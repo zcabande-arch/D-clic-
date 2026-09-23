@@ -1,6 +1,7 @@
 -- Déclic : notifications push (nouvelle photo dans un groupe + rappel à chaque déclic).
 -- À lancer une fois dans Supabase › SQL Editor, APRÈS schema.sql. Peut être relancé sans risque.
--- La fonction Edge « notify » (supabase/functions/notify/index.ts) doit aussi être créée.
+-- La fonction Edge (supabase/functions/notify/index.ts) doit aussi être créée ; son adresse est utilisée ci-dessous
+-- et dans docs/config.js (NOTIFY_URL).
 
 create extension if not exists pg_net with schema extensions;
 create extension if not exists pg_cron;
@@ -40,7 +41,7 @@ create or replace function public.notify_new_photo() returns trigger
 language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform net.http_post(
-    url     := 'https://alxensbjhfpktfnobvix.supabase.co/functions/v1/notify',
+    url     := 'https://alxensbjhfpktfnobvix.supabase.co/functions/v1/super-responder',
     body    := jsonb_build_object('type', 'photo', 'coll', new.coll, 'id', new.id),
     headers := '{"Content-Type": "application/json"}'::jsonb);
   return new;
@@ -56,7 +57,7 @@ create trigger docs_new_photo after insert on public.docs
 select cron.unschedule(jobid) from cron.job where jobname = 'declic-rappels';
 select cron.schedule('declic-rappels', '0,30 * * * *', $$
   select net.http_post(
-    url     := 'https://alxensbjhfpktfnobvix.supabase.co/functions/v1/notify',
+    url     := 'https://alxensbjhfpktfnobvix.supabase.co/functions/v1/super-responder',
     body    := '{"type": "tick"}'::jsonb,
     headers := '{"Content-Type": "application/json"}'::jsonb);
 $$);

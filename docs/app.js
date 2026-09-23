@@ -1,6 +1,6 @@
 // Déclic : une photo toutes les heures, de 8h à 20h, partagée avec tes proches.
 import { openDb } from "./db.js";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
 
   const FIRST=8, LAST=20, ON_TIME=10;
   const EMOJIS=["❤️","😂","😮","😍","🔥","👏","😢"];
@@ -437,7 +437,6 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
     return null;
   }
   // ---------- notifications ----------
-  const NOTIFY_URL=SUPABASE_URL+"/functions/v1/notify";
   const ASK_KEY="declic.pushAsked";
   const pushSupported=()=>"serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
   function b64ToU8(s){const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0));}

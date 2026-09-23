@@ -5,7 +5,8 @@
 // - POST {type:join}  → prévient les membres qu'une personne vient de rejoindre le groupe
 // - POST {type:message} → prévient les autres membres d'un nouveau message dans la conversation
 // - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale),
-//                       et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
+//                       le résumé de la journée à 21h, et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
+// Chaque personne choisit dans son profil (data.notif) les notifications qu'elle reçoit et les groupes qu'elle coupe.
 // Elle ne fait pas confiance au contenu des requêtes : elle relit tout dans la base, et chaque
 // photo n'est notifiée qu'une fois. La déployer avec « Verify JWT » désactivé.
 // Le chiffrement Web Push (RFC 8291) et la signature VAPID (RFC 8292) utilisent uniquement WebCrypto.
@@ -16,6 +17,8 @@ const LAST = 20;
 const CONTACT = "mailto:declic@example.com";
 // Nombre de jours pendant lesquels les photos sont gardées (les points et séries sont conservés).
 const KEEP_DAYS = 30;
+// Heure locale du résumé de la journée.
+const SUMMARY_HOUR = 21;
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -153,16 +156,13 @@ async function onPhoto(coll: unknown, id: unknown) {
   const others = (g.data.members as string[]).filter((u) => u !== author);
   if (!others.length) return json({ sent: 0 });
 
-  const prof = must(await sb.from("docs").select("data").eq("coll", "profiles").eq("id", author).maybeSingle(), "lecture profil");
-  const name = prof?.data?.name || "Quelqu’un";
-  const subs = must(await sb.from("push_subs").select("*").in("uid", others), "lecture abonnements") || [];
+  const name = await nameOf(author);
   const payload = {
     title: g.data.name || "Déclic",
     body: `📸 ${name} a publié sa photo de ${photo.data.hour}h` + (photo.data.caption ? ` : « ${photo.data.caption} »` : ""),
     tag: `photo-${group}-${photo.data.hour}`,
   };
-  await Promise.all(subs.map((s: SubRow) => send(s, payload)));
-  return json({ sent: subs.length });
+  return json({ sent: await notifyUids(others, payload, "photo", group) });
 }
 
 const recent = (updatedAt: string) => Date.now() - new Date(updatedAt).getTime() <= 10 * 60_000;
@@ -175,7 +175,22 @@ async function nameOf(uid: string) {
   const prof = must(await sb.from("docs").select("data").eq("coll", "profiles").eq("id", uid).maybeSingle(), "lecture profil");
   return prof?.data?.name || "Quelqu’un";
 }
-async function notifyUids(uids: string[], payload: Record<string, unknown>) {
+// Préférences de notification (profil.notif) : { photo, reaction, message, join, reminder, summary: bool, muted: [codes] }.
+type Prefs = Record<string, unknown> & { muted?: string[] };
+async function prefsOf(uids: string[]) {
+  const map = new Map<string, Prefs>();
+  if (!uids.length) return map;
+  const rows = must(await sb.from("docs").select("id,data").eq("coll", "profiles").in("id", uids), "lecture préférences") || [];
+  for (const r of rows as { id: string; data: { notif?: Prefs } }[]) map.set(r.id, r.data?.notif || {});
+  return map;
+}
+const wants = (p: Prefs | undefined, kind: string, group?: string) =>
+  !p || (p[kind] !== false && !(group && Array.isArray(p.muted) && p.muted.includes(group)));
+
+async function notifyUids(uids: string[], payload: Record<string, unknown>, kind: string, group?: string) {
+  if (!uids.length) return 0;
+  const prefs = await prefsOf(uids);
+  uids = uids.filter((u) => wants(prefs.get(u), kind, group));
   if (!uids.length) return 0;
   const subs = must(await sb.from("push_subs").select("*").in("uid", uids), "lecture abonnements") || [];
   await Promise.all(subs.map((s: SubRow) => send(s, payload)));
@@ -205,7 +220,7 @@ async function onReaction(kind: "reaction" | "reply", coll: unknown, id: unknown
   const body = kind === "reaction"
     ? `${row.data.emoji || "❤️"} ${name} a réagi à ta photo de ${photo.data.hour}h`
     : `💬 ${name} a répondu à ta photo de ${photo.data.hour}h${text}`;
-  const sent = await notifyUids([author], { title: g?.data?.name || "Déclic", body, tag: `${kind}-${group}-${row.data.photoId}` });
+  const sent = await notifyUids([author], { title: g?.data?.name || "Déclic", body, tag: `${kind}-${group}-${row.data.photoId}` }, "reaction", group);
   return json({ sent });
 }
 
@@ -227,7 +242,7 @@ async function onMessage(coll: unknown, id: unknown) {
     title: g.data.name || "Déclic",
     body: `💬 ${name} : ${text.length > 120 ? text.slice(0, 117) + "…" : text}`,
     tag: `msg-${group}`,
-  });
+  }, "message", group);
   return json({ sent });
 }
 
@@ -239,7 +254,7 @@ async function onJoin(group: unknown, uid: unknown) {
   if (!(await claim(`join-${group}-${uid}`))) return json({ skipped: "already sent" });
   const name = await nameOf(uid);
   const others = (g.data.members as string[]).filter((u) => u !== uid);
-  const sent = await notifyUids(others, { title: g.data.name || "Déclic", body: `👋 ${name} a rejoint le groupe`, tag: `join-${group}` });
+  const sent = await notifyUids(others, { title: g.data.name || "Déclic", body: `👋 ${name} a rejoint le groupe`, tag: `join-${group}` }, "join", group);
   return json({ sent });
 }
 
@@ -254,8 +269,21 @@ function localParts(tz: string, d: Date) {
 
 async function onTick() {
   const subs = (must(await sb.from("push_subs").select("*"), "lecture abonnements") || []) as SubRow[];
+  const prefs = await prefsOf([...new Set(subs.map((s) => s.uid))]);
   const now = new Date();
   const jobs: Promise<unknown>[] = [];
+  let groups: { id: string; data: { members: string[] } }[] | null = null;
+  const photosByDay = new Map<string, Map<string, number>>();
+  // Nombre de photos par groupe pour un jour donné (chargé une seule fois par jour concerné).
+  async function photosOn(day: string) {
+    if (!photosByDay.has(day)) {
+      const rows = must(await sb.from("docs").select("coll").like("coll", "groups/%/photos").eq("data->>date", day), "lecture photos du jour") || [];
+      const m = new Map<string, number>();
+      for (const r of rows as { coll: string }[]) { const g = r.coll.split("/")[1]; m.set(g, (m.get(g) || 0) + 1); }
+      photosByDay.set(day, m);
+    }
+    return photosByDay.get(day)!;
+  }
   for (const s of subs) {
     let t;
     try {
@@ -263,19 +291,34 @@ async function onTick() {
     } catch {
       continue;
     }
-    if (t.hour < FIRST || t.hour > LAST || t.minute >= 10) continue;
+    if (t.minute >= 10) continue;
     const key = `${t.day}T${t.hour}`;
     if (s.last === key) continue;
-    jobs.push(
-      sb.from("push_subs").update({ last: key }).eq("endpoint", s.endpoint).then(() =>
-        send(s, { title: `Déclic de ${t.hour}h`, body: "C’est maintenant : 10 minutes pour envoyer ta photo à l’heure.", tag: "declic" })
-      ),
-    );
+    const p = prefs.get(s.uid);
+    if (t.hour >= FIRST && t.hour <= LAST) {
+      if (!wants(p, "reminder")) continue;
+      jobs.push(
+        sb.from("push_subs").update({ last: key }).eq("endpoint", s.endpoint).then(() =>
+          send(s, { title: `Déclic de ${t.hour}h`, body: "C’est maintenant : 10 minutes pour envoyer ta photo à l’heure.", tag: "declic" })
+        ),
+      );
+    } else if (t.hour === SUMMARY_HOUR && wants(p, "summary")) {
+      if (!groups) groups = (must(await sb.from("docs").select("id,data").eq("coll", "groups"), "lecture groupes") || []) as typeof groups;
+      const counts = await photosOn(t.day);
+      const mine = groups!.filter((g) => g.data.members?.includes(s.uid) && !(Array.isArray(p?.muted) && p!.muted!.includes(g.id)));
+      const total = mine.reduce((n, g) => n + (counts.get(g.id) || 0), 0);
+      if (!total) continue;
+      jobs.push(
+        sb.from("push_subs").update({ last: key }).eq("endpoint", s.endpoint).then(() =>
+          send(s, { title: "Résumé de la journée", body: `🧩 Ta journée en ${total} déclic${total > 1 ? "s" : ""} est prête : viens voir la mosaïque !`, tag: "resume" })
+        ),
+      );
+    }
   }
   await Promise.all(jobs);
   await sb.from("push_sent").delete().lt("sent_at", new Date(Date.now() - 2 * 86_400_000).toISOString());
   const purged = await purgeOldPhotos();
-  return json({ reminders: jobs.length, purged });
+  return json({ notified: jobs.length, purged });
 }
 
 // ---------- nettoyage des vieilles photos ----------

@@ -23,7 +23,7 @@ grant execute on function public.set_group_theme(text, jsonb) to authenticated;
 -- 2. Messages dans la conversation
 create or replace function public.is_group_sub(c text) returns boolean
 language sql immutable as $$
-  select c ~ '^groups/[A-Z0-9]{6}/(photos|reactions|replies|days|messages)$';
+  select c ~ '^groups/[A-Z0-9]{6}/(photos|reactions|replies|days|messages|seen)$';
 $$;
 
 drop policy if exists docs_insert on public.docs;

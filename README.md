@@ -14,6 +14,25 @@ C’est une vraie application web installable (PWA) avec son propre serveur :
 - **Installable** sur l’écran d’accueil (Android, iPhone, ordinateur) et ouvrable hors ligne.
 - **Comptes sans mot de passe** : chaque appareil reçoit un compte automatiquement. Un lien personnel (Profil › Réglages) permet d’utiliser le même compte sur un autre appareil.
 
+## Version gratuite : GitHub Pages + Supabase
+
+Le dossier `docs/` contient une version de Déclic qui n'a besoin d'aucun serveur :
+l'interface est hébergée gratuitement par **GitHub Pages**, et les comptes, groupes et photos sont gardés par **Supabase** (offre gratuite).
+Tout se configure depuis un navigateur, y compris sur iPad. Les rappels push ne sont pas disponibles dans cette version.
+
+1. **Supabase** : crée un compte sur <https://supabase.com>, puis un projet (« New project »).
+2. **Base de données** : dans *SQL Editor › New query*, colle tout le contenu de [`supabase/schema.sql`](supabase/schema.sql) et touche *Run*.
+3. **Connexion sans mot de passe** : dans *Authentication › Sign In / Providers*, active *Allow anonymous sign-ins*.
+4. **Réglages** : dans *Project Settings › API*, copie la *Project URL* et la clé *anon public*, et mets-les dans [`docs/config.js`](docs/config.js).
+5. **GitHub Pages** : dans le dépôt GitHub, *Settings › Pages*, choisis *Deploy from a branch*, la branche de l'application et le dossier `/docs`, puis *Save*.
+6. Après une minute, l'application est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/**.
+
+Pour inviter des proches : ouvre un groupe, touche *Inviter des proches* et envoie le lien. Ils l'ouvrent dans Safari (ou Chrome), l'ajoutent à l'écran d'accueil et rejoignent le groupe directement.
+
+## Version avec serveur (auto-hébergée)
+
+Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.
+
 ## Lancer en local
 
 Il faut Node.js 22.5 ou plus récent.

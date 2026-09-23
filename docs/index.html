@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Déclic</title>
+<meta name="description" content="Une photo toutes les heures, de 8h à 20h, partagée avec tes proches.">
+<meta name="theme-color" content="#E4EAF4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11172A" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Déclic">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div class="wrap" id="app"><p class="notice">Chargement…</p></div>
+<div id="barHost"></div>
+
+<dialog id="dlgCreate">
+  <h2>Nouveau groupe</h2>
+  <label for="cName">Nom du groupe</label>
+  <input type="text" id="cName" maxlength="40" placeholder="La coloc, Les cousins…">
+  <p class="err" id="cErr"></p>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="cGo">Créer le groupe</button></div>
+</dialog>
+
+<dialog id="dlgJoin">
+  <h2>Rejoindre un groupe</h2>
+  <label for="jCode">Code du groupe</label>
+  <input type="text" id="jCode" maxlength="6" autocapitalize="characters" placeholder="ABC123" style="text-transform:uppercase;letter-spacing:.1em">
+  <p class="err" id="jErr"></p>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="jGo">Rejoindre</button></div>
+</dialog>
+
+<dialog id="dlgShot">
+  <h2 id="sTitle">Ta photo</h2>
+  <img class="preview" id="sPrev" alt="Aperçu de ta photo">
+  <label for="sCap">Légende (facultatif)</label>
+  <input type="text" id="sCap" maxlength="80" placeholder="Ce que tu fais, là, maintenant">
+  <p class="err" id="sErr"></p>
+  <div class="row"><button class="btn ghost" id="sRetake">Reprendre</button><button class="btn flash" id="sGo">Envoyer la photo</button></div>
+</dialog>
+
+<dialog id="dlgReply">
+  <h2>Répondre</h2>
+  <div class="rthumb" id="rThumb"></div>
+  <label for="rText">Ta réponse</label>
+  <input type="text" id="rText" maxlength="200" placeholder="Écris un message…">
+  <img class="rprev" id="rPrev" alt="Photo jointe">
+  <p class="err" id="rErr"></p>
+  <div class="row"><button class="btn ghost small" id="rPhoto">Joindre une photo</button><span style="flex:1"></span><button class="btn ghost small" data-close>Annuler</button><button class="btn small" id="rGo">Envoyer</button></div>
+</dialog>
+
+<dialog id="dlgLb" class="lb"><img id="lbImg" alt=""></dialog>
+
+<input type="file" id="fileIn" accept="image/*" hidden>
+<div class="toast" id="toast" role="status"></div>
+
+</body>
+</html>

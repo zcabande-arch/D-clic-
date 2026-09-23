@@ -157,7 +157,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
         el("span",{class:"plus","aria-hidden":"true",text:"+"})),
       el("label",{for:"pName",text:"Nom"}),nameIn,err,save,
       !first?el("button",{class:"btn ghost",style:"width:100%;margin-top:10px",onclick:()=>{S.editProfile=false;S.draftAvatar=undefined;render();}},"Annuler"):null);
-    app.replaceChildren(el("header",{class:"top"},el("h1",{class:"brand"},el("span",{class:"shutter","aria-hidden":"true"}),el("span",{class:"t",text:"Déclic"}))),card);
+    app.replaceChildren(el("header",{class:"top"},el("h1",{class:"brand"},el("span",{class:"shutter","aria-hidden":"true"}),el("span",{class:"t",text:"Déclic"}))),...[card,first?null:settingsCard()].filter(Boolean));
   }
 
   function renderHome(){
@@ -173,7 +173,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
       el("header",{class:"top"},el("h1",{class:"brand"},el("span",{class:"shutter","aria-hidden":"true"}),el("span",{class:"t",text:"Déclic"})),
         el("button",{class:"me",onclick:()=>{S.editProfile=true;render();},"aria-label":"Modifier mon profil"},el("span",{text:me.name}),avEl(S.uid,36))),
       now);
-    for(const c of [installCard()])if(c)app.append(c);
+    for(const c of [pushCard(),installCard()])if(c)app.append(c);
     if(!S.groups.length) app.append(el("div",{class:"empty",text:"Tu n’as pas encore de groupe. Crée-en un et partage son code, ou entre le code qu’on t’a donné."}));
     else{
       const ul=el("ul",{class:"groups"});
@@ -436,6 +436,57 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
       el("div",{class:"row"},el("button",{class:"btn ghost small",onclick:hideInstall},"Compris")));
     return null;
   }
+  // ---------- notifications ----------
+  const NOTIFY_URL=SUPABASE_URL+"/functions/v1/notify";
+  const ASK_KEY="declic.pushAsked";
+  const pushSupported=()=>"serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
+  function b64ToU8(s){const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0));}
+  async function swReg(){try{return await navigator.serviceWorker.getRegistration();}catch(e){return null;}}
+  async function pushState(){
+    if(!pushSupported())return"unsupported";
+    if(Notification.permission==="denied")return"denied";
+    const reg=await swReg();if(!reg)return"off";
+    try{return (await reg.pushManager.getSubscription())?"on":"off";}catch(e){return"off";}
+  }
+  const tz=()=>Intl.DateTimeFormat().resolvedOptions().timeZone;
+  async function enablePush(){
+    try{
+      if(await Notification.requestPermission()!=="granted"){toast("Notifications refusées.");S.push=await pushState();render();return;}
+      const reg=await navigator.serviceWorker.ready;
+      let sub=await reg.pushManager.getSubscription();
+      if(!sub){const {publicKey}=await (await fetch(NOTIFY_URL)).json();sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(publicKey)});}
+      await S.db.savePush(sub.toJSON(),tz());
+      toast("Notifications activées");
+    }catch(e){toast("Impossible d’activer les notifications.");}
+    S.push=await pushState();render();
+  }
+  async function disablePush(){
+    try{const reg=await swReg(),sub=reg&&await reg.pushManager.getSubscription();
+      if(sub){await S.db.removePush(sub.endpoint).catch(()=>{});await sub.unsubscribe();}
+      toast("Notifications désactivées");
+    }catch(e){toast("Impossible de désactiver les notifications.");}
+    S.push=await pushState();render();
+  }
+  function pushAsked(){try{return !!localStorage.getItem(ASK_KEY);}catch(e){return false;}}
+  function markPushAsked(){try{localStorage.setItem(ASK_KEY,"1");}catch(e){}}
+  function pushCard(){
+    if(S.push!=="off"||pushAsked())return null;
+    return el("div",{class:"empty invite"},
+      el("p",{text:"Active les notifications : tu sauras quand tes proches publient, et tu seras prévenu à chaque déclic."}),
+      el("div",{class:"row"},el("button",{class:"btn flash small",onclick:()=>{markPushAsked();enablePush();}},"Activer les notifications"),
+        el("button",{class:"btn ghost small",onclick:()=>{markPushAsked();render();}},"Plus tard")));
+  }
+  function settingsCard(){
+    const st=S.push;
+    const ctl=st==="on"?el("button",{class:"btn ghost small",onclick:disablePush},"Désactiver"):st==="off"?el("button",{class:"btn flash small",onclick:enablePush},"Activer"):null;
+    const txt=st==="on"?"Activées sur cet appareil : nouvelles photos de tes groupes et rappel à chaque déclic."
+      :st==="denied"?"Bloquées : autorise les notifications de Déclic dans les réglages de l’appareil."
+      :st==="unsupported"?(isIOS?"Ajoute d’abord Déclic à l’écran d’accueil (Partager › Sur l’écran d’accueil), puis ouvre-le depuis l’icône.":"Ce navigateur ne gère pas les notifications.")
+      :"Nouvelles photos de tes groupes et rappel à chaque déclic, de 8h à 20h.";
+    return el("section",{class:"profile settings"},el("h2",{text:"Réglages"}),
+      el("div",{class:"setrow"},el("div",{},el("b",{text:"Notifications"}),el("p",{text:txt})),ctl));
+  }
+
   addEventListener("beforeinstallprompt",e=>{e.preventDefault();S.installEvt=e;render();});
   addEventListener("appinstalled",()=>{S.installEvt=null;render();});
 
@@ -452,4 +503,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
     S.db=db;S.uid=uid;S.prefillName="";
     db.collection("profiles").limit(1000).onSnapshot(s=>{const m={};s.docs.forEach(d=>m[d.id]=d.data());S.profiles=m;S.profilesLoaded=true;render();},e=>{if(e.code==="unavailable")toast("Connexion perdue, nouvelle tentative…");S.profilesLoaded=true;render();});
     db.collection("groups").where("members","array-contains",uid).onSnapshot(s=>{S.groups=s.docs.map(d=>({id:d.id,...d.data()}));S.groupsLoaded=true;render();},e=>{if(e.code!=="unavailable")toast("Impossible de charger tes groupes.");});
+    S.push=await pushState();
+    if(S.push==="on"){try{const sub=await (await swReg()).pushManager.getSubscription();await db.savePush(sub.toJSON(),tz());}catch(e){}}
+    render();
   })();

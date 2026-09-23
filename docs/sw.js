@@ -1,5 +1,5 @@
-// Service worker : ouverture hors ligne de l'interface Déclic.
-const SHELL = "declic-shell-v1";
+// Service worker : ouverture hors ligne de l'interface Déclic et affichage des notifications.
+const SHELL = "declic-shell-v2";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./db.js", "./config.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -29,5 +29,31 @@ self.addEventListener("fetch", (e) => {
         return res;
       })
       .catch(async () => (await caches.match(e.request)) || (e.request.mode === "navigate" ? caches.match("./") : Response.error())),
+  );
+});
+
+self.addEventListener("push", (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch {}
+  e.waitUntil(
+    self.registration.showNotification(d.title || "Déclic", {
+      body: d.body || "",
+      tag: d.tag || "declic",
+      renotify: true,
+      icon: "./icons/icon-192.png",
+      badge: "./icons/icon-192.png",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) if ("focus" in c) return c.focus();
+      return self.clients.openWindow(self.registration.scope);
+    }),
   );
 });

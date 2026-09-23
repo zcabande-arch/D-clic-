@@ -218,6 +218,14 @@ function makeDb(sb, uid) {
   }
 
   return {
+    async savePush(sub, tz) {
+      const { error } = await sb.from("push_subs").upsert({ endpoint: sub.endpoint, uid, sub, tz }, { onConflict: "endpoint" });
+      if (error) throw mapError(error);
+    },
+    async removePush(endpoint) {
+      const { error } = await sb.from("push_subs").delete().eq("endpoint", endpoint);
+      if (error) throw mapError(error);
+    },
     doc: (p) => new DocRef(p),
     collection: (p) => new Query(p),
     async rpc(name, args) {

@@ -218,6 +218,10 @@ function makeDb(sb, uid) {
   }
 
   return {
+    // Envoie une image (data URL) dans le stockage et renvoie son adresse publique.
+    async uploadImage(dataUrl) {
+      return (await uploadMedia({ img: dataUrl })).img;
+    },
     async savePush(sub, tz) {
       const { error } = await sb.from("push_subs").upsert({ endpoint: sub.endpoint, uid, sub, tz }, { onConflict: "endpoint" });
       if (error) throw mapError(error);

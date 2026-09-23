@@ -1,6 +1,8 @@
 // Déclic : fonction Edge d'envoi des notifications.
 // - GET               → renvoie la clé publique push (générée au premier appel)
 // - POST {type:photo} → prévient les autres membres du groupe qu'une photo vient d'être publiée
+// - POST {type:reaction|reply} → prévient l'auteur de la photo qu'on y a réagi / répondu
+// - POST {type:join}  → prévient les membres qu'une personne vient de rejoindre le groupe
 // - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale),
 //                       et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
 // Elle ne fait pas confiance au contenu des requêtes : elle relit tout dans la base, et chaque
@@ -162,6 +164,62 @@ async function onPhoto(coll: unknown, id: unknown) {
   return json({ sent: subs.length });
 }
 
+const recent = (updatedAt: string) => Date.now() - new Date(updatedAt).getTime() <= 10 * 60_000;
+// Réserve une clé d'envoi : renvoie false si cette notification est déjà partie.
+async function claim(key: string) {
+  const { error } = await sb.from("push_sent").insert({ key });
+  return !error;
+}
+async function nameOf(uid: string) {
+  const prof = must(await sb.from("docs").select("data").eq("coll", "profiles").eq("id", uid).maybeSingle(), "lecture profil");
+  return prof?.data?.name || "Quelqu’un";
+}
+async function notifyUids(uids: string[], payload: Record<string, unknown>) {
+  if (!uids.length) return 0;
+  const subs = must(await sb.from("push_subs").select("*").in("uid", uids), "lecture abonnements") || [];
+  await Promise.all(subs.map((s: SubRow) => send(s, payload)));
+  return subs.length;
+}
+
+// Réaction ou réponse sur une photo → son auteur est prévenu.
+async function onReaction(kind: "reaction" | "reply", coll: unknown, id: unknown) {
+  const re = kind === "reaction" ? /^groups\/([A-Z0-9]{6})\/reactions$/ : /^groups\/([A-Z0-9]{6})\/replies$/;
+  const m = typeof coll === "string" ? re.exec(coll) : null;
+  if (!m || typeof id !== "string") return json({ error: "invalid" }, 400);
+  const group = m[1];
+  const row = must(await sb.from("docs").select("data,updated_at").eq("coll", coll).eq("id", id).maybeSingle(), "lecture réaction");
+  if (!row || !recent(row.updated_at)) return json({ skipped: "stale" });
+  const photo = must(
+    await sb.from("docs").select("data").eq("coll", `groups/${group}/photos`).eq("id", String(row.data.photoId)).maybeSingle(),
+    "lecture photo",
+  );
+  if (!photo) return json({ skipped: "no photo" });
+  const author: string = photo.data.uid;
+  const who: string = row.data.uid;
+  if (author === who) return json({ skipped: "own photo" });
+  if (!(await claim(`${coll}/${id}`))) return json({ skipped: "already sent" });
+  const g = must(await sb.from("docs").select("data").eq("coll", "groups").eq("id", group).maybeSingle(), "lecture groupe");
+  const name = await nameOf(who);
+  const text = typeof row.data.text === "string" && row.data.text ? ` : « ${row.data.text.slice(0, 80)} »` : row.data.img ? " avec une photo" : "";
+  const body = kind === "reaction"
+    ? `${row.data.emoji || "❤️"} ${name} a réagi à ta photo de ${photo.data.hour}h`
+    : `💬 ${name} a répondu à ta photo de ${photo.data.hour}h${text}`;
+  const sent = await notifyUids([author], { title: g?.data?.name || "Déclic", body, tag: `${kind}-${group}-${row.data.photoId}` });
+  return json({ sent });
+}
+
+// Nouveau membre → les autres membres sont prévenus.
+async function onJoin(group: unknown, uid: unknown) {
+  if (typeof group !== "string" || !/^[A-Z0-9]{6}$/.test(group) || typeof uid !== "string") return json({ error: "invalid" }, 400);
+  const g = must(await sb.from("docs").select("data,updated_at").eq("coll", "groups").eq("id", group).maybeSingle(), "lecture groupe");
+  if (!g || !recent(g.updated_at) || !(g.data.members as string[]).includes(uid)) return json({ skipped: "stale" });
+  if (!(await claim(`join-${group}-${uid}`))) return json({ skipped: "already sent" });
+  const name = await nameOf(uid);
+  const others = (g.data.members as string[]).filter((u) => u !== uid);
+  const sent = await notifyUids(others, { title: g.data.name || "Déclic", body: `👋 ${name} a rejoint le groupe`, tag: `join-${group}` });
+  return json({ sent });
+}
+
 function localParts(tz: string, d: Date) {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-GB", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
@@ -234,6 +292,8 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return json({ error: "method" }, 405);
     const body = await req.json().catch(() => ({}));
     if (body.type === "photo") return await onPhoto(body.coll, body.id);
+    if (body.type === "reaction" || body.type === "reply") return await onReaction(body.type, body.coll, body.id);
+    if (body.type === "join") return await onJoin(body.group, body.uid);
     if (body.type === "tick") return await onTick();
     return json({ error: "unknown type" }, 400);
   } catch (e) {

@@ -142,8 +142,26 @@ begin
 end;
 $$;
 
-revoke all on function public.join_group(text), public.leave_group(text) from public, anon;
-grant execute on function public.join_group(text), public.leave_group(text) to authenticated;
+-- Thème d'un groupe : un thème prêt à l'emploi ({"preset": "rose-bleu"}) ou une photo de fond
+-- ({"image": "<url du stockage media>"}) ; null revient au thème par défaut. Tout membre peut le changer.
+create or replace function public.set_group_theme(code text, theme jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if not is_member(upper(code)) then raise exception 'not a member'; end if;
+  if theme is not null and not (
+       (theme ?& array['preset'] and not theme ? 'image' and theme->>'preset' ~ '^[a-z-]{1,30}$')
+    or (theme ?& array['image'] and not theme ? 'preset' and theme->>'image' like '%/storage/v1/object/public/media/%')
+  ) then raise exception 'invalid theme'; end if;
+  update docs
+     set data = case when theme is null then data - 'theme' else jsonb_set(data, '{theme}', theme) end,
+         updated_at = now()
+   where coll = 'groups' and id = upper(code);
+end;
+$$;
+
+revoke all on function public.join_group(text), public.leave_group(text), public.set_group_theme(text, jsonb) from public, anon;
+grant execute on function public.join_group(text), public.leave_group(text), public.set_group_theme(text, jsonb) to authenticated;
 
 -- ---------- temps réel ----------
 

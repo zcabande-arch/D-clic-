@@ -121,6 +121,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     try{
       if(S.fileTarget==="avatar"){S.draftAvatar=await squareAvatar(f);render();}
       else if(S.fileTarget==="shot"){S.pendingShot=await compress(f);$("#sPrev").src=S.pendingShot;$("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta photo de ${sl.hour}h`:"Ta photo";openDlg("#dlgShot");}
+      else if(S.fileTarget==="theme"){const g=S.groups.find(x=>x.id===S.current);if(!g)return;toast("Envoi de la photo…");const url=await S.db.uploadImage(await compress(f,1400,280000));await setTheme(g,{image:url});}
       else if(S.fileTarget==="reply"){S.pendingReplyImg=await compress(f,700,60000);const p=$("#rPrev");p.src=S.pendingReplyImg;p.style.display="block";}
     }catch(err){toast("Cette image n’a pas pu être lue.");}
   });
@@ -128,6 +129,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // ---------- render ----------
   function render(){
     if(!S.db)return;
+    const cg=S.current&&!S.editProfile?S.groups.find(x=>x.id===S.current):null;
+    applyTheme(cg&&cg.theme);
     if(!S.profilesLoaded){app.replaceChildren(el("p",{class:"notice",text:"Chargement…"}));barHost.replaceChildren();return;}
     if(!S.profiles[S.uid]||S.editProfile)return renderProfile();
     S.current?renderGroup():renderHome();
@@ -223,7 +226,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(h===curHour){const miss=g.members.filter(m=>!list.some(p=>p.uid===m)&&m!==S.uid);if(miss.length)sec.append(el("p",{class:"pending",style:"margin-left:0",text:"Pas encore : "+miss.map(pName).join(", ")}));}
       convo.append(sec);
     }
-    app.replaceChildren(head,renderScore(g,sl,isToday),panel,nav,convo);
+    app.replaceChildren(head,renderScore(g,sl,isToday),panel,themePanel(g),nav,convo);
 
     // bottom bar
     barHost.replaceChildren(renderBar(sl,isToday,mineNow));
@@ -420,6 +423,51 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   async function leave(g){
     if(!confirm("Quitter « "+g.name+" » ?"))return;
     try{await S.db.rpc("leave_group",{code:g.id});closeGroup();toast("Groupe quitté");}catch(e){toast("Impossible de quitter le groupe.");}
+  }
+
+  // ---------- thèmes de groupe ----------
+  // Chaque thème associe deux couleurs (a et b) : un fond en dégradé et des couleurs d'accent assorties.
+  const THEMES={
+    "rose-bleu":{name:"Rose & bleu",a:"#FF6FA8",b:"#4C7BFF",bg:"#F3E6F4",page:"linear-gradient(160deg,#FFD3E6 0%,#D3E1FF 100%)",surface:"#FFFFFF",ink:"#23204A",muted:"#686491",line:"#E4D7EC",chip:"#F4EDF8",mine:"#3E63E0",mineInk:"#FFFFFF",flash:"#FF6FA8",flashInk:"#23204A"},
+    "vert-orange":{name:"Vert & orange",a:"#2EA866",b:"#FF8A3D",bg:"#EAF3E4",page:"linear-gradient(160deg,#CDEFD9 0%,#FFE0C4 100%)",surface:"#FFFFFF",ink:"#1C2B22",muted:"#5E7266",line:"#D8E6D6",chip:"#EFF6EE",mine:"#1E7A4C",mineInk:"#FFFFFF",flash:"#FF8A3D",flashInk:"#1C2B22"},
+    "jaune-bleu":{name:"Jaune & bleu",a:"#FFD23F",b:"#2F6BFF",bg:"#F1F0E0",page:"linear-gradient(160deg,#FFF0A3 0%,#CCDEFF 100%)",surface:"#FFFFFF",ink:"#16233F",muted:"#5D6784",line:"#E0E2D6",chip:"#F2F4F0",mine:"#1D4FB8",mineInk:"#FFFFFF",flash:"#FFD23F",flashInk:"#16233F"},
+    "violet-menthe":{name:"Violet & menthe",a:"#7B5CFF",b:"#35D6A6",bg:"#ECE8F7",page:"linear-gradient(160deg,#E2D6FF 0%,#CBF5E8 100%)",surface:"#FFFFFF",ink:"#231A45",muted:"#675F88",line:"#DDD6EE",chip:"#F2EFFA",mine:"#5B3FD1",mineInk:"#FFFFFF",flash:"#35D6A6",flashInk:"#231A45"},
+    "corail-turquoise":{name:"Corail & turquoise",a:"#FF7A5C",b:"#16A7B2",bg:"#F3EAE6",page:"linear-gradient(160deg,#FFD5CA 0%,#C6EFEE 100%)",surface:"#FFFFFF",ink:"#2A1E1B",muted:"#76625D",line:"#EADAD4",chip:"#F8F0ED",mine:"#0E7C86",mineInk:"#FFFFFF",flash:"#FF7A5C",flashInk:"#2A1E1B"},
+    "nuit-rose":{name:"Nuit & rose",a:"#2A1B55",b:"#FF5FA2",bg:"#1A1033",page:"linear-gradient(160deg,#150D2E 0%,#3D1443 100%)",surface:"#261B40",ink:"#F4EEFF",muted:"#B6A9D6",line:"#3B2E5C",chip:"#33275A",mine:"#7B5CFF",mineInk:"#FFFFFF",flash:"#FF5FA2",flashInk:"#1A1033"},
+  };
+  const THEME_VARS={bg:"--bg",surface:"--surface",ink:"--ink",muted:"--muted",line:"--line",chip:"--chip",mine:"--mine",mineInk:"--mine-ink",flash:"--flash",flashInk:"--flash-ink"};
+  const MEDIA_URL=/^https:\/\/[a-z0-9.-]+\/storage\/v1\/object\/public\/media\/[A-Za-z0-9\/_.-]+$/;
+  let appliedTheme="";
+  function applyTheme(theme){
+    const key=JSON.stringify(theme||null);if(key===appliedTheme)return;appliedTheme=key;
+    const root=document.documentElement,body=document.body;
+    for(const v of Object.values(THEME_VARS))root.style.removeProperty(v);
+    root.style.removeProperty("--page-bg");body.classList.remove("gtheme","gimg");
+    const t=theme&&theme.preset&&THEMES[theme.preset];
+    if(t){
+      for(const[k,v]of Object.entries(THEME_VARS))root.style.setProperty(v,t[k]);
+      root.style.setProperty("--page-bg",t.page);body.classList.add("gtheme");
+    }else if(theme&&typeof theme.image==="string"&&MEDIA_URL.test(theme.image)){
+      root.style.setProperty("--page-bg",`linear-gradient(var(--veil),var(--veil)),url("${theme.image}") center/cover no-repeat`);
+      body.classList.add("gtheme","gimg");
+    }
+    const meta=document.querySelectorAll('meta[name="theme-color"]');
+    meta.forEach(m=>{if(!m.dataset.orig)m.dataset.orig=m.content;m.content=t?t.bg:m.dataset.orig;});
+  }
+  async function setTheme(g,theme){
+    try{await S.db.rpc("set_group_theme",{code:g.id,theme});toast("Thème du groupe mis à jour");}
+    catch(e){toast("Le thème n’a pas pu être changé.");}
+  }
+  function themePanel(g){
+    const cur=g.theme||{};
+    const box=el("details",{class:"panel",open:S.themeOpen,ontoggle:e=>S.themeOpen=e.target.open},el("summary",{text:"🎨 Thème du groupe"}));
+    const grid=el("div",{class:"themes"});
+    const opt=(label,sw,on,onclick)=>el("button",{class:"theme-opt"+(on?" on":""),"aria-pressed":on?"true":"false",onclick},el("span",{class:"sw",style:sw}),el("span",{text:label}));
+    grid.append(opt("Par défaut","background:linear-gradient(135deg,#1B2340 50%,#FFC83D 50%)",!cur.preset&&!cur.image,()=>setTheme(g,null)));
+    for(const[k,t]of Object.entries(THEMES))grid.append(opt(t.name,`background:linear-gradient(135deg,${t.a} 50%,${t.b} 50%)`,cur.preset===k,()=>setTheme(g,{preset:k})));
+    grid.append(opt("Ma photo",cur.image&&MEDIA_URL.test(cur.image)?`background:url("${cur.image}") center/cover`:"background:var(--line)",!!cur.image,()=>pickFile("theme")));
+    box.append(el("p",{text:"Le thème s’applique pour tous les membres du groupe."}),grid);
+    return box;
   }
 
   // ---------- installation ----------

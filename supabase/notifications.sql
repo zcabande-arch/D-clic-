@@ -1,4 +1,4 @@
--- Déclic : notifications push (nouvelle photo dans un groupe + rappel à chaque déclic).
+-- Déclic : notifications push (nouvelle photo, réaction, réponse, nouveau membre + rappel à chaque déclic).
 -- À lancer une fois dans Supabase › SQL Editor, APRÈS schema.sql. Peut être relancé sans risque.
 -- La fonction Edge (supabase/functions/notify/index.ts) doit aussi être créée ; son adresse est utilisée ci-dessous
 -- et dans docs/config.js (NOTIFY_URL).
@@ -55,6 +55,45 @@ drop trigger if exists docs_new_photo on public.docs;
 create trigger docs_new_photo after insert on public.docs
   for each row when (new.coll like 'groups/%/photos')
   execute function public.notify_new_photo();
+
+-- Réaction ou réponse sur une photo → la fonction prévient l'auteur de la photo.
+create or replace function public.notify_reaction() returns trigger
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform net.http_post(
+    url     := 'https://alxensbjhfpktfnobvix.supabase.co/functions/v1/super-responder',
+    body    := jsonb_build_object('type', case when new.coll like '%/reactions' then 'reaction' else 'reply' end, 'coll', new.coll, 'id', new.id),
+    headers := '{"Content-Type": "application/json"}'::jsonb);
+  return new;
+end;
+$$;
+
+drop trigger if exists docs_new_reaction on public.docs;
+create trigger docs_new_reaction after insert on public.docs
+  for each row when (new.coll like 'groups/%/reactions' or new.coll like 'groups/%/replies')
+  execute function public.notify_reaction();
+
+-- Nouveau membre dans un groupe → la fonction prévient les autres membres.
+create or replace function public.notify_join() returns trigger
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  m text;
+begin
+  for m in select jsonb_array_elements_text(new.data->'members')
+           except select jsonb_array_elements_text(old.data->'members') loop
+    perform net.http_post(
+      url     := 'https://alxensbjhfpktfnobvix.supabase.co/functions/v1/super-responder',
+      body    := jsonb_build_object('type', 'join', 'group', new.id, 'uid', m),
+      headers := '{"Content-Type": "application/json"}'::jsonb);
+  end loop;
+  return new;
+end;
+$$;
+
+drop trigger if exists docs_group_join on public.docs;
+create trigger docs_group_join after update on public.docs
+  for each row when (new.coll = 'groups' and new.data->'members' is distinct from old.data->'members')
+  execute function public.notify_join();
 
 -- Rappel à chaque déclic : la fonction regarde l'heure locale de chaque appareil.
 select cron.unschedule(jobid) from cron.job where jobname = 'declic-rappels';

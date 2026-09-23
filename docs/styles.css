@@ -105,7 +105,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
 .pending{font-size:13px;color:var(--muted);margin:-4px 0 14px 44px}
 
 /* Bottom bar */
-.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);z-index:5}
+.bar{padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg)}
 .bar.open{background:var(--flash);color:var(--flash-ink)}
 .bar .in{max-width:600px;margin:0 auto;display:flex;align-items:center;gap:14px}
 .bar .txt{min-width:0;flex:1}
@@ -196,3 +196,14 @@ body.gtheme::before{content:"";position:fixed;inset:0;z-index:-1;background:var(
 .theme-opt.on{box-shadow:inset 0 0 0 2.5px var(--flash)}
 .setrow.setcol{flex-direction:column;align-items:stretch}
 .setrow.setcol .themes{margin:4px 0 0}
+
+/* Messages */
+#dock{position:fixed;left:0;right:0;bottom:0;z-index:5}
+.has-composer .bar{padding-bottom:10px}
+.has-composer .wrap.chat{padding-bottom:220px}
+#composer{display:flex;gap:8px;align-items:center;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line)}
+#composer[hidden]{display:none}
+#composer input{flex:1;min-width:0;max-width:540px;margin-left:auto;padding:11px 16px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-size:16px}
+#composer .btn{margin-right:auto}
+.bubble.text{padding:6px 8px 8px}
+.bubble.text .caption{margin:0 6px;font-size:16px;white-space:pre-wrap}

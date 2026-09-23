@@ -5,7 +5,7 @@
 -- Chemins de documents utilisés par l'application :
 --   profiles/{uid}
 --   groups/{code}
---   groups/{code}/{photos|reactions|replies|days}/{id}
+--   groups/{code}/{photos|reactions|replies|days|messages}/{id}
 
 create table if not exists public.docs (
   coll       text        not null,
@@ -47,7 +47,7 @@ $$;
 
 create or replace function public.is_group_sub(c text) returns boolean
 language sql immutable as $$
-  select c ~ '^groups/[A-Z0-9]{6}/(photos|reactions|replies|days)$';
+  select c ~ '^groups/[A-Z0-9]{6}/(photos|reactions|replies|days|messages)$';
 $$;
 
 -- ---------- règles d'accès ----------
@@ -80,7 +80,8 @@ create policy docs_insert on public.docs for insert to authenticated with check 
       is_member(grp)
       and data->>'uid' = (auth.uid())::text
       and jsonb_typeof(data->'date') = 'string'
-      and (coll like '%/replies' or right(id, 37) = '_' || (auth.uid())::text)
+      and (coll like '%/replies' or coll like '%/messages' or right(id, 37) = '_' || (auth.uid())::text)
+      and (coll not like '%/messages' or char_length(data->>'text') between 1 and 500)
     else false
   end);
 

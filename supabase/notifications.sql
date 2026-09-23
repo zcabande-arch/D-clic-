@@ -56,13 +56,14 @@ create trigger docs_new_photo after insert on public.docs
   for each row when (new.coll like 'groups/%/photos')
   execute function public.notify_new_photo();
 
--- Réaction ou réponse sur une photo → la fonction prévient l'auteur de la photo.
+-- Réaction ou réponse sur une photo → la fonction prévient l'auteur de la photo ;
+-- message dans la conversation → la fonction prévient les autres membres.
 create or replace function public.notify_reaction() returns trigger
 language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform net.http_post(
     url     := 'https://alxensbjhfpktfnobvix.supabase.co/functions/v1/super-responder',
-    body    := jsonb_build_object('type', case when new.coll like '%/reactions' then 'reaction' else 'reply' end, 'coll', new.coll, 'id', new.id),
+    body    := jsonb_build_object('type', case when new.coll like '%/reactions' then 'reaction' when new.coll like '%/messages' then 'message' else 'reply' end, 'coll', new.coll, 'id', new.id),
     headers := '{"Content-Type": "application/json"}'::jsonb);
   return new;
 end;
@@ -70,7 +71,7 @@ $$;
 
 drop trigger if exists docs_new_reaction on public.docs;
 create trigger docs_new_reaction after insert on public.docs
-  for each row when (new.coll like 'groups/%/reactions' or new.coll like 'groups/%/replies')
+  for each row when (new.coll like 'groups/%/reactions' or new.coll like 'groups/%/replies' or new.coll like 'groups/%/messages')
   execute function public.notify_reaction();
 
 -- Nouveau membre dans un groupe → la fonction prévient les autres membres.

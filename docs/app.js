@@ -5,9 +5,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   const FIRST=8, LAST=20, ON_TIME=10;
   const EMOJIS=["❤️","😂","😮","😍","🔥","👏","😢"];
   const $=s=>document.querySelector(s);
-  const app=$("#app"), barHost=$("#barHost");
+  const app=$("#app"), barHost=$("#barHost"), composer=$("#composer");
   const S={db:null,user:null,uid:null,groups:[],profiles:{},profilesLoaded:false,current:null,day:null,
-    photos:[],reacts:[],replies:[],subs:[],picker:null,open:{},editProfile:false,panelOpen:false,
+    photos:[],reacts:[],replies:[],messages:[],subs:[],picker:null,open:{},editProfile:false,panelOpen:false,
     fileTarget:null,days:[],daySub:null,period:"week",backfilled:{},pendingShot:null,pendingReplyImg:null,replyTo:null,draftAvatar:undefined,scrollBottom:false};
 
   // ---------- helpers ----------
@@ -133,6 +133,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const cg=S.current&&!S.editProfile?S.groups.find(x=>x.id===S.current):null;
     const mine=S.profiles[S.uid];
     applyTheme((cg&&cg.theme)||(mine&&mine.theme)||null);
+    const showComposer=!!(cg&&S.profilesLoaded&&S.profiles[S.uid]&&S.day===todayKey());
+    if(composer.hidden===showComposer){composer.hidden=!showComposer;document.body.classList.toggle("has-composer",showComposer);}
     if(!S.profilesLoaded){app.replaceChildren(el("p",{class:"notice",text:"Chargement…"}));barHost.replaceChildren();return;}
     if(!S.profiles[S.uid]||S.editProfile)return renderProfile();
     S.current?renderGroup():renderHome();
@@ -217,14 +219,17 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
 
     // conversation
     const byHour={};for(const p of S.photos)(byHour[p.hour]=byHour[p.hour]||[]).push(p);
-    const hours=Object.keys(byHour).map(Number);if(curHour!=null&&!hours.includes(curHour))hours.push(curHour);hours.sort((a,b)=>a-b);
+    const msgByHour={};for(const m of S.messages){const h=new Date(m.ts).getHours();(msgByHour[h]=msgByHour[h]||[]).push(m);}
+    const hours=[...new Set([...Object.keys(byHour),...Object.keys(msgByHour)].map(Number))];if(curHour!=null&&!hours.includes(curHour))hours.push(curHour);hours.sort((a,b)=>a-b);
     const convo=el("div");
-    if(!hours.length) convo.append(el("div",{class:"empty",text:isToday?(sl.phase==="before"?"La conversation commence à 8h.":"Aucune photo aujourd’hui."):"Aucune photo ce jour-là."}));
+    if(!hours.length) convo.append(el("div",{class:"empty",text:isToday?(sl.phase==="before"?"Les photos commencent à 8h. Tu peux déjà écrire un message.":"Aucune photo aujourd’hui. Écris un message à ton groupe !"):"Aucune photo ce jour-là."}));
     for(const h of hours){
       const list=(byHour[h]||[]).sort((a,b)=>a.ts-b.ts);
       const veil=h===curHour&&!mineNow;
-      const sec=el("section",{class:"slot"},el("div",{class:"slothead"},el("b",{text:h+"h"}),el("span",{text:list.length?`${list.length}/${g.members.length} photo${list.length>1?"s":""}`:"en attente"})));
-      for(const p of list)sec.append(photoMsg(p,veil));
+      const isSlot=h>=FIRST&&h<=LAST;
+      const sec=el("section",{class:"slot"},el("div",{class:"slothead"},el("b",{text:h+"h"}),el("span",{text:list.length?`${list.length}/${g.members.length} photo${list.length>1?"s":""}`:(h===curHour?"en attente":isSlot?"":"")})));
+      const items=[...list.map(p=>({ts:p.ts,node:()=>photoMsg(p,veil)})),...(msgByHour[h]||[]).map(m=>({ts:m.ts,node:()=>textMsg(m)}))].sort((a,b)=>a.ts-b.ts);
+      for(const it of items)sec.append(it.node());
       if(h===curHour){const miss=g.members.filter(m=>!list.some(p=>p.uid===m)&&m!==S.uid);if(miss.length)sec.append(el("p",{class:"pending",style:"margin-left:0",text:"Pas encore : "+miss.map(pName).join(", ")}));}
       convo.append(sec);
     }
@@ -295,6 +300,19 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     return el("div",{class:"msg"+(mine?" mine":"")},mine?null:avEl(p.uid,32),bubble);
   }
 
+  function textMsg(m){
+    const mine=m.uid===S.uid;
+    const bubble=el("div",{class:"bubble text"},
+      el("div",{class:"meta"},el("span",{class:"who",text:mine?"Toi":pName(m.uid)}),el("time",{text:hm(m.ts)})),
+      el("p",{class:"caption",text:m.text}));
+    if(mine)bubble.append(el("div",{class:"acts"},el("button",{onclick:()=>deleteMessage(m)},"Supprimer")));
+    return el("div",{class:"msg"+(mine?" mine":"")},mine?null:avEl(m.uid,32),bubble);
+  }
+  async function deleteMessage(m){
+    if(!confirm("Supprimer ce message ?"))return;
+    try{await S.db.doc("groups/"+S.current).collection("messages").doc(m.id).delete();}catch(e){toast("Le message n’a pas pu être supprimé.");}
+  }
+
   function renderBar(sl,isToday,mineNow){
     const txt=el("div",{class:"txt"}),bar=el("div",{class:"bar"},el("div",{class:"in"},txt));
     const inner=bar.firstChild;
@@ -330,12 +348,13 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // ---------- data ----------
   function unsubAll(){S.subs.forEach(u=>{try{u()}catch(e){}});S.subs=[];}
   function subscribeDay(){
-    unsubAll();S.photos=[];S.reacts=[];S.replies=[];S.picker=null;
+    unsubAll();S.photos=[];S.reacts=[];S.replies=[];S.messages=[];S.picker=null;
     const base=S.db.doc("groups/"+S.current);
     const err=()=>toast("Connexion perdue, nouvelle tentative…");
     S.subs.push(base.collection("photos").where("date","==",S.day).onSnapshot(s=>{S.photos=s.docs.map(d=>({id:d.id,...d.data()})).filter(p=>typeof p.hour==="number");backfill();render();S.scrollBottom=false;},err));
     S.subs.push(base.collection("reactions").where("date","==",S.day).onSnapshot(s=>{S.reacts=s.docs.map(d=>d.data());render();},err));
     S.subs.push(base.collection("replies").where("date","==",S.day).onSnapshot(s=>{S.replies=s.docs.map(d=>({id:d.id,...d.data()}));render();},err));
+    S.subs.push(base.collection("messages").where("date","==",S.day).onSnapshot(s=>{S.messages=s.docs.map(d=>({id:d.id,...d.data()})).filter(m=>typeof m.text==="string"&&typeof m.ts==="number");render();},err));
   }
   function subscribeDays(){
     if(S.daySub){S.daySub();S.daySub=null;}S.days=[];
@@ -374,6 +393,18 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     try{await S.db.doc("groups/"+S.current).collection("replies").add({photoId:p.id,uid:S.uid,text:t.slice(0,200),img:S.pendingReplyImg||"",date:p.date,ts:Date.now()});$("#dlgReply").close();S.pendingReplyImg=null;}
     catch(e){$("#rErr").textContent=e&&e.code==="quota_exceeded"?"Espace plein pour ce groupe.":"Réponse non envoyée. Réessaie.";}
     b.disabled=false;
+  });
+
+  // Envoi d'un message texte dans la conversation du groupe (le champ n'est jamais redessiné : le texte tapé est conservé).
+  composer.addEventListener("submit",async e=>{
+    e.preventDefault();
+    const input=$("#mText"),text=input.value.trim();if(!text||!S.current)return;
+    const btn=$("#mSend");btn.disabled=true;
+    try{
+      await S.db.doc("groups/"+S.current).collection("messages").add({uid:S.uid,date:todayKey(),ts:Date.now(),text:text.slice(0,500)});
+      input.value="";S.scrollBottom=true;render();S.scrollBottom=false;
+    }catch(err){toast(err&&err.code==="quota_exceeded"?"Message trop long.":"Message non envoyé. Réessaie.");}
+    btn.disabled=false;input.focus();
   });
 
   $("#sRetake").addEventListener("click",()=>{$("#dlgShot").close();setTimeout(()=>pickFile("shot","environment"),50);});

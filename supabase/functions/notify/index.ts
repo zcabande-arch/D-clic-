@@ -3,6 +3,7 @@
 // - POST {type:photo} → prévient les autres membres du groupe qu'une photo vient d'être publiée
 // - POST {type:reaction|reply} → prévient l'auteur de la photo qu'on y a réagi / répondu
 // - POST {type:join}  → prévient les membres qu'une personne vient de rejoindre le groupe
+// - POST {type:message} → prévient les autres membres d'un nouveau message dans la conversation
 // - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale),
 //                       et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
 // Elle ne fait pas confiance au contenu des requêtes : elle relit tout dans la base, et chaque
@@ -208,6 +209,28 @@ async function onReaction(kind: "reaction" | "reply", coll: unknown, id: unknown
   return json({ sent });
 }
 
+// Message dans la conversation → les autres membres sont prévenus.
+async function onMessage(coll: unknown, id: unknown) {
+  const m = typeof coll === "string" ? /^groups\/([A-Z0-9]{6})\/messages$/.exec(coll) : null;
+  if (!m || typeof id !== "string") return json({ error: "invalid" }, 400);
+  const group = m[1];
+  const row = must(await sb.from("docs").select("data,updated_at").eq("coll", coll).eq("id", id).maybeSingle(), "lecture message");
+  if (!row || !recent(row.updated_at)) return json({ skipped: "stale" });
+  if (!(await claim(`${coll}/${id}`))) return json({ skipped: "already sent" });
+  const g = must(await sb.from("docs").select("data").eq("coll", "groups").eq("id", group).maybeSingle(), "lecture groupe");
+  if (!g) return json({ skipped: "no group" });
+  const who: string = row.data.uid;
+  const name = await nameOf(who);
+  const text = String(row.data.text || "");
+  const others = (g.data.members as string[]).filter((u) => u !== who);
+  const sent = await notifyUids(others, {
+    title: g.data.name || "Déclic",
+    body: `💬 ${name} : ${text.length > 120 ? text.slice(0, 117) + "…" : text}`,
+    tag: `msg-${group}`,
+  });
+  return json({ sent });
+}
+
 // Nouveau membre → les autres membres sont prévenus.
 async function onJoin(group: unknown, uid: unknown) {
   if (typeof group !== "string" || !/^[A-Z0-9]{6}$/.test(group) || typeof uid !== "string") return json({ error: "invalid" }, 400);
@@ -263,7 +286,7 @@ async function purgeOldPhotos() {
   if (already) return 0; // déjà fait aujourd'hui
   const cutoff = new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString().slice(0, 10);
   let removed = 0;
-  for (const kind of ["photos", "replies"]) {
+  for (const kind of ["photos", "replies", "messages"]) {
     for (;;) {
       const rows = must(
         await sb.from("docs").select("coll,id,data").like("coll", `groups/%/${kind}`).lt("data->>date", cutoff).limit(200),
@@ -294,6 +317,7 @@ Deno.serve(async (req) => {
     if (body.type === "photo") return await onPhoto(body.coll, body.id);
     if (body.type === "reaction" || body.type === "reply") return await onReaction(body.type, body.coll, body.id);
     if (body.type === "join") return await onJoin(body.group, body.uid);
+    if (body.type === "message") return await onMessage(body.coll, body.id);
     if (body.type === "tick") return await onTick();
     return json({ error: "unknown type" }, 400);
   } catch (e) {

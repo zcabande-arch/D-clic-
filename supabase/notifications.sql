@@ -36,6 +36,9 @@ create table if not exists public.push_sent (
 );
 alter table public.push_sent enable row level security;
 
+-- La fonction Edge travaille avec le rôle service_role : il lui faut l'accès explicite à ces tables.
+grant select, insert, update, delete on public.push_subs, public.push_config, public.push_sent, public.docs to service_role;
+
 -- Nouvelle photo → la fonction prévient les autres membres du groupe.
 create or replace function public.notify_new_photo() returns trigger
 language plpgsql security definer set search_path = public, extensions as $$

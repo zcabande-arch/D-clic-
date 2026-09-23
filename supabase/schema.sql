@@ -109,7 +109,7 @@ drop policy if exists docs_delete on public.docs;
 create policy docs_delete on public.docs for delete to authenticated using (
   is_group_sub(coll) and is_member(grp) and data->>'uid' = (auth.uid())::text);
 
-grant select, insert, update, delete on public.docs to authenticated;
+grant select, insert, update, delete on public.docs to authenticated, service_role;
 
 -- ---------- rejoindre / quitter un groupe ----------
 

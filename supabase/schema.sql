@@ -56,7 +56,9 @@ drop policy if exists docs_select on public.docs;
 create policy docs_select on public.docs for select to authenticated using (
   case
     when coll = 'profiles' then shares_group(id)
-    when coll = 'groups'   then is_member(id)
+    -- On lit la liste des membres sur la ligne elle-même : indispensable pour qu'un groupe
+    -- puisse être créé par un « upsert » (Postgres vérifie la lecture de la nouvelle ligne).
+    when coll = 'groups'   then data->'members' ? (auth.uid())::text
     when is_group_sub(coll) then is_member(grp)
     else false
   end);

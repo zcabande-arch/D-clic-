@@ -1,7 +1,8 @@
 // Déclic : fonction Edge d'envoi des notifications.
 // - GET               → renvoie la clé publique push (générée au premier appel)
 // - POST {type:photo} → prévient les autres membres du groupe qu'une photo vient d'être publiée
-// - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale)
+// - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale),
+//                       et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
 // Elle ne fait pas confiance au contenu des requêtes : elle relit tout dans la base, et chaque
 // photo n'est notifiée qu'une fois. La déployer avec « Verify JWT » désactivé.
 // Le chiffrement Web Push (RFC 8291) et la signature VAPID (RFC 8292) utilisent uniquement WebCrypto.
@@ -10,6 +11,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const FIRST = 8;
 const LAST = 20;
 const CONTACT = "mailto:declic@example.com";
+// Nombre de jours pendant lesquels les photos sont gardées (les points et séries sont conservés).
+const KEEP_DAYS = 30;
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
@@ -190,7 +193,38 @@ async function onTick() {
   }
   await Promise.all(jobs);
   await sb.from("push_sent").delete().lt("sent_at", new Date(Date.now() - 2 * 86_400_000).toISOString());
-  return json({ reminders: jobs.length });
+  const purged = await purgeOldPhotos();
+  return json({ reminders: jobs.length, purged });
+}
+
+// ---------- nettoyage des vieilles photos ----------
+const MEDIA_MARK = "/storage/v1/object/public/media/";
+async function purgeOldPhotos() {
+  const today = new Date().toISOString().slice(0, 10);
+  const { error: already } = await sb.from("push_sent").insert({ key: `purge-${today}` });
+  if (already) return 0; // déjà fait aujourd'hui
+  const cutoff = new Date(Date.now() - KEEP_DAYS * 86_400_000).toISOString().slice(0, 10);
+  let removed = 0;
+  for (const kind of ["photos", "replies"]) {
+    for (;;) {
+      const rows = must(
+        await sb.from("docs").select("coll,id,data").like("coll", `groups/%/${kind}`).lt("data->>date", cutoff).limit(200),
+        "lecture vieilles photos",
+      ) || [];
+      if (!rows.length) break;
+      const paths = rows
+        .map((r: { data: { img?: string } }) => r.data.img || "")
+        .filter((u: string) => u.includes(MEDIA_MARK))
+        .map((u: string) => u.slice(u.indexOf(MEDIA_MARK) + MEDIA_MARK.length));
+      if (paths.length) must(await sb.storage.from("media").remove(paths), "suppression fichiers");
+      for (const r of rows) must(await sb.from("docs").delete().eq("coll", r.coll).eq("id", r.id), "suppression photo");
+      removed += rows.length;
+      if (rows.length < 200) break;
+    }
+  }
+  // Les réactions des photos effacées ne servent plus à rien.
+  must(await sb.from("docs").delete().like("coll", "groups/%/reactions").lt("data->>date", cutoff), "suppression réactions");
+  return removed;
 }
 
 Deno.serve(async (req) => {

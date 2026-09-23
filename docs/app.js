@@ -94,8 +94,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
 
   // ---------- images ----------
   function loadImage(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>{URL.revokeObjectURL(u);res(i)};i.onerror=rej;i.src=u;});}
-  async function compress(file,max=1000,limit=190000){
-    const img=await loadImage(file);let q=.8,out="";
+  // limit = longueur maximale de la data URL (≈ 1,37 × le poids réel) : ~60 à 70 Ko par photo, ~40 Ko par photo de réponse.
+  async function compress(file,max=900,limit=100000){
+    const img=await loadImage(file);let q=.72,out="";
     for(let t=0;t<8;t++){
       const sc=Math.min(1,max/Math.max(img.width,img.height));
       const c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
@@ -120,7 +121,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     try{
       if(S.fileTarget==="avatar"){S.draftAvatar=await squareAvatar(f);render();}
       else if(S.fileTarget==="shot"){S.pendingShot=await compress(f);$("#sPrev").src=S.pendingShot;$("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta photo de ${sl.hour}h`:"Ta photo";openDlg("#dlgShot");}
-      else if(S.fileTarget==="reply"){S.pendingReplyImg=await compress(f,800,150000);const p=$("#rPrev");p.src=S.pendingReplyImg;p.style.display="block";}
+      else if(S.fileTarget==="reply"){S.pendingReplyImg=await compress(f,700,60000);const p=$("#rPrev");p.src=S.pendingReplyImg;p.style.display="block";}
     }catch(err){toast("Cette image n’a pas pu être lue.");}
   });
 

@@ -1,0 +1,24 @@
+# Un projet Supabase gratuit se met en pause après 7 jours sans activité.
+# Cette tâche fait une petite requête tous les 2 jours pour le garder éveillé.
+name: Garder Supabase éveillé
+
+on:
+  schedule:
+    - cron: "17 6 */2 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Requête à la base et à la fonction
+        env:
+          SUPABASE_URL: https://alxensbjhfpktfnobvix.supabase.co
+          SUPABASE_KEY: sb_publishable_9nKf0FeovnRuD1gbrEnMZw_PTsRivaF
+        run: |
+          curl -fsS --retry 3 "$SUPABASE_URL/rest/v1/docs?select=id&limit=1" -H "apikey: $SUPABASE_KEY" -o /dev/null
+          curl -fsS --retry 3 "$SUPABASE_URL/functions/v1/super-responder" -o /dev/null
+          echo "Supabase a répondu."

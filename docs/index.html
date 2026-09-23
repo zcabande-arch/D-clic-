@@ -65,6 +65,22 @@
   <div class="row"><button class="btn ghost small" id="rPhoto">Joindre une photo</button><span style="flex:1"></span><button class="btn ghost small" data-close>Annuler</button><button class="btn small" id="rGo">Envoyer</button></div>
 </dialog>
 
+<dialog id="dlgAccount">
+  <h2 id="aTitle">Ton compte</h2>
+  <p class="hint" id="aHint"></p>
+  <div id="aStep1"><label for="aEmail">Ton e-mail</label><input type="email" id="aEmail" autocomplete="email" inputmode="email" placeholder="prenom@exemple.fr"></div>
+  <div id="aStep2" hidden><label for="aCode">Code reçu par e-mail</label><input type="text" id="aCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="letter-spacing:.2em"></div>
+  <p class="err" id="aErr"></p>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="aGo">Recevoir le code</button></div>
+</dialog>
+
+<dialog id="dlgMosaic">
+  <h2>Résumé de la journée</h2>
+  <img class="mosaic" id="mImg" alt="Mosaïque des photos du jour">
+  <p class="err" id="mErr"></p>
+  <div class="row"><button class="btn ghost" data-close>Fermer</button><button class="btn flash" id="mShare">Enregistrer ou partager</button></div>
+</dialog>
+
 <dialog id="dlgLb" class="lb"><img id="lbImg" alt=""></dialog>
 
 <input type="file" id="fileIn" accept="image/*" hidden>

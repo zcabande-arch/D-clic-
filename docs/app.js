@@ -7,7 +7,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   const $=s=>document.querySelector(s);
   const app=$("#app"), barHost=$("#barHost"), composer=$("#composer");
   const S={db:null,user:null,uid:null,groups:[],profiles:{},profilesLoaded:false,current:null,day:null,
-    photos:[],reacts:[],replies:[],messages:[],subs:[],picker:null,open:{},editProfile:false,panelOpen:false,
+    photos:[],reacts:[],replies:[],messages:[],seen:{},typing:{},subs:[],picker:null,open:{},editProfile:false,panelOpen:false,
     fileTarget:null,days:[],daySub:null,period:"week",backfilled:{},pendingShot:null,pendingReplyImg:null,replyTo:null,draftAvatar:undefined,scrollBottom:false};
 
   // ---------- helpers ----------
@@ -164,7 +164,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
         avatar?el("img",{class:"av",src:avatar,alt:"",style:"width:112px;height:112px"}):el("span",{class:"av",style:"width:112px;height:112px;background:var(--line);color:var(--muted);font-size:40px",text:"☺"}),
         el("span",{class:"plus","aria-hidden":"true",text:"+"})),
       el("label",{for:"pName",text:"Nom"}),nameIn,err,save,
-      !first?el("button",{class:"btn ghost",style:"width:100%;margin-top:10px",onclick:()=>{S.editProfile=false;S.draftAvatar=undefined;render();}},"Annuler"):null);
+      !first?el("button",{class:"btn ghost",style:"width:100%;margin-top:10px",onclick:()=>{S.editProfile=false;S.draftAvatar=undefined;render();}},"Annuler")
+        :el("button",{class:"btn ghost",style:"width:100%;margin-top:10px",onclick:()=>openAccount("login")},"J’ai déjà un compte"));
     app.replaceChildren(el("header",{class:"top"},el("h1",{class:"brand"},el("span",{class:"shutter","aria-hidden":"true"}),el("span",{class:"t",text:"Déclic"}))),...[card,first?null:settingsCard()].filter(Boolean));
   }
 
@@ -212,10 +213,16 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
 
     // panel
     const panel=el("details",{class:"panel",open:S.panelOpen,ontoggle:e=>S.panelOpen=e.target.open},el("summary",{text:`Membres et invitation (${g.members.length})`}));
-    const ul=el("ul",{class:"members"});g.members.forEach(m=>ul.append(el("li",{},avEl(m,30),el("span",{text:pName(m)+(m===S.uid?" (toi)":"")}))));
+    const isAdmin=g.createdBy===S.uid;
+    const ul=el("ul",{class:"members"});g.members.forEach(m=>ul.append(el("li",{},avEl(m,30),
+      el("span",{class:"mname",text:pName(m)+(m===S.uid?" (toi)":"")}),
+      m===g.createdBy?el("span",{class:"admin",text:"👑 admin"}):null,
+      isAdmin&&m!==S.uid?el("button",{class:"btn ghost small",style:"margin-left:auto;color:var(--late)",onclick:()=>removeMember(g,m)},"Retirer"):null)));
+    const muted=((S.profiles[S.uid]||{}).notif||{}).muted||[];
+    const muteBox=el("label",{class:"switch"},el("input",{type:"checkbox",checked:muted.includes(g.id),onchange:e=>toggleMute(g,e.target.checked)}),el("span",{text:"🔕 Couper les notifications de ce groupe"}));
     panel.append(el("p",{text:"Code à partager :"}),el("div",{class:"code",text:g.id}),
       el("p",{text:"Envoie le lien d’invitation : tes proches ouvrent Déclic, créent leur profil et rejoignent le groupe directement."}),ul,
-      el("div",{class:"row"},el("button",{class:"btn small",onclick:()=>invite(g)},"Inviter des proches"),el("button",{class:"btn ghost small",onclick:()=>copy(g.id)},"Copier le code"),el("button",{class:"btn ghost small",style:"color:var(--late)",onclick:()=>leave(g)},"Quitter le groupe")));
+      el("div",{class:"row"},el("button",{class:"btn small",onclick:()=>invite(g)},"Inviter des proches"),el("button",{class:"btn ghost small",onclick:()=>copy(g.id)},"Copier le code"),el("button",{class:"btn ghost small",style:"color:var(--late)",onclick:()=>leave(g)},"Quitter le groupe")),muteBox);
 
     // conversation
     const byHour={};for(const p of S.photos)(byHour[p.hour]=byHour[p.hour]||[]).push(p);
@@ -233,7 +240,20 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(h===curHour){const miss=g.members.filter(m=>!list.some(p=>p.uid===m)&&m!==S.uid);if(miss.length)sec.append(el("p",{class:"pending",style:"margin-left:0",text:"Pas encore : "+miss.map(pName).join(", ")}));}
       convo.append(sec);
     }
-    app.replaceChildren(head,renderScore(g,sl,isToday),panel,themePanel(g),nav,convo);
+    if(S.photos.length)convo.append(el("div",{class:"row",style:"justify-content:center;margin:4px 0 18px"},el("button",{class:"btn ghost small",onclick:()=>showMosaic(g)},"🧩 Résumé de la journée")));
+    if(isToday){
+      const last=lastItem();
+      if(last){
+        const viewers=g.members.filter(m=>m!==S.uid&&m!==last.uid&&(S.seen[m]||0)>=last.ts);
+        if(viewers.length)convo.append(el("p",{class:"seenby",text:"Vu par "+viewers.map(pName).join(", ")}));
+      }
+      const typers=Object.entries(S.typing).filter(([u,t])=>u!==S.uid&&Date.now()-t<4000&&g.members.includes(u)).map(([u])=>pName(u));
+      S.typingShown=typers.length>0;
+      if(typers.length)convo.append(el("p",{class:"typing",text:typers.join(", ")+(typers.length>1?" écrivent":" écrit")},el("span",{class:"dots","aria-hidden":"true"},el("i"),el("i"),el("i"))));
+      markSeen(last);
+    }
+    const defi=isToday?el("div",{class:"defi"},el("b",{text:"🎯 Défi du jour"}),el("span",{text:defiDuJour()})):null;
+    app.replaceChildren(...[head,renderScore(g,sl,isToday),panel,themePanel(g),defi,nav,convo].filter(Boolean));
 
     // bottom bar
     barHost.replaceChildren(renderBar(sl,isToday,mineNow));
@@ -264,7 +284,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       el("li",{text:`Tout le groupe à l’heure sur un même déclic : +${PTS.together} chacun.`}),
       el("li",{text:`Série de jours : +${PTS.streakStep} par jour de suite avec au moins une photo (jusqu’à +${PTS.streakMax} par jour).`}),
       el("li",{text:`Journée parfaite, les ${HOURS} déclics de 8h à 20h : +${PTS.fullDay}.`}));
-    board.append(tabs,ol,el("p",{class:"legend",style:"margin:0 0 6px",text:"Comment gagner des points"}),rules);
+    const bl=el("ul",{class:"badges"});
+    for(const m of g.members){const got=badgesOf(m);bl.append(el("li",{},avEl(m,26),el("span",{class:"nm",text:m===S.uid?"Toi":pName(m)}),
+      el("span",{class:"icons",text:got.length?got.map(b=>b.icon).join(" "):"—",title:got.map(b=>b.name).join(", ")})));}
+    const guide=el("ul",{class:"rules"});const mineB=new Set(badgesOf(S.uid).map(b=>b.id));
+    for(const b of BADGES)guide.append(el("li",{class:mineB.has(b.id)?"got":"",text:`${b.icon} ${b.name} : ${b.desc}`}));
+    announceBadges(g);
+    board.append(tabs,ol,el("p",{class:"legend",style:"margin:0 0 6px",text:"Comment gagner des points"}),rules,
+      el("p",{class:"legend",style:"margin:10px 0 6px",text:"🏅 Badges (30 derniers jours)"}),bl,guide);
     const f=document.createDocumentFragment();f.append(card,board);return f;
   }
 
@@ -332,6 +359,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const sl=slotNow(),key=sl.phase+(sl.hour??"")+todayKey()+(sl.phase==="open"&&sl.sinceMin<ON_TIME);
     if(lastKey&&key!==lastKey){lastKey=key;if(S.current&&S.day!==todayKey()&&S.day===shiftDay(todayKey(),-1)){} render();return;}
     lastKey=key;const now=Date.now();
+    if(S.typingShown&&!Object.values(S.typing).some(t=>now-t<4000)){render();return;}
     const h=document.querySelector("[data-home]");
     if(h)h.textContent=sl.phase==="open"&&sl.sinceMin<ON_TIME?fmtDur(sl.open.getTime()+ON_TIME*60000-now):fmtDur(sl.next-now);
     const c=document.querySelector("[data-clock]");
@@ -356,6 +384,31 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     S.subs.push(base.collection("replies").where("date","==",S.day).onSnapshot(s=>{S.replies=s.docs.map(d=>({id:d.id,...d.data()}));render();},err));
     S.subs.push(base.collection("messages").where("date","==",S.day).onSnapshot(s=>{S.messages=s.docs.map(d=>({id:d.id,...d.data()})).filter(m=>typeof m.text==="string"&&typeof m.ts==="number");render();},err));
   }
+  // « Vu par » (collection seen) et « … écrit » (canal temps réel) pour le groupe ouvert.
+  function subscribeLive(id){
+    closeLive();S.seen={};S.typing={};
+    S.seenSub=S.db.doc("groups/"+id).collection("seen").onSnapshot(s=>{const m={};s.docs.forEach(d=>{const x=d.data();m[x.uid]=x.ts;});S.seen=m;render();},()=>{});
+    S.typingCh=S.db.typing(id,uid=>{S.typing[uid]=Date.now();render();});
+  }
+  function closeLive(){if(S.seenSub){S.seenSub();S.seenSub=null;}if(S.typingCh){S.typingCh.close();S.typingCh=null;}S.typing={};}
+  function lastItem(){
+    let last=null;
+    for(const x of [...S.photos,...S.messages])if(typeof x.ts==="number"&&(!last||x.ts>last.ts))last=x;
+    return last;
+  }
+  let seenWriting=false;
+  function markSeen(last){
+    if(!last||document.visibilityState!=="visible"||seenWriting||(S.seen[S.uid]||0)>=last.ts)return;
+    seenWriting=true;const ts=last.ts;S.seen[S.uid]=ts;
+    S.db.doc("groups/"+S.current).collection("seen").doc("s_"+S.uid).set({uid:S.uid,date:todayKey(),ts})
+      .catch(()=>{}).finally(()=>{seenWriting=false;});
+  }
+  let lastTypingSent=0;
+  $("#mText").addEventListener("input",e=>{
+    if(!S.typingCh||!e.target.value.trim()||Date.now()-lastTypingSent<2500)return;
+    lastTypingSent=Date.now();S.typingCh.send();
+  });
+
   function subscribeDays(){
     if(S.daySub){S.daySub();S.daySub=null;}S.days=[];
     S.daySub=S.db.doc("groups/"+S.current).collection("days").where("date",">=",shiftDay(todayKey(),-40)).onSnapshot(s=>{S.days=s.docs.map(d=>d.data());S.daysLoaded=true;backfill();render();},()=>{});
@@ -368,9 +421,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       S.backfilled[k]=1;recordSlot(p.date,p.hour,p.lateMin||0).catch(()=>{});return; // one write at a time
     }
   }
-  function openGroup(id){S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();S.day=todayKey();S.panelOpen=false;S.scrollBottom=true;subscribeDay();render();}
+  function openGroup(id){S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=false;S.scrollBottom=true;subscribeDay();render();}
   function setDay(d){S.day=d;S.scrollBottom=true;subscribeDay();render();}
-  function closeGroup(){S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}render();window.scrollTo(0,0);}
+  function closeGroup(){S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
 
   async function react(p,emoji){
     S.picker=null;
@@ -514,6 +567,146 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     catch(e){toast("Le thème n’a pas pu être changé.");}
   }
 
+  // ---------- profil : préférences ----------
+  async function saveProfile(patch){
+    const me=S.profiles[S.uid];if(!me)return false;
+    const next={...me,...patch,updatedAt:Date.now()};
+    for(const[k,v]of Object.entries(patch))if(v==null)delete next[k];
+    try{await S.db.doc("profiles/"+S.uid).set(next);return true;}catch(e){toast("L’enregistrement a échoué.");return false;}
+  }
+  const NOTIF_TYPES=[["photo","Nouvelles photos"],["reaction","Réactions et réponses à mes photos"],["message","Messages"],["join","Nouveaux membres"],["reminder","Rappel à chaque déclic"],["summary","Résumé de la journée (21h)"]];
+  function notifPrefs(){return {...((S.profiles[S.uid]||{}).notif||{})};}
+  async function setNotif(kind,on){const n=notifPrefs();if(on)delete n[kind];else n[kind]=false;await saveProfile({notif:n});}
+  async function toggleMute(g,on){
+    const n=notifPrefs();const m=new Set(n.muted||[]);on?m.add(g.id):m.delete(g.id);n.muted=[...m];
+    if(await saveProfile({notif:n}))toast(on?"Notifications de ce groupe coupées":"Notifications de ce groupe réactivées");
+  }
+
+  // ---------- administration du groupe ----------
+  async function removeMember(g,m){
+    if(!confirm(`Retirer ${pName(m)} du groupe « ${g.name} » ?`))return;
+    try{await S.db.rpc("remove_member",{code:g.id,member:m});toast(pName(m)+" a été retiré du groupe");}
+    catch(e){toast("Impossible de retirer ce membre.");}
+  }
+
+  // ---------- défi du jour ----------
+  const DEFIS=["Montre ce que tu manges","Ta vue en ce moment","Un selfie avec la personne la plus proche","Quelque chose de rouge","Tes chaussures du jour","Le ciel au-dessus de toi","Un objet qui te fait sourire","Ton coin préféré de la maison","Un animal (ou une peluche)","Ta boisson du moment","Quelque chose qui commence par la lettre D","Ton plus beau sourire","Une ombre intéressante","Ce que tu lis ou regardes","Ta tenue du jour","Quelque chose de rond","Une photo prise d’en haut","Un détail que personne ne remarque","Tes mains en action","Quelque chose de vieux","Un reflet","Ton moyen de transport","Une couleur pastel","Ce qui est sur ton bureau","Un endroit où tu n’étais jamais allé","Ta grimace la plus drôle","Un truc qui brille","Quelque chose de vert","Une photo en noir et blanc","La meilleure chose de ta journée"];
+  function defiDuJour(){const[a,b,c]=todayKey().split("-").map(Number);const n=Math.floor(Date.UTC(a,b-1,c)/864e5);return DEFIS[n%DEFIS.length];}
+
+  // ---------- badges (calculés sur les 30 derniers jours du groupe) ----------
+  const BADGES=[
+    {id:"serie3",icon:"🔥",name:"Série de 3",desc:"poster 3 jours de suite",test:x=>x.best>=3},
+    {id:"serie7",icon:"☄️",name:"Série de 7",desc:"poster 7 jours de suite",test:x=>x.best>=7},
+    {id:"parfait",icon:"💯",name:"Journée parfaite",desc:`les ${HOURS} déclics d’une même journée`,test:x=>x.perfect},
+    {id:"combo5",icon:"⚡",name:"Combo ×5",desc:"5 déclics à l’heure d’affilée",test:x=>x.combo>=5},
+    {id:"ponctuel",icon:"⏱️",name:"Ponctuel",desc:"20 déclics à l’heure",test:x=>x.onTime>=20},
+    {id:"matin",icon:"🌅",name:"Lève-tôt",desc:"5 photos de 8h à l’heure",test:x=>x.early>=5},
+    {id:"soir",icon:"🌙",name:"Oiseau de nuit",desc:"5 photos de 20h",test:x=>x.night>=5},
+    {id:"cinquante",icon:"📸",name:"50 déclics",desc:"50 photos envoyées",test:x=>x.total>=50},
+  ];
+  function badgesOf(uid){
+    const since=shiftDay(todayKey(),-30);
+    const docs=S.days.filter(d=>d.uid===uid&&d.date>=since).sort((a,b)=>a.date<b.date?-1:1);
+    const x={best:0,perfect:false,combo:0,onTime:0,early:0,night:0,total:0};let run=0,prev=null;
+    for(const d of docs){
+      const hrs=Object.keys(d.slots||{}).map(Number).sort((a,b)=>a-b);if(!hrs.length)continue;
+      run=prev&&shiftDay(prev,1)===d.date?run+1:1;prev=d.date;x.best=Math.max(x.best,run);
+      if(hrs.length>=HOURS)x.perfect=true;
+      let c=0,ph=null;
+      for(const h of hrs){const v=d.slots[h];x.total++;
+        if(v<=ON_TIME){x.onTime++;c=ph===h-1&&c>0?c+1:1;x.combo=Math.max(x.combo,c);if(h===FIRST)x.early++;}else c=0;
+        if(h===LAST)x.night++;ph=h;}
+    }
+    return BADGES.filter(b=>b.test(x));
+  }
+  function announceBadges(g){
+    if(!S.daysLoaded)return;
+    const key="declic.badges."+g.id,got=badgesOf(S.uid).map(b=>b.id);
+    let seen=null;try{seen=JSON.parse(localStorage.getItem(key)||"null");}catch(e){}
+    try{localStorage.setItem(key,JSON.stringify(got));}catch(e){}
+    if(!seen)return; // première visite : pas d'annonce
+    const fresh=BADGES.filter(b=>got.includes(b.id)&&!seen.includes(b.id));
+    if(fresh.length)toast("Nouveau badge : "+fresh.map(b=>b.icon+" "+b.name).join(", ")+" !");
+  }
+
+  // ---------- résumé de la journée (mosaïque) ----------
+  function loadForCanvas(src){
+    return new Promise((res,rej)=>{const i=new Image();if(!src.startsWith("data:")){i.crossOrigin="anonymous";src+=(src.includes("?")?"&":"?")+"mosaic=1";}
+      i.onload=()=>res(i);i.onerror=rej;i.src=src;});
+  }
+  async function buildMosaic(g){
+    const photos=[...S.photos].sort((a,b)=>a.hour-b.hour||a.ts-b.ts);const n=photos.length;
+    const cols=n<=1?1:n<=4?2:n<=9?3:4,rows=Math.ceil(n/cols),W=300,H=400,gap=10,pad=28,top=150,foot=60;
+    const c=document.createElement("canvas");c.width=pad*2+cols*W+(cols-1)*gap;c.height=top+rows*H+(rows-1)*gap+foot;
+    const x=c.getContext("2d"),css=getComputedStyle(document.documentElement),v=k=>css.getPropertyValue(k).trim();
+    const disp='"Bricolage Grotesque","Avenir Next",system-ui,sans-serif',body='"Figtree",system-ui,sans-serif';
+    x.fillStyle=v("--bg")||"#E4EAF4";x.fillRect(0,0,c.width,c.height);
+    x.fillStyle=v("--ink")||"#1B2340";x.font=`800 44px ${disp}`;x.fillText(g.name,pad,pad+44);
+    x.font=`600 24px ${body}`;x.fillStyle=v("--muted")||"#5E6785";x.fillText(`${fmtDay(S.day)} · ${n} déclic${n>1?"s":""}`,pad,pad+86);
+    const imgs=await Promise.all(photos.map(p=>loadForCanvas(p.img).catch(()=>null)));
+    photos.forEach((p,i)=>{
+      const cx=pad+(i%cols)*(W+gap),cy=top+Math.floor(i/cols)*(H+gap),img=imgs[i];
+      x.save();x.beginPath();if(x.roundRect)x.roundRect(cx,cy,W,H,18);else x.rect(cx,cy,W,H);x.clip();
+      x.fillStyle=v("--line")||"#C9D2E3";x.fillRect(cx,cy,W,H);
+      if(img){const s=Math.max(W/img.width,H/img.height),w=img.width*s,h=img.height*s;x.drawImage(img,cx+(W-w)/2,cy+(H-h)/2,w,h);}
+      const label=`${p.hour}h · ${p.uid===S.uid?"Moi":pName(p.uid)}`;x.font=`700 20px ${body}`;const tw=x.measureText(label).width;
+      x.fillStyle="rgba(0,0,0,.55)";if(x.roundRect){x.beginPath();x.roundRect(cx+10,cy+H-44,tw+24,34,17);x.fill();}else x.fillRect(cx+10,cy+H-44,tw+24,34);
+      x.fillStyle="#fff";x.fillText(label,cx+22,cy+H-20);x.restore();
+    });
+    x.fillStyle=v("--muted")||"#5E6785";x.font=`800 22px ${disp}`;x.fillText("Déclic",pad,c.height-24);
+    return new Promise((res,rej)=>{try{c.toBlob(b=>b?res(b):rej(new Error("blob")),"image/jpeg",.88);}catch(e){rej(e);}});
+  }
+  let mosaicBlob=null;
+  async function showMosaic(g){
+    $("#mImg").removeAttribute("src");openDlg("#dlgMosaic");$("#mErr").textContent="Préparation de la mosaïque…";
+    try{mosaicBlob=await buildMosaic(g);$("#mImg").src=URL.createObjectURL(mosaicBlob);$("#mErr").textContent="";}
+    catch(e){mosaicBlob=null;$("#mErr").textContent="La mosaïque n’a pas pu être créée.";}
+    S.mosaicName=`declic-${g.name.replace(/[^\p{L}\p{N}]+/gu,"-")}-${S.day}.jpg`;
+  }
+  $("#mShare").addEventListener("click",async()=>{
+    if(!mosaicBlob)return;const file=new File([mosaicBlob],S.mosaicName||"declic.jpg",{type:"image/jpeg"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:"Résumé Déclic"});}catch(e){}return;}
+    const a=el("a",{href:URL.createObjectURL(mosaicBlob),download:file.name});document.body.append(a);a.click();a.remove();
+  });
+
+  // ---------- compte par e-mail (sans mot de passe) ----------
+  const ACC={mode:"link",step:1,email:""};
+  function openAccount(mode){
+    Object.assign(ACC,{mode,step:1,email:""});
+    $("#aTitle").textContent=mode==="login"?"Retrouver mon compte":"Sécuriser mon compte";
+    $("#aHint").textContent=mode==="login"?"Entre l’e-mail que tu as ajouté à ton compte : tu vas recevoir un code.":"Ajoute ton e-mail : si tu changes de téléphone, un code reçu par e-mail te permettra de retrouver ton compte. Tu restes connecté.";
+    $("#aEmail").value="";$("#aCode").value="";$("#aStep1").hidden=false;$("#aStep2").hidden=true;$("#aGo").textContent="Recevoir le code";
+    openDlg("#dlgAccount");setTimeout(()=>$("#aEmail").focus(),50);
+  }
+  function accountError(e){
+    const m=String(e&&e.message||"");
+    if(/already|registered|exists/i.test(m))return "Cet e-mail est déjà utilisé par un autre compte. Sur ce téléphone, utilise plutôt « J’ai déjà un compte ».";
+    if(/signups? not allowed|not found|user not/i.test(m))return "Aucun compte n’utilise cet e-mail.";
+    if(/expired|invalid|token/i.test(m))return "Code incorrect ou expiré. Vérifie-le ou demande un nouveau code.";
+    if(/rate|too many|seconds/i.test(m))return "Trop de demandes : réessaie dans une minute.";
+    if(/email/i.test(m)&&/valid/i.test(m))return "Cette adresse e-mail n’est pas valide.";
+    return "Ça n’a pas marché. Réessaie dans un instant.";
+  }
+  $("#aGo").addEventListener("click",async()=>{
+    const b=$("#aGo");$("#aErr").textContent="";
+    if(ACC.step===1){
+      const email=$("#aEmail").value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){$("#aErr").textContent="Entre une adresse e-mail valide.";return;}
+      b.disabled=true;
+      try{ACC.mode==="login"?await S.account.startLogin(email):await S.account.startLink(email);
+        ACC.email=email;ACC.step=2;$("#aStep1").hidden=true;$("#aStep2").hidden=false;b.textContent="Valider le code";
+        $("#aHint").textContent=`Un code a été envoyé à ${email}. Regarde aussi dans les spams.`;setTimeout(()=>$("#aCode").focus(),50);}
+      catch(e){$("#aErr").textContent=accountError(e);}
+      b.disabled=false;return;
+    }
+    const code=$("#aCode").value.replace(/\s/g,"");if(!/^\d{6,10}$/.test(code)){$("#aErr").textContent="Entre le code à 6 chiffres reçu par e-mail.";return;}
+    b.disabled=true;
+    try{
+      if(ACC.mode==="login"){await S.account.confirmLogin(ACC.email,code);toast("Compte retrouvé !");setTimeout(()=>location.reload(),600);return;}
+      await S.account.confirmLink(ACC.email,code);S.accountEmail=ACC.email;$("#dlgAccount").close();toast("Ton compte est sécurisé");render();
+    }catch(e){$("#aErr").textContent=accountError(e);}
+    b.disabled=false;
+  });
+
   // ---------- installation ----------
   const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
   const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
@@ -576,8 +769,16 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       :st==="unsupported"?(isIOS?"Ajoute d’abord Déclic à l’écran d’accueil (Partager › Sur l’écran d’accueil), puis ouvre-le depuis l’icône.":"Ce navigateur ne gère pas les notifications.")
       :"Nouvelles photos de tes groupes et rappel à chaque déclic, de 8h à 20h.";
     const me=S.profiles[S.uid]||{};
+    const prefs=me.notif||{};
+    const choices=el("div",{class:"choices"},...NOTIF_TYPES.map(([k,label])=>el("label",{class:"switch"},
+      el("input",{type:"checkbox",checked:prefs[k]!==false,onchange:e=>setNotif(k,e.target.checked)}),el("span",{text:label}))));
+    const account=S.accountEmail
+      ?el("div",{class:"setrow"},el("div",{},el("b",{text:"Compte"}),el("p",{text:`Sécurisé avec ${S.accountEmail} ✓ Sur un autre téléphone, choisis « J’ai déjà un compte ».`})))
+      :el("div",{class:"setrow"},el("div",{},el("b",{text:"Compte"}),el("p",{text:"Ajoute ton e-mail pour retrouver ton compte si tu changes de téléphone. Pas de mot de passe : tu recevras un code."})),
+        el("button",{class:"btn flash small",onclick:()=>openAccount("link")},"Ajouter mon e-mail"));
     return el("section",{class:"profile settings"},el("h2",{text:"Réglages"}),
-      el("div",{class:"setrow"},el("div",{},el("b",{text:"Notifications"}),el("p",{text:txt})),ctl),
+      account,
+      el("div",{class:"setrow setcol"},el("div",{class:"setline"},el("div",{},el("b",{text:"Notifications"}),el("p",{text:txt})),ctl),choices),
       el("div",{class:"setrow setcol"},el("div",{},el("b",{text:"Thème de l’application"}),
         el("p",{text:"Rien que pour toi. Dans un groupe qui a son propre thème, c’est celui du groupe qui s’affiche."})),
         themeGrid(me.theme,setAppTheme,"apptheme")));
@@ -595,8 +796,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     let opened;
     try{opened=await openDb(SUPABASE_URL,SUPABASE_ANON_KEY);}
     catch(e){app.replaceChildren(el("p",{class:"notice",text:"Impossible de se connecter à Déclic. Vérifie ta connexion internet."}),el("div",{class:"row",style:"margin-top:12px"},el("button",{class:"btn",onclick:()=>location.reload()},"Réessayer")));return;}
-    const {db,uid}=opened;
-    S.db=db;S.uid=uid;S.prefillName="";
+    const {db,uid,account}=opened;
+    S.db=db;S.uid=uid;S.account=account;S.prefillName="";
+    account.isLinked().then(async ok=>{if(ok){S.accountEmail=await account.email();render();}}).catch(()=>{});
     db.collection("profiles").limit(1000).onSnapshot(s=>{const m={};s.docs.forEach(d=>m[d.id]=d.data());S.profiles=m;S.profilesLoaded=true;render();},e=>{if(e.code==="unavailable")toast("Connexion perdue, nouvelle tentative…");S.profilesLoaded=true;render();});
     db.collection("groups").where("members","array-contains",uid).onSnapshot(s=>{S.groups=s.docs.map(d=>({id:d.id,...d.data()}));S.groupsLoaded=true;render();},e=>{if(e.code!=="unavailable")toast("Impossible de charger tes groupes.");});
     S.push=await pushState();

@@ -58,7 +58,40 @@ export async function openDb(url, anonKey) {
     session = r.data.session;
   }
   const uid = session.user.id;
-  return { uid, db: makeDb(sb, uid) };
+  return { uid, db: makeDb(sb, uid), account: makeAccount(sb) };
+}
+
+// Compte sans mot de passe : un code à 6 chiffres est envoyé par e-mail.
+// - link : ajoute un e-mail au compte actuel (on reste connecté, même identifiant)
+// - login : se connecte à un compte existant depuis un autre appareil
+function makeAccount(sb) {
+  const clean = (e) => String(e || "").trim().toLowerCase();
+  return {
+    async email() {
+      const { data } = await sb.auth.getUser();
+      return data?.user?.email || data?.user?.new_email || null;
+    },
+    async isLinked() {
+      const { data } = await sb.auth.getUser();
+      return !!(data?.user?.email && !data.user.is_anonymous);
+    },
+    async startLink(email) {
+      const { error } = await sb.auth.updateUser({ email: clean(email) });
+      if (error) throw mapError(error);
+    },
+    async confirmLink(email, code) {
+      const { error } = await sb.auth.verifyOtp({ email: clean(email), token: String(code).trim(), type: "email_change" });
+      if (error) throw mapError(error);
+    },
+    async startLogin(email) {
+      const { error } = await sb.auth.signInWithOtp({ email: clean(email), options: { shouldCreateUser: false } });
+      if (error) throw mapError(error);
+    },
+    async confirmLogin(email, code) {
+      const { error } = await sb.auth.verifyOtp({ email: clean(email), token: String(code).trim(), type: "email" });
+      if (error) throw mapError(error);
+    },
+  };
 }
 
 function makeDb(sb, uid) {
@@ -229,6 +262,15 @@ function makeDb(sb, uid) {
     async removePush(endpoint) {
       const { error } = await sb.from("push_subs").delete().eq("endpoint", endpoint);
       if (error) throw mapError(error);
+    },
+    // Canal temps réel sans base de données (indicateur « … écrit »).
+    typing(group, onTyping) {
+      const ch = sb.channel(`typing:${group}`, { config: { broadcast: { self: false } } });
+      ch.on("broadcast", { event: "typing" }, (m) => m.payload && onTyping(m.payload.uid)).subscribe();
+      return {
+        send: () => ch.send({ type: "broadcast", event: "typing", payload: { uid } }),
+        close: () => sb.removeChannel(ch),
+      };
     },
     doc: (p) => new DocRef(p),
     collection: (p) => new Query(p),

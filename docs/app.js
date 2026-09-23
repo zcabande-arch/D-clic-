@@ -122,6 +122,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(S.fileTarget==="avatar"){S.draftAvatar=await squareAvatar(f);render();}
       else if(S.fileTarget==="shot"){S.pendingShot=await compress(f);$("#sPrev").src=S.pendingShot;$("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta photo de ${sl.hour}h`:"Ta photo";openDlg("#dlgShot");}
       else if(S.fileTarget==="theme"){const g=S.groups.find(x=>x.id===S.current);if(!g)return;toast("Envoi de la photo…");const url=await S.db.uploadImage(await compress(f,1400,280000));await setTheme(g,{image:url});}
+      else if(S.fileTarget==="apptheme"){toast("Envoi de la photo…");const url=await S.db.uploadImage(await compress(f,1400,280000));await setAppTheme({image:url});}
       else if(S.fileTarget==="reply"){S.pendingReplyImg=await compress(f,700,60000);const p=$("#rPrev");p.src=S.pendingReplyImg;p.style.display="block";}
     }catch(err){toast("Cette image n’a pas pu être lue.");}
   });
@@ -130,7 +131,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   function render(){
     if(!S.db)return;
     const cg=S.current&&!S.editProfile?S.groups.find(x=>x.id===S.current):null;
-    applyTheme(cg&&cg.theme);
+    const mine=S.profiles[S.uid];
+    applyTheme((cg&&cg.theme)||(mine&&mine.theme)||null);
     if(!S.profilesLoaded){app.replaceChildren(el("p",{class:"notice",text:"Chargement…"}));barHost.replaceChildren();return;}
     if(!S.profiles[S.uid]||S.editProfile)return renderProfile();
     S.current?renderGroup():renderHome();
@@ -150,7 +152,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const save=el("button",{class:"btn flash",style:"width:100%;margin-top:16px",onclick:async()=>{
       const n=nameIn.value.trim(); if(!n){err.textContent="Entre ton nom.";return;}
       save.disabled=true;
-      try{await S.db.doc("profiles/"+S.uid).set({name:n,avatar:avatar||"",updatedAt:Date.now()});S.editProfile=false;S.draftAvatar=undefined;toast(first?"Profil créé":"Profil mis à jour");}
+      try{await S.db.doc("profiles/"+S.uid).set({name:n,avatar:avatar||"",updatedAt:Date.now(),...(mine&&mine.theme?{theme:mine.theme}:{})});S.editProfile=false;S.draftAvatar=undefined;toast(first?"Profil créé":"Profil mis à jour");}
       catch(e){err.textContent="L’enregistrement a échoué. Réessaie.";save.disabled=false;}
     }},first?"Créer mon profil":"Enregistrer");
     const card=el("section",{class:"profile"},
@@ -458,16 +460,27 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     try{await S.db.rpc("set_group_theme",{code:g.id,theme});toast("Thème du groupe mis à jour");}
     catch(e){toast("Le thème n’a pas pu être changé.");}
   }
-  function themePanel(g){
-    const cur=g.theme||{};
-    const box=el("details",{class:"panel",open:S.themeOpen,ontoggle:e=>S.themeOpen=e.target.open},el("summary",{text:"🎨 Thème du groupe"}));
+  // Grille de choix : « Par défaut », les thèmes prêts à l'emploi et « Ma photo ».
+  function themeGrid(theme,onPick,fileTarget){
+    const cur=theme||{};
     const grid=el("div",{class:"themes"});
     const opt=(label,sw,on,onclick)=>el("button",{class:"theme-opt"+(on?" on":""),"aria-pressed":on?"true":"false",onclick},el("span",{class:"sw",style:sw}),el("span",{text:label}));
-    grid.append(opt("Par défaut","background:linear-gradient(135deg,#1B2340 50%,#FFC83D 50%)",!cur.preset&&!cur.image,()=>setTheme(g,null)));
-    for(const[k,t]of Object.entries(THEMES))grid.append(opt(t.name,`background:linear-gradient(135deg,${t.a} 50%,${t.b} 50%)`,cur.preset===k,()=>setTheme(g,{preset:k})));
-    grid.append(opt("Ma photo",cur.image&&MEDIA_URL.test(cur.image)?`background:url("${cur.image}") center/cover`:"background:var(--line)",!!cur.image,()=>pickFile("theme")));
-    box.append(el("p",{text:"Le thème s’applique pour tous les membres du groupe."}),grid);
+    grid.append(opt("Par défaut","background:linear-gradient(135deg,#1B2340 50%,#FFC83D 50%)",!cur.preset&&!cur.image,()=>onPick(null)));
+    for(const[k,t]of Object.entries(THEMES))grid.append(opt(t.name,`background:linear-gradient(135deg,${t.a} 50%,${t.b} 50%)`,cur.preset===k,()=>onPick({preset:k})));
+    grid.append(opt("Ma photo",cur.image&&MEDIA_URL.test(cur.image)?`background:url("${cur.image}") center/cover`:"background:var(--line)",!!cur.image,()=>pickFile(fileTarget)));
+    return grid;
+  }
+  function themePanel(g){
+    const box=el("details",{class:"panel",open:S.themeOpen,ontoggle:e=>S.themeOpen=e.target.open},el("summary",{text:"🎨 Thème du groupe"}));
+    box.append(el("p",{text:"Le thème s’applique pour tous les membres du groupe."}),themeGrid(g.theme,t=>setTheme(g,t),"theme"));
     return box;
+  }
+  // Thème personnel de l'application, enregistré dans le profil (il suit l'utilisateur sur ses appareils).
+  async function setAppTheme(theme){
+    const me=S.profiles[S.uid];if(!me)return;
+    const next={...me,updatedAt:Date.now()};if(theme)next.theme=theme;else delete next.theme;
+    try{await S.db.doc("profiles/"+S.uid).set(next);toast("Thème de l’application mis à jour");}
+    catch(e){toast("Le thème n’a pas pu être changé.");}
   }
 
   // ---------- installation ----------
@@ -531,8 +544,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       :st==="denied"?"Bloquées : autorise les notifications de Déclic dans les réglages de l’appareil."
       :st==="unsupported"?(isIOS?"Ajoute d’abord Déclic à l’écran d’accueil (Partager › Sur l’écran d’accueil), puis ouvre-le depuis l’icône.":"Ce navigateur ne gère pas les notifications.")
       :"Nouvelles photos de tes groupes et rappel à chaque déclic, de 8h à 20h.";
+    const me=S.profiles[S.uid]||{};
     return el("section",{class:"profile settings"},el("h2",{text:"Réglages"}),
-      el("div",{class:"setrow"},el("div",{},el("b",{text:"Notifications"}),el("p",{text:txt})),ctl));
+      el("div",{class:"setrow"},el("div",{},el("b",{text:"Notifications"}),el("p",{text:txt})),ctl),
+      el("div",{class:"setrow setcol"},el("div",{},el("b",{text:"Thème de l’application"}),
+        el("p",{text:"Rien que pour toi. Dans un groupe qui a son propre thème, c’est celui du groupe qui s’affiche."})),
+        themeGrid(me.theme,setAppTheme,"apptheme")));
   }
 
   addEventListener("beforeinstallprompt",e=>{e.preventDefault();S.installEvt=e;render();});

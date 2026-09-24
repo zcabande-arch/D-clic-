@@ -6,6 +6,7 @@
 // - POST {type:message} → prévient les autres membres d'un nouveau message dans la conversation
 // - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale),
 //                       le résumé de la journée à 21h, et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
+// - POST {type:recovery-create} (avec le jeton de l'utilisateur) → crée son code de récupération
 // Chaque personne choisit dans son profil (data.notif) les notifications qu'elle reçoit et les groupes qu'elle coupe.
 // Elle ne fait pas confiance au contenu des requêtes : elle relit tout dans la base, et chaque
 // photo n'est notifiée qu'une fois. La déployer avec « Verify JWT » désactivé.
@@ -351,6 +352,24 @@ async function purgeOldPhotos() {
   return removed;
 }
 
+// ---------- code de récupération (sans e-mail) ----------
+// Le code sert de mot de passe ; l'adresse de connexion est dérivée du code (empreinte SHA-256),
+// si bien qu'un nouvel appareil n'a besoin que du code. Aucun e-mail n'est jamais envoyé.
+const RC_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+async function recoveryEmail(norm: string) {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode("declic:" + norm)));
+  return `r-${Array.from(h.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("")}@declic-recup.invalid`;
+}
+async function onRecoveryCreate(req: Request) {
+  const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const { data, error } = await sb.auth.getUser(token);
+  if (error || !data?.user) return json({ error: "unauthenticated" }, 401);
+  const norm = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => RC_ALPHA[b % RC_ALPHA.length]).join("");
+  const email = await recoveryEmail(norm);
+  must(await sb.auth.admin.updateUserById(data.user.id, { email, password: norm, email_confirm: true }), "création du code");
+  return json({ code: norm.match(/.{4}/g)!.join("-") });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -362,6 +381,7 @@ Deno.serve(async (req) => {
     if (body.type === "join") return await onJoin(body.group, body.uid);
     if (body.type === "message") return await onMessage(body.coll, body.id);
     if (body.type === "tick") return await onTick();
+    if (body.type === "recovery-create") return await onRecoveryCreate(req);
     return json({ error: "unknown type" }, 400);
   } catch (e) {
     console.error(e);

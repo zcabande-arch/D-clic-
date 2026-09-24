@@ -66,12 +66,19 @@
 </dialog>
 
 <dialog id="dlgAccount">
-  <h2 id="aTitle">Ton compte</h2>
-  <p class="hint" id="aHint"></p>
-  <div id="aStep1"><label for="aEmail">Ton e-mail</label><input type="email" id="aEmail" autocomplete="email" inputmode="email" placeholder="prenom@exemple.fr"></div>
-  <div id="aStep2" hidden><label for="aCode">Code reçu par e-mail</label><input type="text" id="aCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="letter-spacing:.2em"></div>
+  <h2>Retrouver mon compte</h2>
+  <p class="hint">Entre le code de récupération que tu as créé dans ton profil sur ton ancien appareil.</p>
+  <label for="aCode">Code de récupération</label>
+  <input type="text" id="aCode" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" style="text-transform:uppercase;letter-spacing:.08em">
   <p class="err" id="aErr"></p>
-  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="aGo">Recevoir le code</button></div>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="aGo">Retrouver mon compte</button></div>
+</dialog>
+
+<dialog id="dlgCode">
+  <h2>Ton code de récupération</h2>
+  <div class="rcode" id="rcCode"></div>
+  <p class="hint">Note-le ou fais une capture d’écran, et garde-le pour toi : il permet d’ouvrir ton compte sur un autre appareil. Il ne sera plus affiché.</p>
+  <div class="row"><button class="btn ghost" id="rcCopy">Copier</button><button class="btn flash" data-close>C’est noté</button></div>
 </dialog>
 
 <dialog id="dlgMosaic">

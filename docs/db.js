@@ -47,7 +47,7 @@ const OPS = {
 const SERVER_OPS = { "==": "eq", "<": "lt", "<=": "lte", ">": "gt", ">=": "gte" };
 const matches = (where, data) => where.every(([f, op, v]) => OPS[op](data?.[f], v));
 
-export async function openDb(url, anonKey) {
+export async function openDb(url, anonKey, notifyUrl) {
   const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
   let {
     data: { session },
@@ -58,38 +58,34 @@ export async function openDb(url, anonKey) {
     session = r.data.session;
   }
   const uid = session.user.id;
-  return { uid, db: makeDb(sb, uid), account: makeAccount(sb) };
+  return { uid, db: makeDb(sb, uid), account: makeAccount(sb, notifyUrl) };
 }
 
-// Compte sans mot de passe : un code à 6 chiffres est envoyé par e-mail.
-// - link : ajoute un e-mail au compte actuel (on reste connecté, même identifiant)
-// - login : se connecte à un compte existant depuis un autre appareil
-function makeAccount(sb) {
-  const clean = (e) => String(e || "").trim().toLowerCase();
+// Code de récupération (sans e-mail) : le code sert de mot de passe et l'adresse de connexion en est dérivée,
+// exactement comme dans la fonction Edge. Créer un code ne déconnecte pas ; il remplace l'ancien.
+const normCode = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+async function recoveryEmail(norm) {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("declic:" + norm)));
+  return `r-${Array.from(h.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("")}@declic-recup.invalid`;
+}
+function makeAccount(sb, notifyUrl) {
   return {
-    async email() {
-      const { data } = await sb.auth.getUser();
-      return data?.user?.email || data?.user?.new_email || null;
+    async createCode() {
+      const { data } = await sb.auth.getSession();
+      const r = await fetch(notifyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (data?.session?.access_token || "") },
+        body: JSON.stringify({ type: "recovery-create" }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.code) throw dbError(j.error || "internal", j.detail || "Création du code impossible");
+      return j.code;
     },
-    async isLinked() {
-      const { data } = await sb.auth.getUser();
-      return !!(data?.user?.email && !data.user.is_anonymous);
-    },
-    async startLink(email) {
-      const { error } = await sb.auth.updateUser({ email: clean(email) });
-      if (error) throw mapError(error);
-    },
-    async confirmLink(email, code) {
-      const { error } = await sb.auth.verifyOtp({ email: clean(email), token: String(code).trim(), type: "email_change" });
-      if (error) throw mapError(error);
-    },
-    async startLogin(email) {
-      const { error } = await sb.auth.signInWithOtp({ email: clean(email), options: { shouldCreateUser: false } });
-      if (error) throw mapError(error);
-    },
-    async confirmLogin(email, code) {
-      const { error } = await sb.auth.verifyOtp({ email: clean(email), token: String(code).trim(), type: "email" });
-      if (error) throw mapError(error);
+    async login(code) {
+      const norm = normCode(code);
+      if (norm.length !== 16) throw dbError("invalid_argument", "Code incomplet");
+      const { error } = await sb.auth.signInWithPassword({ email: await recoveryEmail(norm), password: norm });
+      if (error) throw dbError(/invalid/i.test(error.message) ? "bad_code" : "unavailable", error.message);
     },
   };
 }

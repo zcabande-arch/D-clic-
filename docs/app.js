@@ -206,6 +206,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     app.className="wrap chat";
 
     const head=el("header",{class:"top"},el("button",{class:"back",onclick:goHome},"‹ Groupes"),el("span",{class:"brand",style:"font-size:20px"},el("span",{class:"t",text:g.name})));
+    const back=isToday?null:el("div",{class:"row",style:"justify-content:center;margin:-6px 0 16px"},el("button",{class:"btn ghost small",onclick:()=>setDay(todayKey())},"Revenir à aujourd’hui"));
     const nav=el("div",{class:"daynav"},
       el("button",{onclick:()=>setDay(shiftDay(S.day,-1))},"‹ Veille"),
       el("strong",{text:fmtDay(S.day)}),
@@ -253,10 +254,11 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       markSeen(last);
     }
     const defi=isToday?el("div",{class:"defi"},el("b",{text:"🎯 Défi du jour"}),el("span",{text:defiDuJour()})):null;
-    app.replaceChildren(...[head,renderScore(g,sl,isToday),panel,themePanel(g),defi,nav,convo].filter(Boolean));
+    app.replaceChildren(...[head,renderScore(g,sl,isToday),panel,themePanel(g),defi,nav,back,convo].filter(Boolean));
 
     // bottom bar
-    barHost.replaceChildren(renderBar(sl,isToday,mineNow));
+    const bar=renderBar(sl,isToday,mineNow);
+    barHost.replaceChildren(...(bar?[bar]:[]));document.body.classList.toggle("has-bar",!!bar);
     if(S.scrollBottom||nearBottom)requestAnimationFrame(()=>window.scrollTo(0,document.documentElement.scrollHeight));else window.scrollTo(0,prevY);
     tick();
   }
@@ -340,18 +342,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     try{await S.db.doc("groups/"+S.current).collection("messages").doc(m.id).delete();}catch(e){toast("Le message n’a pas pu être supprimé.");}
   }
 
+  // Bandeau fin, affiché seulement quand une photo est attendue (déclic en cours et pas encore envoyée).
   function renderBar(sl,isToday,mineNow){
-    const txt=el("div",{class:"txt"}),bar=el("div",{class:"bar"},el("div",{class:"in"},txt));
-    const inner=bar.firstChild;
-    if(!isToday){txt.append(el("div",{class:"l1",text:"Tu regardes "+fmtDay(S.day).toLowerCase()}),el("div",{class:"l2",text:"Archives"}));inner.append(el("button",{class:"btn",onclick:()=>setDay(todayKey())},"Aujourd’hui"));return bar;}
-    if(sl.phase==="open"&&!mineNow){
-      bar.classList.add("open");
-      txt.append(el("div",{class:"l1","data-l1":"1"}),el("div",{class:"l2","data-clock":"1"}));
-      inner.append(el("button",{class:"btn",onclick:()=>pickFile("shot","environment")},"📷 Ma photo de "+sl.hour+"h"));
-    }else{
-      txt.append(el("div",{class:"l1",text:sl.phase==="open"?`Photo de ${sl.hour}h envoyée. Prochain déclic ${sl.hour<LAST?"à "+(sl.hour+1)+"h":"demain à 8h"}`:`Prochain déclic ${sl.phase==="before"?"à 8h":"demain à 8h"}`}),el("div",{class:"l2","data-clock":"1"}));
-    }
-    return bar;
+    if(!isToday||sl.phase!=="open"||mineNow)return null;
+    return el("div",{class:"bar open slim"},el("div",{class:"in"},
+      el("div",{class:"txt"},el("span",{class:"l1","data-l1":"1"}),el("span",{class:"l2","data-clock":"1"})),
+      el("button",{class:"btn small",onclick:()=>pickFile("shot","environment")},"📷 Ma photo")));
   }
 
   let lastKey="";
@@ -366,8 +362,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(c){
       const l1=document.querySelector("[data-l1]");
       if(l1){const left=sl.open.getTime()+ON_TIME*60000-now;
-        if(left>0){l1.textContent=`Déclic de ${sl.hour}h : à l’heure encore`;c.textContent=fmtDur(left);}
-        else{l1.textContent=`En retard pour ${sl.hour}h, envoie quand même`;c.textContent="+"+fmtDur(-left);}
+        if(left>0){l1.textContent=`📷 Déclic de ${sl.hour}h`;c.textContent=fmtDur(left);}
+        else{l1.textContent=`En retard pour ${sl.hour}h`;c.textContent="+"+fmtDur(-left);}
       }else c.textContent=fmtDur(sl.next-now);
     }
   }

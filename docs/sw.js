@@ -1,5 +1,5 @@
 // Service worker : ouverture hors ligne de l'interface Déclic et affichage des notifications.
-const SHELL = "declic-shell-v2";
+const SHELL = "declic-shell-v3";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./db.js", "./config.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -19,8 +19,10 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
+  // « no-cache » : on redemande toujours au serveur s'il y a une version plus récente (GitHub Pages met 10 min en cache).
+  const fresh = e.request.mode === "navigate" ? fetch(e.request.url, { cache: "no-cache" }) : fetch(new Request(e.request, { cache: "no-cache" }));
   e.respondWith(
-    fetch(e.request)
+    fresh
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

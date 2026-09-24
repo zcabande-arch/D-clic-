@@ -205,7 +205,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const nearBottom=innerHeight+scrollY>=document.documentElement.scrollHeight-120, prevY=scrollY;
     app.className="wrap chat";
 
-    const head=el("header",{class:"top"},el("button",{class:"back",onclick:closeGroup},"‹ Groupes"),el("span",{class:"brand",style:"font-size:20px"},el("span",{class:"t",text:g.name})));
+    const head=el("header",{class:"top"},el("button",{class:"back",onclick:goHome},"‹ Groupes"),el("span",{class:"brand",style:"font-size:20px"},el("span",{class:"t",text:g.name})));
     const nav=el("div",{class:"daynav"},
       el("button",{onclick:()=>setDay(shiftDay(S.day,-1))},"‹ Veille"),
       el("strong",{text:fmtDay(S.day)}),
@@ -421,9 +421,37 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       S.backfilled[k]=1;recordSlot(p.date,p.hour,p.lateMin||0).catch(()=>{});return; // one write at a time
     }
   }
-  function openGroup(id){S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=false;S.scrollBottom=true;subscribeDay();render();}
+  function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=false;S.scrollBottom=true;subscribeDay();render();}
   function setDay(d){S.day=d;S.scrollBottom=true;subscribeDay();render();}
-  function closeGroup(){S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
+  function closeGroup(){if(history.state&&history.state.g)history.replaceState(null,"");S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
+  // Retour à l'accueil : passe par l'historique pour que le bouton/geste « retour » du navigateur fasse pareil.
+  function goHome(){if(history.state&&history.state.g)history.back();else closeGroup();}
+  addEventListener("popstate",()=>{if(S.current&&!(history.state&&history.state.g))closeGroup();});
+
+  // Balayer vers la droite dans un groupe ramène à l'accueil ; l'écran suit le doigt.
+  (function swipeBack(){
+    const dock=$("#dock");let sx=0,sy=0,dx=0,active=false,decided=false;
+    const blocked=t=>t.closest("input,textarea,.picker,.themes,.track,dialog,[contenteditable]")||document.querySelector("dialog[open]");
+    const move=(x,anim)=>{for(const n of [app,dock]){n.style.transition=anim?"transform .22s ease-out":"none";n.style.transform=x?`translateX(${x}px)`:"";}};
+    addEventListener("touchstart",e=>{
+      if(!S.current||e.touches.length!==1||blocked(e.target)){active=false;return;}
+      sx=e.touches[0].clientX;sy=e.touches[0].clientY;dx=0;active=true;decided=false;
+    },{passive:true});
+    addEventListener("touchmove",e=>{
+      if(!active)return;
+      const x=e.touches[0].clientX-sx,y=e.touches[0].clientY-sy;
+      if(!decided){if(Math.abs(x)<10&&Math.abs(y)<10)return;decided=true;if(x<=0||Math.abs(y)>Math.abs(x)*0.8){active=false;return;}}
+      dx=Math.max(0,x);move(dx,false);
+      if(e.cancelable)e.preventDefault();
+    },{passive:false});
+    const end=()=>{
+      if(!active)return;active=false;
+      if(dx>Math.min(120,innerWidth*0.3)){move(innerWidth,true);setTimeout(()=>{move(0,false);goHome();},200);}
+      else move(0,true);
+      dx=0;
+    };
+    addEventListener("touchend",end);addEventListener("touchcancel",end);
+  })();
 
   async function react(p,emoji){
     S.picker=null;

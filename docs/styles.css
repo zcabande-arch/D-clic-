@@ -249,3 +249,7 @@ img.mosaic{display:block;width:100%;max-height:60vh;object-fit:contain;border-ra
 .members .bell{font-size:15px;flex:none}
 .members .bell.off{opacity:.55}
 .nsline{font-size:13px;color:var(--muted);margin:-4px 0 12px}
+.pushicon{font-size:40px;text-align:center;margin:0 0 4px}
+#dlgPush h2{text-align:center}
+.steps{margin:6px 0 10px;padding-left:22px;display:grid;gap:4px}
+#dlgPush p{margin:6px 0}

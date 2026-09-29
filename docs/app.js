@@ -138,6 +138,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(!S.profilesLoaded){app.replaceChildren(el("p",{class:"notice",text:"Chargement…"}));barHost.replaceChildren();return;}
     if(!S.profiles[S.uid]||S.editProfile)return renderProfile();
     S.current?renderGroup():renderHome();
+    maybeAskPush();
     if(S.pendingJoin&&!S.current){
       const code=S.pendingJoin;S.pendingJoin=null;
       if(S.groups.some(g=>g.id===code))openGroup(code);
@@ -182,7 +183,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       el("header",{class:"top"},el("h1",{class:"brand"},el("span",{class:"shutter","aria-hidden":"true"}),el("span",{class:"t",text:"Déclic"})),
         el("button",{class:"me",onclick:()=>{S.editProfile=true;render();},"aria-label":"Modifier mon profil"},el("span",{text:me.name}),avEl(S.uid,36))),
       now);
-    for(const c of [pushCard(),installCard()])if(c)app.append(c);
+    for(const c of [installCard()])if(c)app.append(c);
     if(!S.groups.length) app.append(el("div",{class:"empty",text:"Tu n’as pas encore de groupe. Crée-en un et partage son code, ou entre le code qu’on t’a donné."}));
     else{
       const ul=el("ul",{class:"groups"});
@@ -736,7 +737,6 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     return null;
   }
   // ---------- notifications ----------
-  const ASK_KEY="declic.pushAsked";
   const pushSupported=()=>"serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
   function b64ToU8(s){const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0));}
   async function swReg(){try{return await navigator.serviceWorker.getRegistration();}catch(e){return null;}}
@@ -765,15 +765,36 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     }catch(e){toast("Impossible de désactiver les notifications.");}
     S.push=await pushState();render();
   }
-  function pushAsked(){try{return !!localStorage.getItem(ASK_KEY);}catch(e){return false;}}
-  function markPushAsked(){try{localStorage.setItem(ASK_KEY,"1");}catch(e){}}
-  function pushCard(){
-    if(S.push!=="off"||pushAsked())return null;
-    return el("div",{class:"empty invite"},
-      el("p",{text:"Active les notifications : tu sauras quand tes proches publient, et tu seras prévenu à chaque déclic."}),
-      el("div",{class:"row"},el("button",{class:"btn flash small",onclick:()=>{markPushAsked();enablePush();}},"Activer les notifications"),
-        el("button",{class:"btn ghost small",onclick:()=>{markPushAsked();render();}},"Plus tard")));
+  // Question à l'ouverture pour ceux qui n'ont pas activé les notifications (une fois par session ;
+  // après « Non merci », on ne redemande pas avant 7 jours).
+  const PUSH_ASK_KEY="declic.pushAskAt";
+  function lastPushAsk(){try{return Number(localStorage.getItem(PUSH_ASK_KEY))||0;}catch(e){return 0;}}
+  function setPushAsk(){try{localStorage.setItem(PUSH_ASK_KEY,String(Date.now()));}catch(e){}}
+  function maybeAskPush(){
+    if(S.pushPrompted||!S.profiles[S.uid]||S.editProfile)return;
+    const st=S.push;
+    const iosInSafari=st==="unsupported"&&isIOS&&!standalone();
+    if(st!=="off"&&!iosInSafari)return;
+    if(Date.now()-lastPushAsk()<(iosInSafari?3:7)*864e5)return;
+    if(document.querySelector("dialog[open]"))return;
+    S.pushPrompted=true;
+    const body=$("#pBody");
+    if(iosInSafari){
+      $("#pTitle").textContent="Active les notifications";
+      body.replaceChildren(el("p",{text:"Sur iPhone et iPad, les notifications marchent seulement quand Déclic est sur l’écran d’accueil :"}),
+        el("ol",{class:"steps"},el("li",{text:"touche le bouton Partager de Safari (le carré avec une flèche) ;"}),el("li",{text:"choisis « Sur l’écran d’accueil », puis « Ajouter » ;"}),el("li",{text:"ouvre Déclic depuis cette icône et accepte les notifications."})));
+      $("#pNo").hidden=true;$("#pYes").textContent="Compris";
+    }else{
+      $("#pTitle").textContent="Recevoir les notifications ?";
+      body.replaceChildren(el("p",{text:"Pour ne rien rater de tes groupes :"}),
+        el("ul",{class:"steps"},el("li",{text:"📷 un rappel à chaque déclic, de 8h à 20h ;"}),el("li",{text:"📸 quand tes proches publient leur photo ;"}),el("li",{text:"💬 les messages, réactions et réponses."})),
+        el("p",{class:"legend",text:"Tu pourras choisir lesquelles recevoir dans ton profil."}));
+      $("#pNo").hidden=false;$("#pYes").textContent="Oui, activer";
+    }
+    $("#dlgPush").showModal();
   }
+  $("#pYes").addEventListener("click",()=>{setPushAsk();$("#dlgPush").close();if(S.push==="off")enablePush();});
+  $("#pNo").addEventListener("click",()=>{setPushAsk();$("#dlgPush").close();toast("D’accord. Tu pourras les activer plus tard dans ton profil.");});
   function settingsCard(){
     const st=S.push;
     const ctl=st==="on"?el("button",{class:"btn ghost small",onclick:disablePush},"Désactiver"):st==="off"?el("button",{class:"btn flash small",onclick:enablePush},"Activer"):null;

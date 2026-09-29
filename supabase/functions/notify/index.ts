@@ -4,6 +4,7 @@
 // - POST {type:reaction|reply} → prévient l'auteur de la photo qu'on y a réagi / répondu
 // - POST {type:join}  → prévient les membres qu'une personne vient de rejoindre le groupe
 // - POST {type:message} → prévient les autres membres d'un nouveau message dans la conversation
+//   (les personnes mentionnées avec @Prénom reçoivent « … t'a mentionné » à la place)
 // - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale),
 //                       le résumé de la journée à 21h, et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
 // - POST {type:recovery-create} (avec le jeton de l'utilisateur) → crée son code de récupération
@@ -198,6 +199,13 @@ async function notifyUids(uids: string[], payload: Record<string, unknown>, kind
   return subs.length;
 }
 
+// Membres mentionnés (@Prénom) : liste fournie par l'app, recoupée avec les membres du groupe.
+function mentionedIn(data: { mentions?: unknown }, members: string[], author: string) {
+  const list = Array.isArray(data.mentions) ? data.mentions : [];
+  return [...new Set(list.filter((u): u is string => typeof u === "string" && u !== author && members.includes(u)))];
+}
+const short = (t: string, n = 120) => (t.length > n ? t.slice(0, n - 3) + "…" : t);
+
 // Réaction ou réponse sur une photo → son auteur est prévenu.
 async function onReaction(kind: "reaction" | "reply", coll: unknown, id: unknown) {
   const re = kind === "reaction" ? /^groups\/([A-Z0-9]{6})\/reactions$/ : /^groups\/([A-Z0-9]{6})\/replies$/;
@@ -213,16 +221,26 @@ async function onReaction(kind: "reaction" | "reply", coll: unknown, id: unknown
   if (!photo) return json({ skipped: "no photo" });
   const author: string = photo.data.uid;
   const who: string = row.data.uid;
-  if (author === who) return json({ skipped: "own photo" });
-  if (!(await claim(`${coll}/${id}`))) return json({ skipped: "already sent" });
   const g = must(await sb.from("docs").select("data").eq("coll", "groups").eq("id", group).maybeSingle(), "lecture groupe");
+  const mentioned = kind === "reply" && g ? mentionedIn(row.data, g.data.members as string[], who).filter((u) => u !== author) : [];
+  if (author === who && !mentioned.length) return json({ skipped: "own photo" });
+  if (!(await claim(`${coll}/${id}`))) return json({ skipped: "already sent" });
   const name = await nameOf(who);
+  let sentMentions = 0;
+  if (mentioned.length) {
+    sentMentions = await notifyUids(mentioned, {
+      title: `${name} t’a mentionné`,
+      body: `💬 ${g?.data?.name || "Déclic"} : ${short(String(row.data.text || ""))}`,
+      tag: `mention-${group}-${id}`,
+    }, "mention", group);
+  }
+  if (author === who) return json({ sent: 0, mentions: sentMentions });
   const text = typeof row.data.text === "string" && row.data.text ? ` : « ${row.data.text.slice(0, 80)} »` : row.data.img ? " avec une photo" : "";
   const body = kind === "reaction"
     ? `${row.data.emoji || "❤️"} ${name} a réagi à ta photo de ${photo.data.hour}h`
     : `💬 ${name} a répondu à ta photo de ${photo.data.hour}h${text}`;
   const sent = await notifyUids([author], { title: g?.data?.name || "Déclic", body, tag: `${kind}-${group}-${row.data.photoId}` }, "reaction", group);
-  return json({ sent });
+  return json({ sent, mentions: sentMentions });
 }
 
 // Message dans la conversation → les autres membres sont prévenus.
@@ -238,13 +256,20 @@ async function onMessage(coll: unknown, id: unknown) {
   const who: string = row.data.uid;
   const name = await nameOf(who);
   const text = String(row.data.text || "");
-  const others = (g.data.members as string[]).filter((u) => u !== who);
+  const members = g.data.members as string[];
+  const mentioned = mentionedIn(row.data, members, who);
+  const others = members.filter((u) => u !== who && !mentioned.includes(u));
+  const mentions = await notifyUids(mentioned, {
+    title: `${name} t’a mentionné`,
+    body: `💬 ${g.data.name || "Déclic"} : ${short(text)}`,
+    tag: `mention-${group}-${id}`,
+  }, "mention", group);
   const sent = await notifyUids(others, {
     title: g.data.name || "Déclic",
-    body: `💬 ${name} : ${text.length > 120 ? text.slice(0, 117) + "…" : text}`,
+    body: `💬 ${name} : ${short(text)}`,
     tag: `msg-${group}`,
   }, "message", group);
-  return json({ sent });
+  return json({ sent, mentions });
 }
 
 // Nouveau membre → les autres membres sont prévenus.

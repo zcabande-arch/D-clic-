@@ -321,7 +321,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const reps=S.replies.filter(r=>r.photoId===p.id).sort((a,b)=>a.ts-b.ts);
     if(reps.length){
       const box=el("div",{class:"replies"});
-      for(const r of reps)box.append(el("div",{class:"reply"},avEl(r.uid,24),el("div",{class:"body"},el("span",{class:"who",text:r.uid===S.uid?"Toi":pName(r.uid)}),r.text?el("p",{text:r.text}):null,
+      for(const r of reps)box.append(el("div",{class:"reply"},avEl(r.uid,24),el("div",{class:"body"},el("span",{class:"who",text:r.uid===S.uid?"Toi":pName(r.uid)}),r.text?el("p",{},...richText(r.text)):null,
         r.img?el("button",{class:"rimg","aria-label":"Agrandir",onclick:()=>zoom(r.img)},el("img",{src:r.img,alt:""})):null)));
       bubble.append(box);
     }
@@ -333,11 +333,51 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     return el("div",{class:"msg"+(mine?" mine":"")},mine?null:avEl(p.uid,32),bubble);
   }
 
+  // ---------- mentions @Prénom ----------
+  const escRe=t=>t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  const fold=t=>t.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  function currentMembers(){const g=S.groups.find(x=>x.id===S.current);return g?g.members:[];}
+  // Membres (autres que moi) dont « @Prénom » apparaît dans le texte.
+  function mentionsIn(text){
+    return currentMembers().filter(m=>{
+      const n=(S.profiles[m]&&S.profiles[m].name||"").trim();
+      return m!==S.uid&&n&&new RegExp("@"+escRe(n)+"(?![\\p{L}\\p{N}])","iu").test(text);
+    });
+  }
+  // Texte avec les @Prénom mis en valeur.
+  function richText(text){
+    const names=[...new Set(currentMembers().map(m=>(S.profiles[m]&&S.profiles[m].name||"").trim()).filter(Boolean))].sort((a,b)=>b.length-a.length);
+    if(!names.length)return [text];
+    const re=new RegExp("@(?:"+names.map(escRe).join("|")+")(?![\\p{L}\\p{N}])","giu");
+    const out=[];let i=0;
+    for(const m of text.matchAll(re)){if(m.index>i)out.push(text.slice(i,m.index));out.push(el("span",{class:"mention",text:m[0]}));i=m.index+m[0].length;}
+    if(i<text.length)out.push(text.slice(i));
+    return out;
+  }
+  // Suggestions pendant la frappe : « @Lé » propose Léa, Léon…
+  function mentionQuery(input){
+    const before=input.value.slice(0,input.selectionStart??input.value.length);
+    const m=/(^|\s)@([\p{L}\p{N}_-]*)$/u.exec(before);
+    return m?{q:m[2],start:before.length-m[2].length-1}:null;
+  }
+  function updateMentionBox(){
+    const box=$("#mentionBox"),input=$("#mText"),mq=S.current?mentionQuery(input):null;
+    const list=mq?currentMembers().filter(m=>m!==S.uid&&S.profiles[m]&&fold(S.profiles[m].name).startsWith(fold(mq.q))).slice(0,6):[];
+    if(!list.length){box.hidden=true;box.replaceChildren();return;}
+    box.replaceChildren(...list.map(m=>el("button",{type:"button",class:"mopt",role:"option",
+      onpointerdown:e=>e.preventDefault(),
+      onclick:()=>{const name=S.profiles[m].name.trim(),v=input.value,end=input.selectionStart??v.length;
+        input.value=v.slice(0,mq.start)+"@"+name+" "+v.slice(end);const pos=mq.start+name.length+2;input.setSelectionRange(pos,pos);input.focus();updateMentionBox();}},
+      avEl(m,24),el("span",{text:S.profiles[m].name}))));
+    box.hidden=false;
+  }
+
   function textMsg(m){
     const mine=m.uid===S.uid;
     const bubble=el("div",{class:"bubble text"},
       el("div",{class:"meta"},el("span",{class:"who",text:mine?"Toi":pName(m.uid)}),el("time",{text:hm(m.ts)})),
-      el("p",{class:"caption",text:m.text}));
+      el("p",{class:"caption"},...richText(m.text)));
+    if(!mine&&Array.isArray(m.mentions)&&m.mentions.includes(S.uid))bubble.classList.add("tagged");
     if(mine)bubble.append(el("div",{class:"acts"},el("button",{onclick:()=>deleteMessage(m)},"Supprimer")));
     return el("div",{class:"msg"+(mine?" mine":"")},mine?null:avEl(m.uid,32),bubble);
   }
@@ -404,6 +444,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       .catch(()=>{}).finally(()=>{seenWriting=false;});
   }
   let lastTypingSent=0;
+  $("#mText").addEventListener("input",updateMentionBox);
+  $("#mText").addEventListener("blur",()=>setTimeout(()=>{$("#mentionBox").hidden=true;},150));
   $("#mText").addEventListener("input",e=>{
     if(!S.typingCh||!e.target.value.trim()||Date.now()-lastTypingSent<2500)return;
     lastTypingSent=Date.now();S.typingCh.send();
@@ -476,7 +518,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const t=$("#rText").value.trim(),p=S.replyTo;if(!p)return;
     if(!t&&!S.pendingReplyImg){$("#rErr").textContent="Écris un message ou joins une photo.";return;}
     const b=$("#rGo");b.disabled=true;
-    try{await S.db.doc("groups/"+S.current).collection("replies").add({photoId:p.id,uid:S.uid,text:t.slice(0,200),img:S.pendingReplyImg||"",date:p.date,ts:Date.now()});$("#dlgReply").close();S.pendingReplyImg=null;}
+    try{await S.db.doc("groups/"+S.current).collection("replies").add({photoId:p.id,uid:S.uid,text:t.slice(0,200),img:S.pendingReplyImg||"",date:p.date,ts:Date.now(),mentions:mentionsIn(t.slice(0,200))});$("#dlgReply").close();S.pendingReplyImg=null;}
     catch(e){$("#rErr").textContent=e&&e.code==="quota_exceeded"?"Espace plein pour ce groupe.":"Réponse non envoyée. Réessaie.";}
     b.disabled=false;
   });
@@ -487,8 +529,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const input=$("#mText"),text=input.value.trim();if(!text||!S.current)return;
     const btn=$("#mSend");btn.disabled=true;
     try{
-      await S.db.doc("groups/"+S.current).collection("messages").add({uid:S.uid,date:todayKey(),ts:Date.now(),text:text.slice(0,500)});
-      input.value="";S.scrollBottom=true;render();S.scrollBottom=false;
+      const body=text.slice(0,500);
+      await S.db.doc("groups/"+S.current).collection("messages").add({uid:S.uid,date:todayKey(),ts:Date.now(),text:body,mentions:mentionsIn(body)});
+      input.value="";updateMentionBox();S.scrollBottom=true;render();S.scrollBottom=false;
     }catch(err){toast(err&&err.code==="quota_exceeded"?"Message trop long.":"Message non envoyé. Réessaie.");}
     btn.disabled=false;input.focus();
   });
@@ -607,7 +650,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     for(const[k,v]of Object.entries(patch))if(v==null)delete next[k];
     try{await S.db.doc("profiles/"+S.uid).set(next);return true;}catch(e){toast("L’enregistrement a échoué.");return false;}
   }
-  const NOTIF_TYPES=[["photo","Nouvelles photos"],["reaction","Réactions et réponses à mes photos"],["message","Messages"],["join","Nouveaux membres"],["reminder","Rappel à chaque déclic"],["summary","Résumé de la journée (21h)"]];
+  const NOTIF_TYPES=[["photo","Nouvelles photos"],["reaction","Réactions et réponses à mes photos"],["message","Messages"],["mention","Quand on me mentionne (@)"],["join","Nouveaux membres"],["reminder","Rappel à chaque déclic"],["summary","Résumé de la journée (21h)"]];
   function notifPrefs(){return {...((S.profiles[S.uid]||{}).notif||{})};}
   async function setNotif(kind,on){const n=notifPrefs();if(on)delete n[kind];else n[kind]=false;await saveProfile({notif:n});}
   async function toggleMute(g,on){

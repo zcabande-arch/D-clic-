@@ -7,7 +7,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   const $=s=>document.querySelector(s);
   const app=$("#app"), barHost=$("#barHost"), composer=$("#composer");
   const S={db:null,user:null,uid:null,groups:[],profiles:{},profilesLoaded:false,current:null,day:null,
-    photos:[],reacts:[],replies:[],messages:[],seen:{},typing:{},subs:[],picker:null,open:{},editProfile:false,panelOpen:false,
+    photos:[],reacts:[],replies:[],messages:[],seen:{},typing:{},notifStatus:{},subs:[],picker:null,open:{},editProfile:false,panelOpen:false,
     fileTarget:null,days:[],daySub:null,period:"week",backfilled:{},pendingShot:null,pendingReplyImg:null,replyTo:null,draftAvatar:undefined,scrollBottom:false};
 
   // ---------- helpers ----------
@@ -213,17 +213,20 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       el("button",{disabled:isToday,onclick:()=>setDay(shiftDay(S.day,1))},"Lendemain ›"));
 
     // panel
-    const panel=el("details",{class:"panel",open:S.panelOpen,ontoggle:e=>S.panelOpen=e.target.open},el("summary",{text:`Membres et invitation (${g.members.length})`}));
+    const panel=el("details",{class:"panel",open:S.panelOpen,ontoggle:e=>{if(e.target.open&&!S.panelOpen)loadNotifStatus(g.id);S.panelOpen=e.target.open;}},el("summary",{text:`Membres et invitation (${g.members.length})`}));
     const isAdmin=g.createdBy===S.uid;
+    const ns=S.notifStatus[g.id];
+    const bell=m=>ns&&m in ns?el("span",{class:"bell"+(ns[m]?"":" off"),title:ns[m]?"Reçoit les notifications":"N’a pas activé les notifications",text:ns[m]?"🔔":"🔕"}):null;
     const ul=el("ul",{class:"members"});g.members.forEach(m=>ul.append(el("li",{},avEl(m,30),
-      el("span",{class:"mname",text:pName(m)+(m===S.uid?" (toi)":"")}),
+      el("span",{class:"mname",text:pName(m)+(m===S.uid?" (toi)":"")}),bell(m),
       m===g.createdBy?el("span",{class:"admin",text:"👑 admin"}):null,
       isAdmin&&m!==S.uid?el("button",{class:"btn ghost small",style:"margin-left:auto;color:var(--late)",onclick:()=>removeMember(g,m)},"Retirer"):null)));
     const muted=((S.profiles[S.uid]||{}).notif||{}).muted||[];
     const muteBox=el("label",{class:"switch"},el("input",{type:"checkbox",checked:muted.includes(g.id),onchange:e=>toggleMute(g,e.target.checked)}),el("span",{text:"🔕 Couper les notifications de ce groupe"}));
+    const nsLine=ns?(()=>{const on=g.members.filter(m=>ns[m]).length;return el("p",{class:"nsline",text:`🔔 ${on} membre${on>1?"s":""} sur ${g.members.length} reçoi${on>1?"vent":"t"} les notifications`+(on<g.members.length?" · 🔕 = pas activées (il faut ouvrir Déclic depuis l’écran d’accueil puis toucher « Activer les notifications »)":"")});})():null;
     panel.append(el("p",{text:"Code à partager :"}),el("div",{class:"code",text:g.id}),
       el("p",{text:"Envoie le lien d’invitation : tes proches ouvrent Déclic, créent leur profil et rejoignent le groupe directement."}),ul,
-      el("div",{class:"row"},el("button",{class:"btn small",onclick:()=>invite(g)},"Inviter des proches"),el("button",{class:"btn ghost small",onclick:()=>copy(g.id)},"Copier le code"),el("button",{class:"btn ghost small",style:"color:var(--late)",onclick:()=>leave(g)},"Quitter le groupe")),muteBox);
+      el("div",{class:"row"},el("button",{class:"btn small",onclick:()=>invite(g)},"Inviter des proches"),el("button",{class:"btn ghost small",onclick:()=>copy(g.id)},"Copier le code"),el("button",{class:"btn ghost small",style:"color:var(--late)",onclick:()=>leave(g)},"Quitter le groupe")),...[nsLine,muteBox].filter(Boolean));
 
     // conversation
     const byHour={};for(const p of S.photos)(byHour[p.hour]=byHour[p.hour]||[]).push(p);
@@ -417,7 +420,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       S.backfilled[k]=1;recordSlot(p.date,p.hour,p.lateMin||0).catch(()=>{});return; // one write at a time
     }
   }
-  function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=false;S.scrollBottom=true;subscribeDay();render();}
+  // Qui reçoit les notifications dans ce groupe (fonction SQL group_notif_status).
+  async function loadNotifStatus(id){
+    try{const rows=await S.db.call("group_notif_status",{code:id});const m={};for(const r of rows||[])m[r.uid]=r.devices>0;S.notifStatus[id]=m;render();}
+    catch(e){/* fonction pas encore installée : on n'affiche simplement rien */}
+  }
+  function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=false;S.scrollBottom=true;subscribeDay();render();loadNotifStatus(id);}
   function setDay(d){S.day=d;S.scrollBottom=true;subscribeDay();render();}
   function closeGroup(){if(history.state&&history.state.g)history.replaceState(null,"");S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
   // Retour à l'accueil : passe par l'historique pour que le bouton/geste « retour » du navigateur fasse pareil.
@@ -746,7 +754,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       let sub=await reg.pushManager.getSubscription();
       if(!sub){const {publicKey}=await (await fetch(NOTIFY_URL)).json();sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(publicKey)});}
       await S.db.savePush(sub.toJSON(),tz());
-      toast("Notifications activées");
+      toast("Notifications activées");if(S.current)loadNotifStatus(S.current);
     }catch(e){toast("Impossible d’activer les notifications.");}
     S.push=await pushState();render();
   }

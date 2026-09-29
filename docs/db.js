@@ -270,6 +270,12 @@ function makeDb(sb, uid) {
     },
     doc: (p) => new DocRef(p),
     collection: (p) => new Query(p),
+    // Appel d'une fonction SQL en lecture seule (sans rafraîchir les abonnements).
+    async call(name, args) {
+      const { data, error } = await sb.rpc(name, args);
+      if (error) throw mapError(error);
+      return data;
+    },
     async rpc(name, args) {
       const { data, error } = await sb.rpc(name, args);
       if (error) throw mapError(error);

@@ -246,3 +246,6 @@ img.mosaic{display:block;width:100%;max-height:60vh;object-fit:contain;border-ra
 .bar.slim .l1{font-size:14px;opacity:1}
 .bar.slim .l2{font-size:18px;line-height:1.2}
 .bar.slim .btn{padding:8px 14px}
+.members .bell{font-size:15px;flex:none}
+.members .bell.off{opacity:.55}
+.nsline{font-size:13px;color:var(--muted);margin:-4px 0 12px}

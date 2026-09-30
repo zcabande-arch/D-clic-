@@ -331,7 +331,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     app.className="wrap chat";
 
     const head=el("header",{class:"top ghead"},el("button",{class:"back",onclick:goHome},"‹ Groupes"),
-      el("button",{class:"gtitle",onclick:openInfo,"aria-label":"Infos du groupe"},el("span",{class:"t",text:g.name}),el("span",{class:"gsub",text:`${g.members.length} membre${g.members.length>1?"s":""} · infos`})),
+      el("button",{class:"gtitle",onclick:openInfo,"aria-label":"Infos du groupe"},el("span",{class:"t",text:g.name}),el("span",{class:"gsub",text:`${g.members.length} membre${g.members.length>1?"s":""} · infos`}),
+        isToday&&!(sl.phase==="open"&&!mineNow)?el("span",{class:"gnext"},el("span",{"data-nextlabel":"1"}),el("b",{"data-next":"1"})):null),
       el("button",{class:"infobtn",onclick:openInfo,"aria-label":"Infos du groupe",text:"ⓘ"}));
     const back=isToday?null:el("div",{class:"row",style:"justify-content:center;margin:-6px 0 16px"},el("button",{class:"btn ghost small",onclick:()=>setDay(todayKey())},"Revenir à aujourd’hui"));
     const nav=el("div",{class:"daynav"},
@@ -383,8 +384,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(typers.length)convo.append(el("p",{class:"typing",text:typers.join(", ")+(typers.length>1?" écrivent":" écrit")},el("span",{class:"dots","aria-hidden":"true"},el("i"),el("i"),el("i"))));
       markSeen(last);
     }
+    const news=isToday?newsCard():null;
     const defi=isToday?el("div",{class:"defi slim"},el("b",{text:"🎯 Défi du jour :"}),el("span",{text:defiDuJour()})):null;
-    app.replaceChildren(...[head,defi,nav,back,convo].filter(Boolean));
+    app.replaceChildren(...[head,news,defi,nav,back,convo].filter(Boolean));
     // Feuille « Infos du groupe » : score, classement, membres, thème (redessinée si elle est ouverte).
     if($("#dlgInfo").open){$("#iTitle").textContent=g.name;$("#iBody").replaceChildren(renderScore(g,sl,isToday),panel,themePanel(g));}
 
@@ -610,6 +612,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(S.typingShown&&!Object.values(S.typing).some(t=>now-t<4000)){render();return;}
     const h=document.querySelector("[data-home]");
     if(h)h.textContent=sl.phase==="open"&&sl.sinceMin<ON_TIME?fmtDur(sl.open.getTime()+ON_TIME*60000-now):fmtDur(sl.next-now);
+    const nx=document.querySelector("[data-next]");
+    if(nx){
+      const lb=document.querySelector("[data-nextlabel]");
+      if(sl.phase==="open"&&sl.hour<LAST){lb.textContent=`⏱ Déclic de ${sl.hour+1}h dans `;}
+      else if(sl.phase==="before"){lb.textContent=`⏱ Premier déclic (${FIRST}h) dans `;}
+      else{lb.textContent="⏱ Prochain déclic demain 8h, dans ";}
+      nx.textContent=fmtDur(sl.next-now);
+    }
     const c=document.querySelector("[data-clock]");
     if(c){
       const l1=document.querySelector("[data-l1]");
@@ -682,8 +692,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(S.panelOpen===undefined||S.panelOpen===false)S.panelOpen=true;
     $("#dlgInfo").showModal();loadNotifStatus(S.current);render();
   }
-  function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=true;S.scrollBottom=true;S.quote=null;S.bottomTs=0;subscribeDay();render();loadNotifStatus(id);
-    try{if(!localStorage.getItem("declic.tipGestes")){localStorage.setItem("declic.tipGestes","1");setTimeout(()=>toast("Astuce : appui long sur un message pour réagir, balaie-le vers la droite pour répondre"),900);}}catch(e){}}
+  function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=true;S.scrollBottom=true;S.quote=null;S.bottomTs=0;subscribeDay();render();loadNotifStatus(id);}
   function setDay(d){S.day=d;S.scrollBottom=true;subscribeDay();render();}
   function closeGroup(){if(history.state&&history.state.g)history.replaceState(null,"");$("#newPill").hidden=true;S.quote=null;$("#quoteBar").hidden=true;if($("#dlgInfo").open)$("#dlgInfo").close();S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
   // Retour à l'accueil : passe par l'historique pour que le bouton/geste « retour » du navigateur fasse pareil.
@@ -880,6 +889,29 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(!confirm(`Retirer ${pName(m)} du groupe « ${g.name} » ?`))return;
     try{await S.db.rpc("remove_member",{code:g.id,member:m});toast(pName(m)+" a été retiré du groupe");}
     catch(e){toast("Impossible de retirer ce membre.");}
+  }
+
+  // ---------- message d'info « Modifications apportées » (affiché dans chaque groupe) ----------
+  // Pour annoncer une nouvelle mise à jour : changer id/date et la liste ci-dessous.
+  const NEWS={id:"2026-09-30",date:"2026-09-30",days:7,items:[
+    "Groupe épuré : score, classement, membres, code et thème sont dans ⓘ Infos (en haut)",
+    "Pastilles de messages non lus sur l’accueil, groupes triés par activité",
+    "Double-toucher une photo = ❤️",
+    "Balayer un message vers la droite = y répondre (avec citation)",
+    "Appui long sur un message ou une photo = réagir, répondre, copier, supprimer",
+    "On peut réagir aux messages, pas seulement aux photos",
+    "Bouton « ↓ Nouveaux messages » quand on est remonté",
+    "Photo en grand : balayer vers le haut / le bas pour passer à la suivante",
+    "Mentions @Prénom avec notification, fiche d’un membre en touchant sa photo",
+  ]};
+  function newsDismissed(){try{return localStorage.getItem("declic.news")===NEWS.id;}catch(e){return false;}}
+  function newsCard(){
+    const[a,b,c]=NEWS.date.split("-").map(Number);
+    if(newsDismissed()||Date.now()>new Date(a,b-1,c).getTime()+NEWS.days*864e5)return null;
+    return el("section",{class:"news",role:"status"},
+      el("div",{class:"newshead"},el("b",{text:"ℹ️ Modifications apportées"}),
+        el("button",{class:"x","aria-label":"Fermer",onclick:()=>{try{localStorage.setItem("declic.news",NEWS.id);}catch(e){}render();}},"✕")),
+      el("ul",{},...NEWS.items.map(t=>el("li",{text:t}))));
   }
 
   // ---------- défi du jour ----------

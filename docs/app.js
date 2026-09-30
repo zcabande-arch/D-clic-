@@ -52,6 +52,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   function genCode(){const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";for(const b of crypto.getRandomValues(new Uint8Array(6)))s+=a[b%a.length];return s;}
   function openDlg(sel){const d=$(sel);d.querySelectorAll(".err").forEach(e=>e.textContent="");d.showModal();}
   document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>b.closest("dialog").close()));
+  $("#newPill").addEventListener("click",()=>{window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"});});
+  addEventListener("scroll",()=>{
+    if(!S.current)return;
+    if(innerHeight+scrollY>=document.documentElement.scrollHeight-120){
+      S.bottomTs=Math.max(0,...[...S.photos,...S.messages].map(x=>x.ts||0));$("#newPill").hidden=true;
+    }
+  },{passive:true});
+
   // ---------- visionneuse : balayer vers le haut / le bas pour passer d'une photo à l'autre ----------
   const LB={list:[],i:0,moved:false};
   function zoom(src,list){
@@ -99,7 +107,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // ---------- fiche d'un membre (toucher sa photo de profil) ----------
   document.addEventListener("click",e=>{
     const av=e.target.closest&&e.target.closest(".av[data-uid]");
-    if(!av||av.closest("button,dialog,.avpick"))return;
+    if(!av||av.closest("button,#dlgUser,.avpick"))return;
     const uid=av.dataset.uid;if(!uid||!S.profiles[uid])return;
     e.preventDefault();showUser(uid);
   });
@@ -222,7 +230,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(!S.profilesLoaded){app.replaceChildren(el("p",{class:"notice",text:"Chargement…"}));barHost.replaceChildren();return;}
     if(!S.profiles[S.uid]||S.editProfile)return renderProfile();
     S.current?renderGroup():renderHome();
-    maybeAskPush();
+    maybeAskPush();updateAppBadge();
     if(S.pendingJoin&&!S.current){
       const code=S.pendingJoin;S.pendingJoin=null;
       if(S.groups.some(g=>g.id===code))openGroup(code);
@@ -254,6 +262,34 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     app.replaceChildren(el("header",{class:"top"},el("h1",{class:"brand"},el("span",{class:"shutter","aria-hidden":"true"}),el("span",{class:"t",text:"Déclic"}))),...[card,first?null:settingsCard()].filter(Boolean));
   }
 
+  // ---------- activité des groupes (pastilles « non lu », tri) ----------
+  function lastRead(gid){try{return Number(localStorage.getItem("declic.read."+gid))||0;}catch(e){return 0;}}
+  function setRead(gid,ts){if(ts>lastRead(gid)){try{localStorage.setItem("declic.read."+gid,String(ts));}catch(e){}}}
+  const actSubs={};S.act={};
+  function syncActivity(){
+    const ids=new Set(S.groups.map(g=>g.id)),since=shiftDay(todayKey(),-1);
+    for(const id of Object.keys(actSubs))if(!ids.has(id)){actSubs[id].forEach(u=>u());delete actSubs[id];delete S.act[id];}
+    for(const id of ids){
+      if(actSubs[id])continue;
+      const a=S.act[id]={photos:[],messages:[],loaded:0};
+      const base=S.db.doc("groups/"+id);
+      const done=()=>{if(++a.loaded===2&&!lastRead(id))setRead(id,Math.max(1,...activityItems(id).map(x=>x.ts)));render();};
+      let first={photos:true,messages:true};
+      actSubs[id]=["photos","messages"].map(k=>base.collection(k).where("date",">=",since).onSnapshot(s2=>{
+        a[k]=s2.docs.map(d=>({id:d.id,kind:k,...d.data()})).filter(x=>typeof x.ts==="number");
+        if(first[k]){first[k]=false;done();}else render();
+      },()=>{}));
+    }
+  }
+  function activityItems(id){const a=S.act[id];return a?[...a.photos,...a.messages]:[];}
+  function unreadOf(id){const r=lastRead(id);return activityItems(id).filter(x=>x.uid!==S.uid&&x.ts>r).length;}
+  function lastActivity(g){const items=activityItems(g.id);return items.reduce((b,x)=>x.ts>b.ts?x:b,{ts:g.createdAt||0});}
+  function updateAppBadge(){
+    if(!("setAppBadge"in navigator))return;
+    const n=S.groups.reduce((t,g)=>t+(S.current===g.id?0:unreadOf(g.id)),0);
+    try{n?navigator.setAppBadge(n):navigator.clearAppBadge();}catch(e){}
+  }
+
   function renderHome(){
     barHost.replaceChildren();app.className="wrap";
     const sl=slotNow();
@@ -271,10 +307,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(!S.groups.length) app.append(el("div",{class:"empty",text:"Tu n’as pas encore de groupe. Crée-en un et partage son code, ou entre le code qu’on t’a donné."}));
     else{
       const ul=el("ul",{class:"groups"});
-      for(const g of[...S.groups].sort((a,b)=>(a.name||"").localeCompare(b.name||""))){
+      for(const g of[...S.groups].sort((a,b)=>lastActivity(b).ts-lastActivity(a).ts||(a.name||"").localeCompare(b.name||""))){
         const stack=el("span",{class:"stack"});g.members.slice(0,4).forEach(m=>stack.append(avEl(m,28)));
-        ul.append(el("li",{},el("button",{class:"gitem",onclick:()=>openGroup(g.id)},
-          el("span",{},el("span",{class:"gname",text:g.name}),el("span",{class:"gsub",text:g.members.length+(g.members.length>1?" membres":" membre")})),stack)));
+        const last=lastActivity(g),n=unreadOf(g.id);
+        const who=last.uid?(last.uid===S.uid?"Toi":pName(last.uid)):"";
+        const preview=last.kind==="messages"?`${who} : ${last.text}`:last.kind==="photos"?`📷 ${who} · photo de ${last.hour}h`:g.members.length+(g.members.length>1?" membres":" membre");
+        ul.append(el("li",{},el("button",{class:"gitem"+(n?" unread":""),onclick:()=>openGroup(g.id)},
+          el("span",{class:"gmain"},el("span",{class:"gname",text:g.name}),el("span",{class:"gsub",text:preview})),
+          el("span",{class:"gside"},last.uid?el("span",{class:"gtime",text:hm(last.ts)}):null,n?el("span",{class:"badge",text:n>99?"99+":String(n)}):stack))));
       }
       app.append(ul);
     }
@@ -290,7 +330,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const nearBottom=innerHeight+scrollY>=document.documentElement.scrollHeight-120, prevY=scrollY;
     app.className="wrap chat";
 
-    const head=el("header",{class:"top"},el("button",{class:"back",onclick:goHome},"‹ Groupes"),el("span",{class:"brand",style:"font-size:20px"},el("span",{class:"t",text:g.name})));
+    const head=el("header",{class:"top ghead"},el("button",{class:"back",onclick:goHome},"‹ Groupes"),
+      el("button",{class:"gtitle",onclick:openInfo,"aria-label":"Infos du groupe"},el("span",{class:"t",text:g.name}),el("span",{class:"gsub",text:`${g.members.length} membre${g.members.length>1?"s":""} · infos`})),
+      el("button",{class:"infobtn",onclick:openInfo,"aria-label":"Infos du groupe",text:"ⓘ"}));
     const back=isToday?null:el("div",{class:"row",style:"justify-content:center;margin:-6px 0 16px"},el("button",{class:"btn ghost small",onclick:()=>setDay(todayKey())},"Revenir à aujourd’hui"));
     const nav=el("div",{class:"daynav"},
       el("button",{onclick:()=>setDay(shiftDay(S.day,-1))},"‹ Veille"),
@@ -341,13 +383,21 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(typers.length)convo.append(el("p",{class:"typing",text:typers.join(", ")+(typers.length>1?" écrivent":" écrit")},el("span",{class:"dots","aria-hidden":"true"},el("i"),el("i"),el("i"))));
       markSeen(last);
     }
-    const defi=isToday?el("div",{class:"defi"},el("b",{text:"🎯 Défi du jour"}),el("span",{text:defiDuJour()})):null;
-    app.replaceChildren(...[head,renderScore(g,sl,isToday),panel,themePanel(g),defi,nav,back,convo].filter(Boolean));
+    const defi=isToday?el("div",{class:"defi slim"},el("b",{text:"🎯 Défi du jour :"}),el("span",{text:defiDuJour()})):null;
+    app.replaceChildren(...[head,defi,nav,back,convo].filter(Boolean));
+    // Feuille « Infos du groupe » : score, classement, membres, thème (redessinée si elle est ouverte).
+    if($("#dlgInfo").open){$("#iTitle").textContent=g.name;$("#iBody").replaceChildren(renderScore(g,sl,isToday),panel,themePanel(g));}
 
     // bottom bar
     const bar=renderBar(sl,isToday,mineNow);
     barHost.replaceChildren(...(bar?[bar]:[]));document.body.classList.toggle("has-bar",!!bar);
     if(S.scrollBottom||nearBottom)requestAnimationFrame(()=>window.scrollTo(0,document.documentElement.scrollHeight));else window.scrollTo(0,prevY);
+    // Bouton « ↓ Nouveaux messages » quand on est remonté et que d'autres écrivent.
+    const lastTs=Math.max(0,...[...S.photos,...S.messages].map(x=>x.ts||0));
+    if(!isToday||S.scrollBottom||nearBottom||!S.bottomTs)S.bottomTs=lastTs;
+    const fresh=isToday?[...S.photos,...S.messages].filter(x=>x.uid!==S.uid&&x.ts>S.bottomTs).length:0;
+    const pill=$("#newPill");pill.hidden=!fresh;if(fresh)pill.textContent=`↓ ${fresh} nouveau${fresh>1?"x":""} message${fresh>1?"s":""}`;
+    showQuote();
     tick();
   }
 
@@ -390,7 +440,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const late=p.lateMin>ON_TIME;
     const bubble=el("div",{class:"bubble"},
       el("div",{class:"meta"},el("span",{class:"who",text:mine?"Toi":pName(p.uid)}),el("time",{text:hm(p.ts)}),late?el("span",{class:"late",text:`+${p.lateMin} min`}):null),
-      el("button",{class:"pic"+(veil?" veiled":""),"aria-label":veil?"Photo masquée":"Agrandir la photo de "+pName(p.uid),onclick:()=>{if(!veil)zoom(p.img,viewerList());}},el("img",{src:p.img,alt:"",loading:"lazy"})));
+      el("button",{class:"pic"+(veil?" veiled":""),"aria-label":veil?"Photo masquée":"Agrandir la photo de "+pName(p.uid),onclick:e=>{if(!veil)picTap(p,e.currentTarget);}},el("img",{src:p.img,alt:"",loading:"lazy",draggable:"false"})));
     if(veil){bubble.append(el("p",{class:"veilnote",text:"Envoie ta photo pour la voir."}));return el("div",{class:"msg"},avEl(p.uid,32),bubble);}
     if(p.caption)bubble.append(el("p",{class:"caption",text:p.caption}));
     // reactions
@@ -409,12 +459,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
         r.img?el("button",{class:"rimg","aria-label":"Agrandir",onclick:()=>zoom(r.img)},el("img",{src:r.img,alt:""})):null)));
       bubble.append(box);
     }
-    const myR=rs.find(r=>r.uid===S.uid);
-    bubble.append(el("div",{class:"acts"},
-      el("button",{onclick:()=>{S.picker=S.picker===p.id?null:p.id;render();}},myR?myR.emoji+" Réaction":"☺ Réagir"),
-      el("button",{onclick:()=>openReply(p)},"↩ Répondre")));
-    if(S.picker===p.id){const pk=el("div",{class:"picker"});EMOJIS.forEach(e=>pk.append(el("button",{class:myR&&myR.emoji===e?"me":"","aria-label":"Réagir "+e,onclick:()=>react(p,e)},e)));bubble.append(pk);}
-    return el("div",{class:"msg"+(mine?" mine":"")},mine?null:avEl(p.uid,32),bubble);
+    gestures(bubble,{kind:"photo",item:p});
+    return el("div",{class:"msg"+(mine?" mine":""),"data-mid":p.id},mine?null:avEl(p.uid,32),bubble);
   }
 
   // ---------- mentions @Prénom ----------
@@ -458,13 +504,91 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
 
   function textMsg(m){
     const mine=m.uid===S.uid;
+    const q=m.replyTo&&typeof m.replyTo==="object"?m.replyTo:null;
     const bubble=el("div",{class:"bubble text"},
       el("div",{class:"meta"},el("span",{class:"who",text:mine?"Toi":pName(m.uid)}),el("time",{text:hm(m.ts)})),
+      q?el("button",{class:"quote",type:"button",onclick:()=>jumpTo(q.id)},el("b",{text:q.uid===S.uid?"Toi":pName(q.uid)}),el("span",{text:String(q.text||"📷 Photo")})):null,
       el("p",{class:"caption"},...richText(m.text)));
     if(!mine&&Array.isArray(m.mentions)&&m.mentions.includes(S.uid))bubble.classList.add("tagged");
-    if(mine)bubble.append(el("div",{class:"acts"},el("button",{onclick:()=>deleteMessage(m)},"Supprimer")));
-    return el("div",{class:"msg"+(mine?" mine":"")},mine?null:avEl(m.uid,32),bubble);
+    const rs=S.reacts.filter(r=>r.photoId===m.id);
+    if(rs.length){
+      const counts={};rs.forEach(r=>{(counts[r.emoji]=counts[r.emoji]||[]).push(r.uid);});
+      bubble.append(el("div",{class:"reacts"},...Object.entries(counts).map(([e,us])=>el("button",{class:"chip"+(us.includes(S.uid)?" me":""),title:us.map(pName).join(", "),onclick:()=>react(m,e)},`${e} ${us.length}`))));
+    }
+    gestures(bubble,{kind:"message",item:m});
+    return el("div",{class:"msg"+(mine?" mine":""),"data-mid":m.id},mine?null:avEl(m.uid,32),bubble);
   }
+  // ---------- gestes sur les bulles ----------
+  let tapTimer=null,lastTap={id:null,t:0};
+  function picTap(p,btn){
+    const now=Date.now();
+    if(lastTap.id===p.id&&now-lastTap.t<320){ // double-toucher : ❤️
+      clearTimeout(tapTimer);lastTap={id:null,t:0};
+      heartBurst(btn);
+      const mine=S.reacts.find(r=>r.photoId===p.id&&r.uid===S.uid);
+      if(!mine||mine.emoji!=="❤️")react(p,"❤️");
+      return;
+    }
+    lastTap={id:p.id,t:now};clearTimeout(tapTimer);
+    tapTimer=setTimeout(()=>{lastTap={id:null,t:0};zoom(p.img,viewerList());},330);
+  }
+  function heartBurst(target){
+    const h=el("span",{class:"burst","aria-hidden":"true",text:"❤️"});target.append(h);setTimeout(()=>h.remove(),800);
+  }
+  function gestures(bubble,ctx){
+    let timer=null,sx=0,sy=0,dx=0,swiping=false,longDone=false;
+    const clear=()=>{clearTimeout(timer);timer=null;};
+    bubble.addEventListener("contextmenu",e=>{e.preventDefault();openActions(ctx);});
+    bubble.addEventListener("touchstart",e=>{
+      if(e.touches.length!==1||e.target.closest(".chip,.quote,.rimg"))return;
+      sx=e.touches[0].clientX;sy=e.touches[0].clientY;dx=0;swiping=false;longDone=false;
+      clear();timer=setTimeout(()=>{timer=null;longDone=true;openActions(ctx);},480);
+    },{passive:true});
+    bubble.addEventListener("touchmove",e=>{
+      const x=e.touches[0].clientX-sx,y=e.touches[0].clientY-sy;
+      if(Math.abs(x)>8||Math.abs(y)>8)clear();
+      if(!swiping&&x>12&&Math.abs(x)>Math.abs(y)*1.2)swiping=true;
+      if(swiping){dx=Math.max(0,Math.min(x,90));bubble.style.transition="none";bubble.style.transform=`translateX(${dx}px)`;if(e.cancelable)e.preventDefault();}
+    },{passive:false});
+    const end=()=>{
+      clear();
+      if(swiping){bubble.style.transition="transform .18s ease-out";bubble.style.transform="";if(dx>55)startReply(ctx);}
+      swiping=false;
+    };
+    bubble.addEventListener("touchend",end);bubble.addEventListener("touchcancel",end);
+    bubble.addEventListener("click",e=>{if(longDone){e.preventDefault();e.stopPropagation();longDone=false;}},true);
+  }
+  function startReply(ctx){
+    if(ctx.kind==="photo"){openReply(ctx.item);return;}
+    const m=ctx.item;S.quote={id:m.id,uid:m.uid,text:String(m.text||"").slice(0,90)};
+    showQuote();$("#mText").focus();
+  }
+  function showQuote(){
+    const q=S.quote,bar=$("#quoteBar");
+    if(!q||composer.hidden){bar.hidden=true;return;}
+    $("#qWho").textContent="Réponse à "+(q.uid===S.uid?"toi-même":pName(q.uid));$("#qText").textContent=q.text;bar.hidden=false;
+  }
+  $("#qClose").addEventListener("click",()=>{S.quote=null;showQuote();});
+  function jumpTo(id){
+    const n=document.querySelector(`[data-mid="${CSS.escape(id)}"]`);if(!n){toast("Message introuvable (autre jour ?)");return;}
+    n.scrollIntoView({behavior:"smooth",block:"center"});n.classList.remove("flashme");void n.offsetWidth;n.classList.add("flashme");
+  }
+  function openActions(ctx){
+    const it=ctx.item,mine=it.uid===S.uid,isPhoto=ctx.kind==="photo";
+    const myR=S.reacts.find(r=>r.photoId===it.id&&r.uid===S.uid);
+    const close=()=>$("#dlgActions").close();
+    const btn=(label,fn,cls="")=>el("button",{class:"btn ghost act "+cls,type:"button",onclick:()=>{close();fn();}},label);
+    const text=isPhoto?(it.caption||""):it.text;
+    $("#acBody").replaceChildren(...[
+      el("div",{class:"emojirow"},...EMOJIS.map(e=>el("button",{type:"button",class:myR&&myR.emoji===e?"me":"","aria-label":"Réagir "+e,onclick:()=>{close();react(it,e);}},e))),
+      btn("↩ Répondre",()=>startReply(ctx)),
+      isPhoto?btn("🔍 Agrandir",()=>zoom(it.img,viewerList())):null,
+      text?btn("📋 Copier le texte",async()=>{try{await navigator.clipboard.writeText(text);toast("Texte copié");}catch(e){toast("Copie impossible");}}):null,
+      !isPhoto&&mine?btn("🗑 Supprimer",()=>deleteMessage(it),"danger"):null,
+      el("p",{class:"legend",style:"text-align:center;margin:8px 0 0",text:(mine?"Toi":pName(it.uid))+" · "+hm(it.ts)})].filter(Boolean));
+    $("#dlgActions").showModal();
+  }
+
   async function deleteMessage(m){
     if(!confirm("Supprimer ce message ?"))return;
     try{await S.db.doc("groups/"+S.current).collection("messages").doc(m.id).delete();}catch(e){toast("Le message n’a pas pu être supprimé.");}
@@ -522,6 +646,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   }
   let seenWriting=false;
   function markSeen(last){
+    if(last&&document.visibilityState==="visible"&&S.current)setRead(S.current,last.ts);
     if(!last||document.visibilityState!=="visible"||seenWriting||(S.seen[S.uid]||0)>=last.ts)return;
     seenWriting=true;const ts=last.ts;S.seen[S.uid]=ts;
     S.db.doc("groups/"+S.current).collection("seen").doc("s_"+S.uid).set({uid:S.uid,date:todayKey(),ts})
@@ -552,9 +677,15 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     try{const rows=await S.db.call("group_notif_status",{code:id});const m={};for(const r of rows||[])m[r.uid]=r.devices>0;S.notifStatus[id]=m;render();}
     catch(e){/* fonction pas encore installée : on n'affiche simplement rien */}
   }
-  function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=false;S.scrollBottom=true;subscribeDay();render();loadNotifStatus(id);}
+  function openInfo(){
+    if(!S.current)return;
+    if(S.panelOpen===undefined||S.panelOpen===false)S.panelOpen=true;
+    $("#dlgInfo").showModal();loadNotifStatus(S.current);render();
+  }
+  function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=true;S.scrollBottom=true;S.quote=null;S.bottomTs=0;subscribeDay();render();loadNotifStatus(id);
+    try{if(!localStorage.getItem("declic.tipGestes")){localStorage.setItem("declic.tipGestes","1");setTimeout(()=>toast("Astuce : appui long sur un message pour réagir, balaie-le vers la droite pour répondre"),900);}}catch(e){}}
   function setDay(d){S.day=d;S.scrollBottom=true;subscribeDay();render();}
-  function closeGroup(){if(history.state&&history.state.g)history.replaceState(null,"");S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
+  function closeGroup(){if(history.state&&history.state.g)history.replaceState(null,"");$("#newPill").hidden=true;S.quote=null;$("#quoteBar").hidden=true;if($("#dlgInfo").open)$("#dlgInfo").close();S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
   // Retour à l'accueil : passe par l'historique pour que le bouton/geste « retour » du navigateur fasse pareil.
   function goHome(){if(history.state&&history.state.g)history.back();else closeGroup();}
   addEventListener("popstate",()=>{if(S.current&&!(history.state&&history.state.g))closeGroup();});
@@ -565,7 +696,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const blocked=t=>t.closest("input,textarea,.picker,.themes,.track,dialog,[contenteditable]")||document.querySelector("dialog[open]");
     const move=(x,anim)=>{for(const n of [app,dock]){n.style.transition=anim?"transform .22s ease-out":"none";n.style.transform=x?`translateX(${x}px)`:"";}};
     addEventListener("touchstart",e=>{
-      if(!S.current||e.touches.length!==1||blocked(e.target)){active=false;return;}
+      if(!S.current||e.touches.length!==1||blocked(e.target)||(e.target.closest(".bubble")&&e.touches[0].clientX>30)){active=false;return;}
       sx=e.touches[0].clientX;sy=e.touches[0].clientY;dx=0;active=true;decided=false;
     },{passive:true});
     addEventListener("touchmove",e=>{
@@ -614,8 +745,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const btn=$("#mSend");btn.disabled=true;
     try{
       const body=text.slice(0,500);
-      await S.db.doc("groups/"+S.current).collection("messages").add({uid:S.uid,date:todayKey(),ts:Date.now(),text:body,mentions:mentionsIn(body)});
-      input.value="";updateMentionBox();S.scrollBottom=true;render();S.scrollBottom=false;
+      const data={uid:S.uid,date:todayKey(),ts:Date.now(),text:body,mentions:mentionsIn(body)};
+      if(S.quote)data.replyTo={id:S.quote.id,uid:S.quote.uid,text:S.quote.text};
+      await S.db.doc("groups/"+S.current).collection("messages").add(data);
+      input.value="";S.quote=null;showQuote();updateMentionBox();S.scrollBottom=true;render();S.scrollBottom=false;
     }catch(err){toast(err&&err.code==="quota_exceeded"?"Message trop long.":"Message non envoyé. Réessaie.");}
     btn.disabled=false;input.focus();
   });
@@ -644,7 +777,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     try{
       let code;
       for(let i=0;;i++){code=genCode();try{await S.db.doc("groups/"+code).set({name:n,members:[S.uid],createdBy:S.uid,createdAt:Date.now()});break;}catch(e){if(e.code!=="permission_denied"||i>=3)throw e;}}
-      $("#dlgCreate").close();toast("Groupe créé. Code : "+code);openGroup(code);S.panelOpen=true;render();
+      $("#dlgCreate").close();toast("Groupe créé. Code : "+code);openGroup(code);S.panelOpen=true;openInfo();
     }catch(e){$("#cErr").textContent="La création a échoué. Réessaie.";}
     b.disabled=false;
   });
@@ -960,7 +1093,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const {db,uid,account}=opened;
     S.db=db;S.uid=uid;S.account=account;S.prefillName="";
     db.collection("profiles").limit(1000).onSnapshot(s=>{const m={};s.docs.forEach(d=>m[d.id]=d.data());S.profiles=m;S.profilesLoaded=true;render();},e=>{if(e.code==="unavailable")toast("Connexion perdue, nouvelle tentative…");S.profilesLoaded=true;render();});
-    db.collection("groups").where("members","array-contains",uid).onSnapshot(s=>{S.groups=s.docs.map(d=>({id:d.id,...d.data()}));S.groupsLoaded=true;render();},e=>{if(e.code!=="unavailable")toast("Impossible de charger tes groupes.");});
+    db.collection("groups").where("members","array-contains",uid).onSnapshot(s=>{S.groups=s.docs.map(d=>({id:d.id,...d.data()}));S.groupsLoaded=true;syncActivity();render();},e=>{if(e.code!=="unavailable")toast("Impossible de charger tes groupes.");});
     S.push=await pushState();
     if(S.push==="on"){try{const sub=await (await swReg()).pushManager.getSubscription();await db.savePush(sub.toJSON(),tz());}catch(e){}}
     render();

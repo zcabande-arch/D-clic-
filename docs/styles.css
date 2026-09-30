@@ -284,3 +284,49 @@ img.mosaic{display:block;width:100%;max-height:60vh;object-fit:contain;border-ra
 .usercard .ustats .stat b{font-size:22px}
 .usercard .ubadges{display:flex;flex-wrap:wrap;gap:6px}
 .usercard .ubadge{background:var(--chip);border-radius:999px;padding:4px 10px;font-size:14px;font-weight:600}
+
+/* ---- Confort : en-tête de groupe, feuille d'infos, gestes, non lus, nouveaux messages ---- */
+header.ghead{gap:8px}
+.ghead .gtitle{flex:1;min-width:0;border:0;background:none;color:var(--ink);text-align:center;padding:4px 6px;display:flex;flex-direction:column;align-items:center}
+.ghead .gtitle .t{font-family:var(--display);font-weight:800;font-size:20px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ghead .gtitle .gsub{font-size:12px;color:var(--muted)}
+.ghead .infobtn{border:0;background:var(--surface);color:var(--ink);width:38px;height:38px;border-radius:50%;font-size:20px;font-weight:700;flex:none}
+.defi.slim{flex-direction:row;align-items:baseline;gap:6px;padding:8px 14px;margin:0 0 14px;border-radius:14px}
+.defi.slim b{font-size:12px}
+.defi.slim span{font-size:16px}
+dialog.sheet{width:min(600px,100%);max-width:100%;max-height:88vh;margin:auto auto 0;border-radius:22px 22px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));overflow:auto;background:var(--bg)}
+dialog.sheet .sheethead{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:-14px;background:var(--bg);padding:6px 0 10px;z-index:1}
+dialog.sheet .sheethead h2{margin:0;font-size:20px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+dialog.actions{width:min(380px,calc(100% - 32px));padding:16px}
+dialog.actions .emojirow{display:flex;justify-content:space-between;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+dialog.actions .emojirow button{border:0;background:var(--bg);font-size:26px;width:46px;height:46px;border-radius:50%}
+dialog.actions .emojirow button.me{background:var(--flash)}
+dialog.actions .act{width:100%;justify-content:flex-start;text-align:left;margin-top:6px;display:block}
+dialog.actions .act.danger{color:var(--late)}
+.bubble{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y}
+.pic img{-webkit-user-drag:none}
+.pic{position:relative}
+.burst{position:absolute;left:50%;top:50%;font-size:84px;transform:translate(-50%,-50%) scale(.4);opacity:0;pointer-events:none;animation:burst .8s ease-out}
+@keyframes burst{15%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}30%{transform:translate(-50%,-50%) scale(.95)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-60%) scale(1)}}
+.quote{display:block;width:100%;text-align:left;border:0;border-left:3px solid var(--flash);background:rgba(127,137,165,.14);color:inherit;border-radius:8px;padding:4px 8px;margin:0 0 6px;font-size:13px}
+.quote b{display:block;font-size:12px}
+.quote span{display:block;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msg.flashme .bubble{animation:flashme 1.2s ease-out}
+@keyframes flashme{0%,40%{box-shadow:0 0 0 3px var(--flash)}100%{box-shadow:0 0 0 0 transparent}}
+.quotebar{display:flex;align-items:center;gap:10px;background:var(--surface);border-top:1px solid var(--line);padding:8px max(12px,calc((100% - 576px) / 2))}
+.quotebar[hidden]{display:none}
+.quotebar .qtxt{flex:1;min-width:0;border-left:3px solid var(--flash);padding-left:8px;font-size:13px}
+.quotebar .qtxt b{display:block}
+.quotebar .qtxt span{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.quotebar button{border:0;background:var(--bg);color:var(--ink);width:30px;height:30px;border-radius:50%;flex:none}
+.newpill{position:absolute;left:50%;transform:translate(-50%,-100%);top:-10px;border:0;background:var(--mine);color:var(--mine-ink);font-weight:700;font-size:14px;border-radius:999px;padding:8px 16px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.newpill[hidden]{display:none}
+.gitem .gmain{flex:1;min-width:0;display:flex;flex-direction:column}
+.gitem .gsub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gitem .gside{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.gitem .gtime{font-size:12px;color:var(--muted)}
+.gitem .badge{background:var(--late);color:#fff;font-weight:800;font-size:12px;min-width:22px;height:22px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px}
+.gitem.unread .gname{font-weight:800}
+.gitem.unread .gsub{color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion: reduce){.burst,.msg.flashme .bubble{animation:none}}
+dialog.sheet .row{justify-content:flex-start;margin-top:10px}

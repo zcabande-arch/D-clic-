@@ -214,10 +214,19 @@ async function onReaction(kind: "reaction" | "reply", coll: unknown, id: unknown
   const group = m[1];
   const row = must(await sb.from("docs").select("data,updated_at").eq("coll", coll).eq("id", id).maybeSingle(), "lecture réaction");
   if (!row || !recent(row.updated_at)) return json({ skipped: "stale" });
-  const photo = must(
+  let photo = must(
     await sb.from("docs").select("data").eq("coll", `groups/${group}/photos`).eq("id", String(row.data.photoId)).maybeSingle(),
     "lecture photo",
   );
+  // Une réaction peut aussi porter sur un message de la conversation.
+  let onMessage = false;
+  if (!photo && kind === "reaction") {
+    photo = must(
+      await sb.from("docs").select("data").eq("coll", `groups/${group}/messages`).eq("id", String(row.data.photoId)).maybeSingle(),
+      "lecture message",
+    );
+    onMessage = !!photo;
+  }
   if (!photo) return json({ skipped: "no photo" });
   const author: string = photo.data.uid;
   const who: string = row.data.uid;
@@ -237,7 +246,9 @@ async function onReaction(kind: "reaction" | "reply", coll: unknown, id: unknown
   if (author === who) return json({ sent: 0, mentions: sentMentions });
   const text = typeof row.data.text === "string" && row.data.text ? ` : « ${row.data.text.slice(0, 80)} »` : row.data.img ? " avec une photo" : "";
   const body = kind === "reaction"
-    ? `${row.data.emoji || "❤️"} ${name} a réagi à ta photo de ${photo.data.hour}h`
+    ? onMessage
+      ? `${row.data.emoji || "❤️"} ${name} a réagi à ton message : « ${short(String(photo.data.text || ""), 60)} »`
+      : `${row.data.emoji || "❤️"} ${name} a réagi à ta photo de ${photo.data.hour}h`
     : `💬 ${name} a répondu à ta photo de ${photo.data.hour}h${text}`;
   const sent = await notifyUids([author], { title: g?.data?.name || "Déclic", body, tag: `${kind}-${group}-${row.data.photoId}` }, "reaction", group);
   return json({ sent, mentions: sentMentions });
@@ -258,7 +269,12 @@ async function onMessage(coll: unknown, id: unknown) {
   const text = String(row.data.text || "");
   const members = g.data.members as string[];
   const mentioned = mentionedIn(row.data, members, who);
-  const others = members.filter((u) => u !== who && !mentioned.includes(u));
+  const rt = row.data.replyTo as { uid?: unknown } | undefined;
+  const answered = rt && typeof rt.uid === "string" && rt.uid !== who && members.includes(rt.uid) && !mentioned.includes(rt.uid) ? rt.uid : null;
+  const others = members.filter((u) => u !== who && !mentioned.includes(u) && u !== answered);
+  const answers = answered
+    ? await notifyUids([answered], { title: `${name} t’a répondu`, body: `💬 ${g.data.name || "Déclic"} : ${short(text)}`, tag: `mention-${group}-${id}` }, "mention", group)
+    : 0;
   const mentions = await notifyUids(mentioned, {
     title: `${name} t’a mentionné`,
     body: `💬 ${g.data.name || "Déclic"} : ${short(text)}`,
@@ -269,7 +285,7 @@ async function onMessage(coll: unknown, id: unknown) {
     body: `💬 ${name} : ${short(text)}`,
     tag: `msg-${group}`,
   }, "message", group);
-  return json({ sent, mentions });
+  return json({ sent, mentions, answers });
 }
 
 // Nouveau membre → les autres membres sont prévenus.

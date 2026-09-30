@@ -24,6 +24,8 @@
 <div class="wrap" id="app"><p class="notice">Chargement…</p></div>
 <div id="dock">
   <div id="barHost"></div>
+  <button id="newPill" class="newpill" type="button" hidden>↓ Nouveaux messages</button>
+  <div id="quoteBar" class="quotebar" hidden><div class="qtxt"><b id="qWho"></b><span id="qText"></span></div><button type="button" id="qClose" aria-label="Annuler la réponse">✕</button></div>
   <div id="mentionBox" class="mentionbox" hidden role="listbox" aria-label="Mentionner un membre"></div>
   <form id="composer" hidden autocomplete="off">
     <input type="text" id="mText" maxlength="500" placeholder="Écris un message…" aria-label="Message" enterkeyhint="send">
@@ -65,6 +67,13 @@
   <p class="err" id="rErr"></p>
   <div class="row"><button class="btn ghost small" id="rPhoto">Joindre une photo</button><span style="flex:1"></span><button class="btn ghost small" data-close>Annuler</button><button class="btn small" id="rGo">Envoyer</button></div>
 </dialog>
+
+<dialog id="dlgInfo" class="sheet">
+  <div class="sheethead"><h2 id="iTitle">Infos du groupe</h2><button class="btn ghost small" data-close>Fermer</button></div>
+  <div id="iBody"></div>
+</dialog>
+
+<dialog id="dlgActions" class="actions"><div id="acBody"></div><button class="btn ghost" data-close style="width:100%;margin-top:8px">Annuler</button></dialog>
 
 <dialog id="dlgUser" class="usercard"><div id="uBody"></div>
   <div class="row"><button class="btn ghost" data-close>Fermer</button><button class="btn" id="uMention">Mentionner</button></div>

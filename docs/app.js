@@ -52,8 +52,49 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   function genCode(){const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let s="";for(const b of crypto.getRandomValues(new Uint8Array(6)))s+=a[b%a.length];return s;}
   function openDlg(sel){const d=$(sel);d.querySelectorAll(".err").forEach(e=>e.textContent="");d.showModal();}
   document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>b.closest("dialog").close()));
-  $("#dlgLb").addEventListener("click",()=>$("#dlgLb").close());
-  function zoom(src){$("#lbImg").src=src;$("#dlgLb").showModal();}
+  // ---------- visionneuse : balayer vers le haut / le bas pour passer d'une photo à l'autre ----------
+  const LB={list:[],i:0,moved:false};
+  function zoom(src,list){
+    LB.list=list&&list.length?list:[{img:src}];
+    LB.i=Math.max(0,LB.list.findIndex(x=>x.img===src));
+    showLb();$("#dlgLb").showModal();
+  }
+  function showLb(dir){
+    const it=LB.list[LB.i],img=$("#lbImg");
+    img.src=it.img;
+    img.classList.remove("from-up","from-down");
+    if(dir){void img.offsetWidth;img.classList.add(dir>0?"from-down":"from-up");}
+    const many=LB.list.length>1;
+    $("#lbInfo").hidden=!it.uid&&!many;
+    $("#lbWho").textContent=it.uid?`${it.uid===S.uid?"Toi":pName(it.uid)} · ${it.hour}h`+(it.caption?` · ${it.caption}`:""):"";
+    $("#lbCount").textContent=many?`${LB.i+1}/${LB.list.length}`:"";
+  }
+  function stepLb(d){
+    const j=LB.i+d;
+    if(j<0||j>=LB.list.length){const img=$("#lbImg");img.classList.remove("bump");void img.offsetWidth;img.classList.add("bump");return;}
+    LB.i=j;showLb(d);
+  }
+  // Les photos visibles du jour, dans l'ordre (sans celles encore masquées du déclic en cours).
+  function viewerList(){
+    const sl=slotNow(),cur=S.day===todayKey()&&sl.phase==="open"?sl.hour:null;
+    const mineNow=cur!=null&&S.photos.some(p=>p.uid===S.uid&&p.hour===cur);
+    return S.photos.filter(p=>!(p.hour===cur&&!mineNow)).sort((a,b)=>a.hour-b.hour||a.ts-b.ts);
+  }
+  (function lbGestures(){
+    const d=$("#dlgLb");let sx=0,sy=0,lastWheel=0;
+    d.addEventListener("click",()=>{if(LB.moved){LB.moved=false;return;}d.close();});
+    d.addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;LB.moved=false;},{passive:true});
+    d.addEventListener("touchmove",e=>{if(e.cancelable)e.preventDefault();},{passive:false});
+    d.addEventListener("touchend",e=>{
+      const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+      if(Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)){LB.moved=true;stepLb(dy<0?1:-1);}
+      else if(Math.abs(dx)>50||Math.abs(dy)>10)LB.moved=true;
+      // Le clic qui suit éventuellement un balayage est ignoré ; au-delà, un toucher ferme à nouveau.
+      if(LB.moved)setTimeout(()=>{LB.moved=false;},400);
+    });
+    d.addEventListener("wheel",e=>{e.preventDefault();const now=Date.now();if(now-lastWheel<350||Math.abs(e.deltaY)<20)return;lastWheel=now;stepLb(e.deltaY>0?1:-1);},{passive:false});
+    d.addEventListener("keydown",e=>{if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();stepLb(1);}else if(e.key==="ArrowUp"||e.key==="ArrowLeft"){e.preventDefault();stepLb(-1);}});
+  })();
 
   // ---------- fiche d'un membre (toucher sa photo de profil) ----------
   document.addEventListener("click",e=>{
@@ -349,7 +390,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const late=p.lateMin>ON_TIME;
     const bubble=el("div",{class:"bubble"},
       el("div",{class:"meta"},el("span",{class:"who",text:mine?"Toi":pName(p.uid)}),el("time",{text:hm(p.ts)}),late?el("span",{class:"late",text:`+${p.lateMin} min`}):null),
-      el("button",{class:"pic"+(veil?" veiled":""),"aria-label":veil?"Photo masquée":"Agrandir la photo de "+pName(p.uid),onclick:()=>{if(!veil)zoom(p.img);}},el("img",{src:p.img,alt:"",loading:"lazy"})));
+      el("button",{class:"pic"+(veil?" veiled":""),"aria-label":veil?"Photo masquée":"Agrandir la photo de "+pName(p.uid),onclick:()=>{if(!veil)zoom(p.img,viewerList());}},el("img",{src:p.img,alt:"",loading:"lazy"})));
     if(veil){bubble.append(el("p",{class:"veilnote",text:"Envoie ta photo pour la voir."}));return el("div",{class:"msg"},avEl(p.uid,32),bubble);}
     if(p.caption)bubble.append(el("p",{class:"caption",text:p.caption}));
     // reactions

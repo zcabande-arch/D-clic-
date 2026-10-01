@@ -29,9 +29,9 @@ Tout se configure depuis un navigateur, y compris sur iPad. Les rappels push ne 
 
 Pour inviter des proches : ouvre un groupe, touche *Inviter des proches* et envoie le lien. Ils l'ouvrent dans Safari (ou Chrome), l'ajoutent à l'écran d'accueil et rejoignent le groupe directement.
 
-## Courses : la liste de courses partagée
+## Take Out : la liste de courses partagée
 
-Le dossier `docs/courses/` contient une deuxième application, **Courses** : la liste de courses partagée en direct
+Le dossier `docs/courses/` contient une deuxième application, **Take Out** : la liste de courses partagée en direct
 avec sa famille, sa coloc, sa moitié ou ses amis, et ce qu'il y a déjà dans la cuisine. Elle utilise le même projet Supabase
 et le même hébergement que Déclic.
 
@@ -53,7 +53,7 @@ et le même hébergement que Déclic.
   (`XXXX-XXXX-XXXX-XXXX`) et un lien personnel à s'envoyer. Sur un autre téléphone, on ouvre le lien ou on tape le code
   dans « J'ai déjà un compte ». Le compte et le code sont les mêmes que ceux de Déclic.
 
-Les illustrations au trait sont décrites dans `docs/courses/illus/LICENCE.txt`.
+Les illustrations au trait de Take Out sont décrites dans `docs/courses/illus/LICENCE.txt`.
 
 ### Mise en route (une seule fois)
 

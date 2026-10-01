@@ -1,4 +1,4 @@
-// Accès aux données de Courses : Supabase (tables de supabase/courses.sql) ou, avec « ?demo » dans l'adresse,
+// Accès aux données de Take Out : Supabase (tables de supabase/courses.sql) ou, avec « ?demo » dans l'adresse,
 // une version de démonstration gardée dans ce navigateur. Les deux exposent la même API.
 import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "../config.js";
 

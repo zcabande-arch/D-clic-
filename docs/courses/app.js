@@ -1,4 +1,4 @@
-// Courses : la liste de courses partagée du foyer (famille, coloc, couple, amis), ce qu'il y a déjà dans la cuisine,
+// Take Out : la liste de courses partagée du foyer (famille, coloc, couple, amis), ce qu'il y a déjà dans la cuisine,
 // et ce que l'on dépense, par rayon.
 // Un article est soit sur la liste de courses (done = false), soit acheté et « dans notre cuisine » (done = true).
 // Chaque achat avec un prix devient une ligne de « purchases », qui alimente l'onglet Dépenses.
@@ -57,7 +57,7 @@ const ill = (name, cls = "ill") => `<img class="${cls}" src="illus/${name}.${SVG
 // Petite frise de dessins pour les écrans vides.
 const doodles = (...names) => `<div class="doodles" aria-hidden="true">${names.map((n, i) => ill(n, `ill d${i}`)).join("")}</div>`;
 const catIll = (id, cls) => ill(catOf(id).id, cls);
-const logo = (cls = "logo") => `<img class="${cls}" src="icons/logo.png" alt="Courses" draggable="false">`;
+const logo = (cls = "logo") => `<img class="${cls}" src="icons/logo.png" alt="Take Out" draggable="false">`;
 const kindIll = (id, cls) => ill(KINDS.some((k) => k.id === id) ? id : "autre", cls);
 // Étoile décorative des cartes (comme les formes du design de référence).
 const STAR = `<svg class="deco" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4l9 25 24-12-12 24 25 9-25 9 12 24-24-12-9 25-9-25-24 12 12-24-25-9 25-9-12-24 24 12z"/></svg>`;
@@ -408,7 +408,7 @@ function render() {
 }
 
 function renderError(app) {
-  app.innerHTML = `<div class="intro">${logo()}<h1>Courses</h1>
+  app.innerHTML = `<div class="intro">${logo()}<h1>Take Out</h1>
     <p class="lead">${esc(errText(S.bootError))}</p>
     <button class="btn wide" id="retry">Réessayer</button></div>`;
   $("#retry").onclick = () => location.reload();
@@ -417,7 +417,7 @@ function renderError(app) {
 // Première ouverture : « C'est pour qui ? »
 function renderWelcome(app) {
   app.innerHTML = `<div class="intro">
-    <div class="brand">${logo("logo sm")}<b>Courses</b></div>
+    <div class="brand">${logo("logo sm")}<b>Take Out</b></div>
     <div class="hero">${ill("mains", "hero-ill")}</div>
     <h1 class="serif">Bienvenue&nbsp;!</h1>
     <p class="lead">La liste de courses partagée de ton foyer&nbsp;: ce qu'il faut acheter, ce qu'il y a déjà dans la cuisine, et ce que vous dépensez.</p>
@@ -1299,10 +1299,10 @@ function openInvite(fresh) {
     </div>`,
     () => {
       $("#iShare").onclick = async () => {
-        const text = `Rejoins notre liste de courses « ${h.name} » : ${url}`;
+        const text = `Rejoins notre liste de courses « ${h.name} » sur Take Out : ${url}`;
         if (navigator.share) {
           try {
-            await navigator.share({ title: "Courses", text: `Rejoins notre liste de courses « ${h.name} »`, url });
+            await navigator.share({ title: "Take Out", text: `Rejoins notre liste de courses « ${h.name} » sur Take Out`, url });
             return;
           } catch (e) {
             if (e && e.name === "AbortError") return;
@@ -1394,7 +1394,7 @@ async function leaveHousehold() {
 
 async function shareAsText(items) {
   const h = household();
-  let text = `🛒 ${h?.name || "Courses"}\n`;
+  let text = `🛒 ${h?.name || "Take Out"}\n`;
   for (const [c, g] of groupByCat(items))
     text += `\n${c.e} ${c.l}\n` + g.map((i) => `• ${i.name}${i.qty ? " (" + i.qty + ")" : ""}${i.quality ? " – " + i.quality : ""}${i.prio === "urgent" ? " 🔥" : ""}`).join("\n") + "\n";
   if (navigator.share) {
@@ -1484,7 +1484,7 @@ function showCode(code) {
       $("#cdShare").onclick = async () => {
         if (navigator.share) {
           try {
-            await navigator.share({ title: "Mon compte Courses", text: "Mon lien pour ouvrir mon compte Courses (à garder pour moi)", url });
+            await navigator.share({ title: "Mon compte Take Out", text: "Mon lien pour ouvrir mon compte Take Out (à garder pour moi)", url });
             return;
           } catch (e) {
             if (e && e.name === "AbortError") return;

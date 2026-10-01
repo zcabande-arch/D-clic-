@@ -1,25 +1,29 @@
-// Courses : la liste de courses partagée du foyer (famille, coloc, couple, amis) et ce qu'il y a déjà dans la cuisine.
+// Courses : la liste de courses partagée du foyer (famille, coloc, couple, amis), ce qu'il y a déjà dans la cuisine,
+// et ce que l'on dépense, par rayon.
 // Un article est soit sur la liste de courses (done = false), soit acheté et « dans notre cuisine » (done = true).
+// Chaque achat avec un prix devient une ligne de « purchases », qui alimente l'onglet Dépenses.
 // Les changements s'affichent tout de suite et partent dans une file d'attente : sans réseau (au fond du magasin),
 // tout reste utilisable et se synchronise dès que la connexion revient.
 import { openStore } from "./store.js";
 
+// tint : fond pastel de la carte du rayon ; tone : couleur du rayon dans le graphique.
 const CATS = [
-  { id: "fruits", e: "🥦", l: "Fruits & légumes" },
-  { id: "viande", e: "🥩", l: "Viande & poisson" },
-  { id: "frais", e: "🧀", l: "Frais & laitiers" },
-  { id: "epicerie", e: "🍝", l: "Épicerie" },
-  { id: "conserves", e: "🥫", l: "Conserves & sauces" },
-  { id: "epices", e: "🧂", l: "Épices & condiments" },
-  { id: "pain", e: "🥖", l: "Boulangerie" },
-  { id: "surgeles", e: "🧊", l: "Surgelés" },
-  { id: "boissons", e: "🥤", l: "Boissons" },
-  { id: "snacks", e: "🍫", l: "Snacks" },
-  { id: "hygiene", e: "🧴", l: "Hygiène & beauté" },
-  { id: "maison", e: "🧽", l: "Maison & entretien" },
-  { id: "bebe", e: "🍼", l: "Bébé & animaux" },
-  { id: "autre", e: "🧺", l: "Autre" },
+  { id: "fruits", e: "🥦", l: "Fruits & légumes", tint: "#DCEAC8", tone: "#A3C77F" },
+  { id: "viande", e: "🥩", l: "Viande & poisson", tint: "#F8D3E3", tone: "#EC96C0" },
+  { id: "frais", e: "🧀", l: "Frais & laitiers", tint: "#F7EAB4", tone: "#EACB55" },
+  { id: "epicerie", e: "🍝", l: "Épicerie", tint: "#F9DEC6", tone: "#EFAB72" },
+  { id: "conserves", e: "🥫", l: "Conserves & sauces", tint: "#F6CFCB", tone: "#E58A82" },
+  { id: "epices", e: "🧂", l: "Épices & condiments", tint: "#E6DDF6", tone: "#B3A0E6" },
+  { id: "pain", e: "🥖", l: "Boulangerie", tint: "#F3E2C3", tone: "#D9AF6C" },
+  { id: "surgeles", e: "🧊", l: "Surgelés", tint: "#D3E2F6", tone: "#93B4EA" },
+  { id: "boissons", e: "🥤", l: "Boissons", tint: "#CFEDEF", tone: "#76C8D0" },
+  { id: "snacks", e: "🍫", l: "Snacks", tint: "#F1D3EE", tone: "#D492CC" },
+  { id: "hygiene", e: "🧴", l: "Hygiène & beauté", tint: "#E2DBF7", tone: "#A293E3" },
+  { id: "maison", e: "🧽", l: "Maison & entretien", tint: "#D3EFDF", tone: "#7FCB9F" },
+  { id: "bebe", e: "🍼", l: "Bébé & animaux", tint: "#DCE6F8", tone: "#A2BAEC" },
+  { id: "autre", e: "🧺", l: "Autre", tint: "#ECE6D8", tone: "#BBB098" },
 ];
+const catOf = (id) => CATS.find((c) => c.id === id) || CATS[CATS.length - 1];
 const PRIOS = [
   { id: "urgent", l: "🔥 Urgent" },
   { id: "bientot", l: "Bientôt" },
@@ -36,21 +40,45 @@ const SHOPS = [
 ];
 // « pour » complète « Une liste pour … ».
 const KINDS = [
-  { id: "famille", l: "Famille", d: "Toute la maisonnée", pour: "la famille", ph: "La famille" },
-  { id: "coloc", l: "Coloc", d: "Entre colocataires", pour: "la coloc", ph: "L'appart" },
-  { id: "couple", l: "Couple", d: "À deux", pour: "vous deux", ph: "Chez nous" },
-  { id: "amis", l: "Amis", d: "Vacances, week-ends, soirées", pour: "la bande", ph: "Le week-end entre potes" },
+  { id: "famille", l: "Famille", d: "Toute la maisonnée", pour: "la famille", ph: "La famille", tint: "#F7EAB4" },
+  { id: "coloc", l: "Coloc", d: "Entre colocataires", pour: "la coloc", ph: "L'appart", tint: "#D3E2F6" },
+  { id: "couple", l: "Couple", d: "À deux", pour: "vous deux", ph: "Chez nous", tint: "#F8D3E3" },
+  { id: "amis", l: "Amis", d: "Vacances, week-ends, soirées", pour: "la bande", ph: "Le week-end entre potes", tint: "#DCEAC8" },
 ];
-const KIND_OTHER = { id: "autre", l: "Autre", d: "", pour: "vous", ph: "Notre liste", img: "autre" };
+const KIND_OTHER = { id: "autre", l: "Autre", d: "", pour: "vous", ph: "Notre liste", tint: "#ECE6D8" };
 const kindOf = (id) => KINDS.find((k) => k.id === id) || KIND_OTHER;
 const EMOJIS = ["🦊", "🐻", "🐼", "🐨", "🐸", "🐙", "🦄", "🐝", "🐱", "🐶", "🌻", "🍓", "🥑", "🍕", "⭐", "🌙"];
 const PRANK = { urgent: 0, bientot: 1, plustard: 2 };
+const VIEWS = ["list", "kitchen", "spend", "us"];
 
 // Illustrations (Fluent Emoji 3D, licence MIT : voir illus/LICENCE.txt).
 const ill = (name, cls = "ill") => `<img class="${cls}" src="illus/${name}.webp" alt="" aria-hidden="true" draggable="false">`;
-const catIll = (id, cls) => ill(CATS.some((c) => c.id === id) ? id : "autre", cls);
+const catIll = (id, cls) => ill(catOf(id).id, cls);
 const logo = (cls = "logo") => `<img class="${cls}" src="icons/logo.png" alt="Courses" draggable="false">`;
 const kindIll = (id, cls) => ill(KINDS.some((k) => k.id === id) ? id : "autre", cls);
+// Étoile décorative des cartes (comme les formes du design de référence).
+const STAR = `<svg class="deco" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4l9 25 24-12-12 24 25 9-25 9 12 24-24-12-9 25-9-25-24 12 12-24-25-9 25-9-12-24 24 12z"/></svg>`;
+// Icônes au trait de la barre du bas.
+const ICONS = {
+  list: `<svg viewBox="0 0 24 24"><path d="M3 5h2l2.2 10.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.5L20.5 9H6.2"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>`,
+  kitchen: `<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M5 10h14M9 6v1.5M9 13v3"/></svg>`,
+  spend: `<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>`,
+  us: `<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.4 3-5.4 6-5.4s5.4 2 6 5.4"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.3c2.4.2 4 1.9 4.5 4.7"/></svg>`,
+};
+
+// ---------- montants ----------
+const EUR = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const EUR0 = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const money = (n) => EUR.format(n || 0);
+const money0 = (n) => (Math.abs(n) >= 100 ? EUR0.format(n) : EUR.format(n || 0));
+// « 2,50 », « 2.5 », « 2,50 € » → 2.5 ; vide → null ; incorrect → NaN.
+function parseMoney(s) {
+  const t = String(s || "").replace(/[€\s]/g, "").replace(",", ".");
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 && n < 100000 ? Math.round(n * 100) / 100 : NaN;
+}
+const pct = (x) => `${Math.round(x * 100)} %`;
 
 // ---------- rayon deviné à partir du nom ----------
 const GUESS = {
@@ -72,7 +100,7 @@ const norm = (s) =>
   String(s || "")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/œ/g, "oe")
     .replace(/[’]/g, "'")
     .replace(/\s+/g, " ")
@@ -136,19 +164,28 @@ function ago(iso) {
   if (days < 7) return `il y a ${days} jours`;
   return "le " + d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
 }
+const today = () => new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, (c) => c.toUpperCase());
+
+// Notification en bas d'écran, avec jusqu'à deux actions : [["Annuler", fn], …].
 let toastTimer;
-function toast(text, action, onAction) {
+function toast(text, actions = []) {
   $("#toastText").textContent = text;
-  const b = $("#toastBtn");
-  b.hidden = !action;
-  b.textContent = action || "";
-  b.onclick = () => {
-    $("#toast").classList.remove("show");
-    onAction && onAction();
-  };
+  const box = $("#toastActions");
+  box.replaceChildren(
+    ...actions.map(([label, fn]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.onclick = () => {
+        $("#toast").classList.remove("show");
+        fn();
+      };
+      return b;
+    }),
+  );
   $("#toast").classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $("#toast").classList.remove("show"), action ? 5000 : 2600);
+  toastTimer = setTimeout(() => $("#toast").classList.remove("show"), actions.length ? 5500 : 2600);
 }
 function errText(e) {
   if (!e) return "Une erreur est survenue.";
@@ -173,11 +210,13 @@ const S = {
   households: loadJSON("courses:households", []),
   hid: loadJSON("courses:hid", null),
   members: [],
-  server: new Map(), // articles tels que la base les connaît
+  // Ce que la base connaît, par table.
+  data: { items: new Map(), purchases: new Map() },
   queue: loadJSON("courses:queue", []), // changements pas encore envoyés
-  view: loadJSON("courses:view", "list"), // « list » : liste de courses ; « kitchen » : dans notre cuisine
+  view: loadJSON("courses:view", "list"),
   shop: "",
   kfilter: "all",
+  period: "month",
   screen: "loading",
   onb: { kind: null, mode: null }, // choix faits à la première ouverture
   live: null,
@@ -190,23 +229,26 @@ const S = {
   bootError: null,
 };
 const household = () => S.households.find((h) => h.id === S.hid) || null;
-const memberName = (uid) => (uid === S.uid ? "toi" : S.members.find((m) => m.uid === uid)?.name || "quelqu'un");
+const member = (uid) => S.members.find((m) => m.uid === uid);
+const memberName = (uid) => (uid === S.uid ? "toi" : member(uid)?.name || "quelqu'un");
+const memberEmoji = (uid) => (uid === S.uid ? S.me?.emoji : member(uid)?.emoji) || "🙂";
 
 function cacheHousehold() {
   if (!S.hid) return;
-  saveJSON("courses:cache:" + S.hid, { items: [...S.server.values()], members: S.members });
+  saveJSON("courses:cache:" + S.hid, { items: [...S.data.items.values()], purchases: [...S.data.purchases.values()], members: S.members });
 }
 function restoreHousehold() {
   const c = loadJSON("courses:cache:" + S.hid, null);
-  S.server = new Map((c?.items || []).map((r) => [r.id, r]));
+  S.data.items = new Map((c?.items || []).map((r) => [r.id, r]));
+  S.data.purchases = new Map((c?.purchases || []).map((r) => [r.id, r]));
   S.members = c?.members || [];
 }
 
 // Ce qui est affiché = ce que la base connaît + les changements en attente.
-function viewItems() {
-  const m = new Map([...S.server].map(([k, v]) => [k, { ...v }]));
+function rows(tbl) {
+  const m = new Map([...S.data[tbl]].map(([k, v]) => [k, { ...v }]));
   for (const op of S.queue) {
-    if (op.hid !== S.hid) continue;
+    if (op.hid !== S.hid || (op.tbl || "items") !== tbl) continue;
     if (op.t === "insert") for (const r of op.rows) m.set(r.id, { ...r, _pending: true });
     else if (op.t === "patch") {
       const it = m.get(op.id);
@@ -215,10 +257,12 @@ function viewItems() {
   }
   return [...m.values()];
 }
+const viewItems = () => rows("items");
 
 // ---------- file d'attente des changements ----------
 function enqueue(op) {
   op.hid = S.hid;
+  op.tbl = op.tbl || "items";
   S.queue.push(op);
   saveJSON("courses:queue", S.queue);
   render();
@@ -230,15 +274,16 @@ async function flush() {
   try {
     while (S.queue.length) {
       const op = S.queue[0];
+      const tbl = op.tbl || "items";
       try {
-        if (op.t === "insert") await S.store.insertItems(op.rows);
-        else if (op.t === "patch") await S.store.patchItem(op.id, op.patch);
-        else if (op.t === "delete") await S.store.deleteItems(op.ids);
+        if (op.t === "insert") await S.store.insertRows(tbl, op.rows);
+        else if (op.t === "patch") await S.store.patchRow(tbl, op.id, op.patch);
+        else if (op.t === "delete") await S.store.deleteRows(tbl, op.ids);
         // Ce qui vient d'être envoyé fait désormais partie de l'état connu, même si le temps réel est coupé.
-        if (op.hid === S.hid) applyToServer(op);
+        if (op.hid === S.hid) applyToData(tbl, op);
       } catch (e) {
         if (e.code === "network") break; // on réessaiera au retour du réseau
-        toast(op.t === "insert" ? "Article non ajouté : " + errText(e) : "Modification refusée : " + errText(e));
+        toast(op.t === "insert" ? "Ajout refusé : " + errText(e) : "Modification refusée : " + errText(e));
       }
       S.queue.shift();
       saveJSON("courses:queue", S.queue);
@@ -249,12 +294,13 @@ async function flush() {
     render();
   }
 }
-function applyToServer(op) {
-  if (op.t === "insert") for (const r of op.rows) S.server.set(r.id, { ...r });
+function applyToData(tbl, op) {
+  const m = S.data[tbl];
+  if (op.t === "insert") for (const r of op.rows) m.set(r.id, { ...r });
   else if (op.t === "patch") {
-    const it = S.server.get(op.id);
-    if (it) S.server.set(op.id, { ...it, ...op.patch });
-  } else if (op.t === "delete") op.ids.forEach((id) => S.server.delete(id));
+    const it = m.get(op.id);
+    if (it) m.set(op.id, { ...it, ...op.patch });
+  } else if (op.t === "delete") op.ids.forEach((id) => m.delete(id));
 }
 
 // ---------- actions sur les articles ----------
@@ -262,7 +308,7 @@ function remember(it) {
   const memo = loadJSON("courses:memo", {});
   const k = norm(it.name);
   if (!k) return;
-  memo[k] = { name: it.name, cat: it.cat, quality: it.quality || "", shop: it.shop || "", n: (memo[k]?.n || 0) + 1, at: Date.now() };
+  memo[k] = { name: it.name, cat: it.cat, quality: it.quality || "", shop: it.shop || "", price: it.price ?? memo[k]?.price ?? null, n: (memo[k]?.n || 0) + 1, at: Date.now() };
   // On garde les 300 articles les plus récents.
   const keys = Object.keys(memo);
   if (keys.length > 300) keys.sort((a, b) => memo[a].at - memo[b].at).slice(0, keys.length - 300).forEach((x) => delete memo[x]);
@@ -276,12 +322,13 @@ function addItem(data, place) {
   const same = viewItems().find((i) => norm(i.name) === norm(data.name));
   const extra = {};
   if (data.qty) extra.qty = data.qty;
+  if (data.price != null) extra.price = data.price;
   if (same) {
     S.flashId = same.id;
     if (place === "list" && !same.done) {
-      if (data.qty && data.qty !== same.qty) {
+      if (Object.keys(extra).length && (extra.qty !== same.qty || extra.price !== same.price)) {
         enqueue({ t: "patch", id: same.id, patch: extra });
-        toast(`« ${same.name} » était déjà sur la liste : quantité mise à jour`);
+        toast(`« ${same.name} » était déjà sur la liste : mis à jour`);
       } else {
         toast(`« ${same.name} » est déjà sur la liste`);
         render();
@@ -291,15 +338,13 @@ function addItem(data, place) {
       enqueue({ t: "patch", id: same.id, patch: { ...extra, ...TO_LIST() } });
       toast(`« ${same.name} » ajouté à la liste`);
     } else if (same.done) {
-      if (same.low || data.qty) enqueue({ t: "patch", id: same.id, patch: { ...extra, low: false } });
+      if (same.low || Object.keys(extra).length) enqueue({ t: "patch", id: same.id, patch: { ...extra, low: false } });
       else render();
       toast(same.low ? `« ${same.name} » : stock refait` : `« ${same.name} » est déjà dans la cuisine`);
-    } else {
-      enqueue({ t: "patch", id: same.id, patch: { ...extra, ...TO_KITCHEN() } });
-      toast(`« ${same.name} » rayé de la liste et rangé dans la cuisine`);
-    }
+    } else bought(same);
     return;
   }
+  const memo = loadJSON("courses:memo", {})[norm(data.name)];
   const row = {
     id: uuid(),
     household: S.hid,
@@ -311,6 +356,7 @@ function addItem(data, place) {
     shop: data.shop || "",
     done: place === "kitchen",
     low: false,
+    price: data.price ?? memo?.price ?? null,
     added_by: S.uid,
     done_by: place === "kitchen" ? S.uid : null,
     created_at: nowIso(),
@@ -321,23 +367,37 @@ function addItem(data, place) {
   enqueue({ t: "insert", rows: [row] });
 }
 const snapshot = (it) => ({ done: it.done, low: !!it.low, done_by: it.done_by, done_at: it.done_at, added_by: it.added_by, created_at: it.created_at, prio: it.prio });
-// Coché sur la liste : il part dans la cuisine.
+
+// Coché sur la liste : il part dans la cuisine, et son prix (s'il est connu) compte dans les dépenses.
 function bought(it) {
   const before = snapshot(it);
   enqueue({ t: "patch", id: it.id, patch: TO_KITCHEN() });
-  toast(`« ${it.name} » rangé dans la cuisine`, "Annuler", () => enqueue({ t: "patch", id: it.id, patch: before }));
+  let pid = null;
+  if (it.price != null) {
+    pid = uuid();
+    enqueue({ tbl: "purchases", t: "insert", rows: [purchaseRow(it, it.price, S.uid, pid)] });
+  }
+  const undo = () => {
+    enqueue({ t: "patch", id: it.id, patch: before });
+    if (pid) enqueue({ tbl: "purchases", t: "delete", ids: [pid] });
+  };
+  if (pid) toast(`« ${it.name} » acheté · ${money(it.price)}`, [["Modifier", () => openPrice(it, pid)], ["Annuler", undo]]);
+  else toast(`« ${it.name} » rangé dans la cuisine`, [["Ajouter le prix", () => openPrice(it, null)], ["Annuler", undo]]);
+}
+function purchaseRow(it, amount, paidBy, id = uuid()) {
+  return { id, household: S.hid, item_id: it.id || null, name: it.name, cat: it.cat || "autre", amount, paid_by: paidBy, created_by: S.uid, bought_at: nowIso() };
 }
 // Fini dans la cuisine : il repart sur la liste de courses.
 function finished(it) {
   const before = snapshot(it);
   enqueue({ t: "patch", id: it.id, patch: { ...TO_LIST(), prio: it.low ? "urgent" : "bientot" } });
-  toast(`« ${it.name} » ajouté à la liste de courses`, "Annuler", () => enqueue({ t: "patch", id: it.id, patch: before }));
+  toast(`« ${it.name} » ajouté à la liste de courses`, [["Annuler", () => enqueue({ t: "patch", id: it.id, patch: before })]]);
 }
 function removeItems(list, msg) {
   if (!list.length) return;
-  const rows = list.map(({ _pending, ...r }) => r);
-  enqueue({ t: "delete", ids: rows.map((r) => r.id) });
-  toast(msg, "Annuler", () => enqueue({ t: "insert", rows }));
+  const rs = list.map(({ _pending, ...r }) => r);
+  enqueue({ t: "delete", ids: rs.map((r) => r.id) });
+  toast(msg, [["Annuler", () => enqueue({ t: "insert", rows: rs })]]);
 }
 
 // ---------- affichage ----------
@@ -363,11 +423,11 @@ function renderError(app) {
 function renderWelcome(app) {
   app.innerHTML = `<div class="intro">
     ${logo()}
-    <h1>Bienvenue&nbsp;!</h1>
-    <p class="lead">La liste de courses partagée de ton foyer&nbsp;: ce qu'il faut acheter, et ce qu'il y a déjà dans la cuisine. Tout le monde voit les changements en direct.</p>
+    <h1 class="serif">Bienvenue&nbsp;!</h1>
+    <p class="lead">La liste de courses partagée de ton foyer&nbsp;: ce qu'il faut acheter, ce qu'il y a déjà dans la cuisine, et ce que vous dépensez.</p>
     <h2 class="q">C'est pour qui&nbsp;?</h2>
     <div class="kinds">${KINDS.map(
-      (k) => `<button class="kind" data-kind="${k.id}">${ill(k.id, "ill lg")}<b>${esc(k.l)}</b><small>${esc(k.d)}</small></button>`,
+      (k) => `<button class="kind" data-kind="${k.id}" style="--tint:${k.tint}">${STAR}${ill(k.id, "ill lg")}<b>${esc(k.l)}</b><small>${esc(k.d)}</small></button>`,
     ).join("")}</div>
     <div class="stack" style="margin-top:22px">
       <button class="btn ghost wide" id="wJoin">${ill("invite", "ill sm")} On m'a invité·e sur une liste</button>
@@ -414,9 +474,9 @@ async function renderProfileSetup(app) {
       ? `Une liste pour ${esc(k.pour)}, super&nbsp;! D'abord, qui es-tu&nbsp;? Les autres verront ton prénom à côté de ce que tu ajoutes.`
       : "D'abord, qui es-tu&nbsp;? Les autres verront ton prénom à côté de ce que tu ajoutes.";
   app.innerHTML = `<div class="intro">
-    ${!invited ? `<button class="link back" id="pBack">← Retour</button>` : ""}
+    ${!invited ? `<button class="round dashed back" id="pBack" aria-label="Retour">←</button>` : ""}
     ${invited ? ill("invite", "ill xl") : k ? kindIll(k.id, "ill xl") : ill("salut", "ill xl")}
-    <h1>Ton profil</h1>
+    <h1 class="serif">Ton profil</h1>
     <p class="lead">${lead}</p>
     <form class="card" id="pForm" autocomplete="off">
       <div class="field"><label for="pName">Ton prénom</label><input id="pName" maxlength="30" required placeholder="ex : Camille" autocomplete="given-name"></div>
@@ -500,7 +560,7 @@ function bindHouseholdForms(prefix) {
       try {
         const code = await S.store.createHousehold(name, kind);
         await refreshHouseholds();
-        S.view = "list";
+        setView("list");
         await selectHousehold(code);
         if ($("#panel").open) $("#panel").close();
         openInvite(true);
@@ -544,14 +604,12 @@ async function joinCode(code, onErr) {
 function renderHouseholdSetup(app) {
   const mode = S.onb.mode;
   let body;
-  if (mode === "join")
-    body = `${joinForm("s")}<p class="or"><button class="link" id="sSwap">Créer une nouvelle liste à la place</button></p>`;
-  else if (mode === "create")
-    body = `${createForm("s", S.onb.kind)}<p class="or"><button class="link" id="sSwap">J'ai plutôt un code d'invitation</button></p>`;
+  if (mode === "join") body = `${joinForm("s")}<p class="or"><button class="link" id="sSwap">Créer une nouvelle liste à la place</button></p>`;
+  else if (mode === "create") body = `${createForm("s", S.onb.kind)}<p class="or"><button class="link" id="sSwap">J'ai plutôt un code d'invitation</button></p>`;
   else body = `${createForm("s", "famille")}<p class="or">ou</p>${joinForm("s")}`;
   app.innerHTML = `<div class="intro">
-    <p class="hello"><span class="av lg">${esc(S.me?.emoji || "🙂")}</span></p>
-    <h1>Salut ${esc(S.me?.name || "")}&nbsp;!</h1>
+    <p class="hello"><span class="av xl">${esc(S.me?.emoji || "🙂")}</span></p>
+    <h1 class="serif">Salut ${esc(S.me?.name || "")}&nbsp;!</h1>
     <p class="lead">${mode === "join" ? "Plus qu'une étape pour rejoindre la liste partagée." : "Donne un nom à ta liste, puis invite les autres."}</p>
     ${body}
     <p class="or"><button class="link" id="editMe">Modifier mon profil</button></p>
@@ -564,13 +622,17 @@ function renderHouseholdSetup(app) {
     });
 }
 
-// ---------- écran principal : liste de courses / dans notre cuisine ----------
+// ---------- écran principal ----------
+function setView(v) {
+  S.view = VIEWS.includes(v) ? v : "list";
+  saveJSON("courses:view", S.view);
+}
+
 function renderMain(app) {
   const h = household();
   const items = viewItems();
   const todo = items.filter((i) => !i.done),
     stock = items.filter((i) => i.done);
-  const others = S.members.filter((m) => m.uid !== S.uid);
   const pending = S.queue.filter((o) => o.hid === S.hid).length;
   const lowCount = stock.filter((i) => i.low).length;
 
@@ -584,28 +646,30 @@ function renderMain(app) {
 
   const top = `
     <div class="top">
-      <button class="switch" id="hhBtn" aria-label="Changer de liste ou gérer le foyer">${kindIll(h?.kind, "ill xs")}<span>${esc(h?.name || "")}</span> ▾</button>
+      <button class="hhpill" id="hhBtn" aria-label="Changer de liste">${kindIll(h?.kind, "ill xs")}<span>${esc(h?.name || "")}</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></button>
       <span class="grow"></span>
-      <button class="faces" id="facesBtn" aria-label="${others.length ? "Membres de la liste" : "Inviter quelqu'un"}">${others
-        .slice(0, 4)
-        .map((m) => `<span class="av" title="${esc(m.name)}">${esc(m.emoji || "🙂")}</span>`)
-        .join("")}${others.length ? "" : `<span class="av add" aria-hidden="true">+</span>`}</button>
-      <button class="meBtn" id="meBtn" aria-label="Mon profil"><span class="av me">${esc(S.me?.emoji || "🙂")}</span></button>
+      <button class="round" id="meBtn" aria-label="Nous : membres et profil"><span class="av me">${esc(S.me?.emoji || "🙂")}</span></button>
     </div>`;
 
-  const body = S.view === "kitchen" ? kitchenHtml(stock, todo) : listHtml(todo, stock, others);
-  const nav = `<nav class="nav" aria-label="Pages">
-      <button data-view="list" aria-current="${S.view === "list" ? "page" : "false"}">${ill("liste", "ill nav-ill")}<span>Liste de courses</span>${
-        todo.length ? `<b class="badge">${todo.length}</b>` : ""
-      }</button>
-      <button data-view="kitchen" aria-current="${S.view === "kitchen" ? "page" : "false"}">${ill("cuisine", "ill nav-ill")}<span>Dans notre cuisine</span>${
-        lowCount ? `<b class="badge warn" title="presque finis">${lowCount}</b>` : ""
-      }</button>
-    </nav>`;
+  let body;
+  if (S.view === "kitchen") body = kitchenHtml(stock);
+  else if (S.view === "spend") body = spendHtml();
+  else if (S.view === "us") body = usHtml();
+  else body = listHtml(todo, stock);
+
+  const tab = (v, label, badge) =>
+    `<button data-view="${v}" aria-current="${S.view === v ? "page" : "false"}" aria-label="${label}">${ICONS[v]}<span>${label}</span>${badge || ""}</button>`;
+  const nav = `<nav class="nav" aria-label="Pages"><div class="navbar">
+      ${tab("list", "Courses", todo.length ? `<b class="badge">${todo.length}</b>` : "")}
+      ${tab("kitchen", "Cuisine", lowCount ? `<b class="badge warn">${lowCount}</b>` : "")}
+      <button class="fab" id="fab" aria-label="${S.view === "spend" ? "Ajouter une dépense" : S.view === "us" ? "Inviter quelqu'un" : "Ajouter un article"}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      ${tab("spend", "Dépenses")}
+      ${tab("us", "Nous")}
+    </div></nav>`;
 
   app.innerHTML = top + (status ? `<div class="sync">${esc(status)}</div>` : "") + body + nav;
 
-  if (keep && keep.view === S.view) {
+  if (keep && keep.view === S.view && $("#quickName")) {
     $("#quickName").value = keep.v;
     if (keep.f) $("#quickName").focus();
   }
@@ -622,55 +686,52 @@ function renderMain(app) {
 function quickForm(view, placeholder) {
   return `<form class="add" id="quick" autocomplete="off">
       <input id="quickName" data-view="${view}" list="suggest" maxlength="80" placeholder="${esc(placeholder)}" aria-label="Article à ajouter" enterkeyhint="done">
-      <button type="button" class="more" id="moreBtn" aria-label="Ajouter avec détails">⋯</button>
       <button class="btn" type="submit">Ajouter</button>
     </form>
     <datalist id="suggest">${suggestions().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>`;
 }
 
-function listHtml(todo, stock, others) {
+function aisle(c, n, inner) {
+  return `<section class="aisle" style="--tint:${c.tint}"><h2>${STAR}<span class="bubble">${catIll(c.id, "ill cat")}</span><span>${esc(c.l)}</span><small>${n}</small></h2><ul class="items">${inner}</ul></section>`;
+}
+const groupByCat = (list) => CATS.map((c) => [c, list.filter((i) => catOf(i.cat).id === c.id)]).filter(([, g]) => g.length);
+
+function listHtml(todo, stock) {
   const urgent = todo.filter((i) => i.prio === "urgent").length;
+  const priced = todo.filter((i) => i.price != null);
+  const estimate = priced.reduce((s, i) => s + i.price, 0);
   // Filtre par magasin : seulement les magasins présents dans la liste.
   const shops = SHOPS.filter((s) => s.id && todo.some((i) => i.shop === s.id));
   if (S.shop && !shops.some((s) => s.id === S.shop)) S.shop = "";
   const shown = todo.filter((i) => !S.shop || i.shop === S.shop || !i.shop);
-  // Presque fini à la maison et pas encore sur la liste : un toucher pour l'ajouter.
   const low = stock.filter((i) => i.low);
-  let html = `<h1>Liste de courses</h1>
-    <p class="count">${
-      todo.length
-        ? `<b>${todo.length}</b> article${todo.length > 1 ? "s" : ""} à acheter${urgent ? ` dont <b>${urgent}</b> urgent${urgent > 1 ? "s" : ""}` : ""}`
-        : "Rien ne manque pour l'instant."
-    }</p>
+  const others = S.members.filter((m) => m.uid !== S.uid);
+  let html = `<header class="head"><h1 class="serif">Liste de courses</h1><p class="date">${esc(today())}</p></header>
+    <div class="stats">
+      <div class="stat" style="--tint:#F7EAB4">${STAR}<b>${todo.length}</b><span>à acheter</span></div>
+      <div class="stat" style="--tint:#F8D3E3">${STAR}<b>${urgent}</b><span>urgent${urgent > 1 ? "s" : ""}</span></div>
+      <div class="stat" style="--tint:#D3E2F6">${STAR}<b>${priced.length ? money0(estimate) : "–"}</b><span>estimé${priced.length && priced.length < todo.length ? ` (${priced.length}/${todo.length})` : ""}</span></div>
+    </div>
     ${quickForm("list", "Il manque quoi ?")}`;
   if (shops.length)
     html += `<div class="bar" role="group" aria-label="Filtrer par magasin"><button class="fchip" data-shop="" aria-pressed="${!S.shop}">Partout</button>${shops
       .map((s) => `<button class="fchip" data-shop="${s.id}" aria-pressed="${S.shop === s.id}">${esc(s.l)}</button>`)
       .join("")}</div>`;
   if (low.length)
-    html += `<section class="lowcard"><h3>${ill("cuisine", "ill sm")} Presque fini à la maison</h3><div class="chips">${low
-      .map((i) => `<button class="chip addlow" data-finish="${esc(i.id)}">+ ${esc(i.name)}</button>`)
+    html += `<section class="note-card" style="--tint:#F7EAB4">${STAR}<h3>Presque fini à la maison</h3><div class="chips">${low
+      .map((i) => `<button class="chip solid" data-finish="${esc(i.id)}">+ ${esc(i.name)}</button>`)
       .join("")}</div></section>`;
   if (!others.length)
-    html += `<button class="invite-hint" id="inviteHint">${ill("invite", "ill md")}<span><b>Invite les autres</b><span>Envoie le lien à ta famille, ta coloc, ta moitié ou tes amis pour partager cette liste.</span></span></button>`;
+    html += `<button class="note-card invite" id="inviteHint" style="--tint:#F8D3E3">${STAR}${ill("invite", "ill md")}<span><b>Invite les autres</b><span>Envoie le lien à ta famille, ta coloc, ta moitié ou tes amis pour partager cette liste.</span></span></button>`;
   html += `<main id="list">`;
   if (!shown.length)
-    html += S.shop
-      ? `<div class="empty">${ill("ok", "ill xl")}<p>Rien de plus à prendre ici.</p></div>`
-      : `<div class="empty">${ill("ok", "ill xl")}<p>Tout est acheté&nbsp;! Ajoute un article dès que quelque chose se termine.</p></div>`;
-  for (const c of CATS) {
-    const group = shown
-      .filter((i) => (CATS.some((x) => x.id === i.cat) ? i.cat : "autre") === c.id)
-      .sort((a, b) => (PRANK[a.prio] ?? 1) - (PRANK[b.prio] ?? 1) || String(a.created_at).localeCompare(String(b.created_at)));
-    if (!group.length) continue;
-    html += aisleHead(c, group.length) + `<ul class="items">${group.map(listItemHtml).join("")}</ul></section>`;
+    html += `<div class="empty">${ill("ok", "ill xl")}<p>${S.shop ? "Rien de plus à prendre ici." : "Tout est acheté&nbsp;! Ajoute un article dès que quelque chose se termine."}</p></div>`;
+  for (const [c, g] of groupByCat(shown)) {
+    g.sort((a, b) => (PRANK[a.prio] ?? 1) - (PRANK[b.prio] ?? 1) || String(a.created_at).localeCompare(String(b.created_at)));
+    html += aisle(c, g.length, g.map(listItemHtml).join(""));
   }
   html += `</main>` + emailHint();
   return html;
-}
-
-function aisleHead(c, n) {
-  return `<section class="aisle"><h2>${catIll(c.id, "ill cat")}<span>${esc(c.l)}</span><small>${n}</small></h2>`;
 }
 
 function listItemHtml(it) {
@@ -679,42 +740,36 @@ function listItemHtml(it) {
   const who = S.members.length > 1 && it.added_by ? `ajouté par ${esc(memberName(it.added_by))}` : "";
   return `<li data-id="${esc(it.id)}">
     <button class="check" data-toggle="${esc(it.id)}" aria-label="Acheté : ${esc(it.name)}">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>
+      <svg viewBox="0 0 16 16"><path d="M3 8.5l3.2 3L13 4.5"/></svg>
     </button>
     <button class="body" data-edit="${esc(it.id)}">
       <div class="name">${esc(it.name)}${it.qty ? ` <span class="qty">· ${esc(it.qty)}</span>` : ""}</div>
       ${it.quality ? `<div class="quality">${esc(it.quality)}</div>` : ""}
       <div class="meta">${prio && it.prio !== "plustard" ? `<span class="pill ${it.prio}">${esc(prio.l)}</span>` : ""}${shop ? `<span class="pill">${esc(shop.l)}</span>` : ""}${
-        who ? `<span>${who}</span>` : ""
-      }${it._pending ? `<span class="pending">en attente d'envoi</span>` : ""}</div>
+        it.price != null ? `<span class="pill">≈ ${money(it.price)}</span>` : ""
+      }${who ? `<span>${who}</span>` : ""}${it._pending ? `<span class="pending">en attente d'envoi</span>` : ""}</div>
     </button>
   </li>`;
 }
 
-function kitchenHtml(stock, todo) {
+function kitchenHtml(stock) {
   const low = stock.filter((i) => i.low).length;
   if (S.kfilter === "low" && !low) S.kfilter = "all";
   const shown = stock.filter((i) => S.kfilter !== "low" || i.low);
-  let html = `<h1>Dans notre cuisine</h1>
-    <p class="count">${
-      stock.length
-        ? `<b>${stock.length}</b> produit${stock.length > 1 ? "s" : ""} à la maison${low ? ` dont <b>${low}</b> presque fini${low > 1 ? "s" : ""}` : ""}`
-        : "Ce que vous avez déjà à la maison."
-    }</p>
+  let html = `<header class="head"><h1 class="serif">Dans notre cuisine</h1><p class="date">${
+    stock.length ? `${stock.length} produit${stock.length > 1 ? "s" : ""} à la maison${low ? ` · ${low} presque fini${low > 1 ? "s" : ""}` : ""}` : "Ce que vous avez déjà à la maison"
+  }</p></header>
     ${quickForm("kitchen", "On a quoi ?")}`;
-  if (low)
+  if (stock.length)
     html += `<div class="bar" role="group" aria-label="Filtre"><button class="fchip" data-kf="all" aria-pressed="${S.kfilter === "all"}">Tout</button><button class="fchip" data-kf="low" aria-pressed="${
       S.kfilter === "low"
-    }">Presque fini · ${low}</button></div>`;
+    }" ${low ? "" : "disabled"}>Presque fini${low ? " · " + low : ""}</button></div>`;
   html += `<main id="list">`;
   if (!stock.length)
     html += `<div class="empty">${ill("cuisine", "ill xl")}<p>La cuisine est vide pour l'instant.</p><p class="hint">Quand tu coches un article sur la liste de courses, il arrive ici. Tu peux aussi ajouter ce que vous avez déjà&nbsp;: quand un produit est fini, un toucher le remet sur la liste.</p></div>`;
-  for (const c of CATS) {
-    const group = shown
-      .filter((i) => (CATS.some((x) => x.id === i.cat) ? i.cat : "autre") === c.id)
-      .sort((a, b) => (b.low ? 1 : 0) - (a.low ? 1 : 0) || a.name.localeCompare(b.name, "fr"));
-    if (!group.length) continue;
-    html += aisleHead(c, group.length) + `<ul class="items">${group.map(kitchenItemHtml).join("")}</ul></section>`;
+  for (const [c, g] of groupByCat(shown)) {
+    g.sort((a, b) => (b.low ? 1 : 0) - (a.low ? 1 : 0) || a.name.localeCompare(b.name, "fr"));
+    html += aisle(c, g.length, g.map(kitchenItemHtml).join(""));
   }
   html += `</main>`;
   return html;
@@ -737,9 +792,219 @@ function kitchenItemHtml(it) {
   </li>`;
 }
 
+// ---------- dépenses ----------
+const PERIODS = [
+  { id: "month", l: "Ce mois-ci" },
+  { id: "last", l: "Mois dernier" },
+  { id: "3m", l: "3 mois" },
+  { id: "year", l: "Cette année" },
+];
+// [début, fin, début de la période précédente comparable, fin de celle-ci, libellé]
+function periodRange(p) {
+  const n = new Date();
+  const m0 = new Date(n.getFullYear(), n.getMonth(), 1);
+  if (p === "last") {
+    const a = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+    return [a, m0, new Date(n.getFullYear(), n.getMonth() - 2, 1), a, "le mois dernier"];
+  }
+  if (p === "3m") {
+    const a = new Date(n.getFullYear(), n.getMonth() - 2, 1);
+    return [a, n, new Date(n.getFullYear(), n.getMonth() - 5, 1), new Date(n.getFullYear(), n.getMonth() - 3, n.getDate(), n.getHours()), "ces 3 mois"];
+  }
+  if (p === "year") {
+    const a = new Date(n.getFullYear(), 0, 1);
+    return [a, n, new Date(n.getFullYear() - 1, 0, 1), new Date(n.getFullYear() - 1, n.getMonth(), n.getDate(), n.getHours()), "cette année"];
+  }
+  // Ce mois-ci, comparé au même moment du mois dernier.
+  const prevStart = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+  const prevEnd = new Date(n.getFullYear(), n.getMonth() - 1, Math.min(n.getDate(), new Date(n.getFullYear(), n.getMonth(), 0).getDate()), n.getHours(), n.getMinutes());
+  return [m0, n, prevStart, prevEnd, n.toLocaleDateString("fr-FR", { month: "long" }).replace(/^/, "en ")];
+}
+const inRange = (p, a, b) => {
+  const t = new Date(p.bought_at);
+  return t >= a && t < b;
+};
+
+// Anneau en segments arrondis, avec l'illustration du rayon sur les plus gros.
+function donut(parts, total, center) {
+  const R = 84,
+    W = 22,
+    C = 2 * Math.PI * R,
+    gap = W + 6;
+  let acc = 0,
+    arcs = "",
+    pins = "";
+  const many = parts.length > 1;
+  for (const p of parts) {
+    const frac = p.value / total;
+    const len = Math.max(0.001, frac * C - (many ? gap : 0));
+    const off = acc * C + (many ? gap / 2 : 0);
+    arcs += `<circle r="${R}" cx="110" cy="110" fill="none" stroke="${p.color}" stroke-width="${W}" stroke-linecap="round" stroke-dasharray="${len} ${C}" stroke-dashoffset="${-off}"><title>${esc(p.label)} : ${pct(frac)}</title></circle>`;
+    if (frac >= 0.09) {
+      const a = (acc + frac / 2) * 2 * Math.PI - Math.PI / 2;
+      pins += `<span class="pin" style="left:${((110 + R * Math.cos(a)) / 220) * 100}%;top:${((110 + R * Math.sin(a)) / 220) * 100}%">${catIll(p.id, "ill xs")}</span>`;
+    }
+    acc += frac;
+  }
+  return `<div class="donut"><svg viewBox="0 0 220 220" role="img" aria-label="Répartition des dépenses par rayon"><g transform="rotate(-90 110 110)"><circle r="${R}" cx="110" cy="110" fill="none" stroke="var(--track)" stroke-width="${W}"/>${
+    total ? arcs : ""
+  }</g></svg>${pins}<div class="dcenter">${center}</div></div>`;
+}
+
+// Qui doit combien à qui pour que chacun ait payé la même part.
+function settle(paid, uids) {
+  const total = uids.reduce((s, u) => s + (paid[u] || 0), 0);
+  const share = total / uids.length;
+  const bal = uids.map((u) => ({ u, v: Math.round(((paid[u] || 0) - share) * 100) / 100 }));
+  const debt = bal.filter((b) => b.v < -0.004).sort((a, b) => a.v - b.v);
+  const cred = bal.filter((b) => b.v > 0.004).sort((a, b) => b.v - a.v);
+  const out = [];
+  let i = 0,
+    j = 0;
+  while (i < debt.length && j < cred.length) {
+    const x = Math.min(-debt[i].v, cred[j].v);
+    if (x >= 0.01) out.push({ from: debt[i].u, to: cred[j].u, amount: x });
+    debt[i].v += x;
+    cred[j].v -= x;
+    if (debt[i].v > -0.004) i++;
+    if (cred[j].v < 0.004) j++;
+  }
+  return out;
+}
+
+function spendHtml() {
+  const all = rows("purchases");
+  const [a, b, pa, pb, label] = periodRange(S.period);
+  const list = all.filter((p) => inRange(p, a, b)).sort((x, y) => String(y.bought_at).localeCompare(String(x.bought_at)));
+  const prev = all.filter((p) => inRange(p, pa, pb)).reduce((s, p) => s + p.amount, 0);
+  const total = list.reduce((s, p) => s + p.amount, 0);
+  const byCat = {};
+  for (const p of list) byCat[catOf(p.cat).id] = (byCat[catOf(p.cat).id] || 0) + p.amount;
+  const parts = Object.entries(byCat)
+    .map(([id, value]) => ({ id, value, color: catOf(id).tone, label: catOf(id).l }))
+    .sort((x, y) => y.value - x.value);
+
+  let html = `<header class="head"><h1 class="serif">Nos dépenses</h1><p class="date">${esc(label.replace(/^./, (c) => c.toUpperCase()))}</p></header>
+    <div class="bar seg" role="group" aria-label="Période">${PERIODS.map((p) => `<button class="fchip" data-period="${p.id}" aria-pressed="${S.period === p.id}">${p.l}</button>`).join("")}</div>`;
+
+  if (!all.length) {
+    return (
+      html +
+      `<div class="empty">${donut([], 0, `<b>0 €</b><span>pour l'instant</span>`)}
+      <p>Quand tu coches un article, ajoute son prix&nbsp;: vos dépenses s'afficheront ici, en cercle, rayon par rayon.</p>
+      <button class="btn" id="addExpense">Ajouter une dépense</button></div>`
+    );
+  }
+
+  html += `<section class="card chart">${donut(parts, total, `<b>${money0(total)}</b><span>${esc(label)}</span>`)}
+    <div class="row center"><button class="btn small" id="addExpense">Ajouter une dépense</button></div></section>`;
+
+  // Le petit mot du jour, comme une carte d'assistant.
+  let insight = "";
+  if (total && prev) {
+    const d = (total - prev) / prev;
+    insight = Math.abs(d) < 0.03 ? `Vous dépensez <b>autant</b> que sur la période précédente.` : `Vous avez dépensé <b class="${d > 0 ? "up" : "down"}">${pct(Math.abs(d))} ${d > 0 ? "de plus" : "de moins"}</b> que sur la période précédente.`;
+  } else if (parts.length) insight = `Le rayon qui pèse le plus&nbsp;: <b>${esc(parts[0].label)}</b>, ${pct(parts[0].value / total)} des dépenses.`;
+  if (insight) html += `<section class="note-card" style="--tint:#F8D3E3">${STAR}<p class="tiny">Le point sur vos courses</p><p>${insight}</p></section>`;
+
+  if (parts.length)
+    html += `<h3 class="sect">Par rayon</h3><ul class="group">${parts
+      .map(
+        (p) => `<li><span class="bubble" style="--tint:${catOf(p.id).tint}">${catIll(p.id, "ill sm")}</span>
+        <span class="gmain"><span class="gname">${esc(p.label)}</span><span class="gbar"><i style="width:${(p.value / parts[0].value) * 100}%;background:${p.color}"></i></span></span>
+        <span class="gval"><b class="tag">${pct(p.value / total)}</b><small>${money(p.value)}</small></span></li>`,
+      )
+      .join("")}</ul>`;
+
+  // Qui a payé, et comment s'équilibrer (utile en coloc et entre amis).
+  if (S.members.length > 1 && total) {
+    const paid = {};
+    for (const p of list) paid[p.paid_by] = (paid[p.paid_by] || 0) + p.amount;
+    const uids = S.members.map((m) => m.uid);
+    const top = Math.max(...uids.map((u) => paid[u] || 0), 0.01);
+    const moves = settle(paid, uids);
+    html += `<h3 class="sect">Qui a payé</h3><ul class="group">${uids
+      .map(
+        (u) => `<li><span class="av">${esc(memberEmoji(u))}</span><span class="gmain"><span class="gname">${esc(u === S.uid ? (S.me?.name || "Toi") + " (toi)" : member(u)?.name || "Sans nom")}</span>
+        <span class="gbar"><i style="width:${((paid[u] || 0) / top) * 100}%"></i></span></span><span class="gval"><b class="tag">${pct((paid[u] || 0) / total)}</b><small>${money(paid[u] || 0)}</small></span></li>`,
+      )
+      .join("")}</ul>
+      <section class="note-card" style="--tint:#DCEAC8">${STAR}<p class="tiny">Pour partager à parts égales (${money(total / uids.length)} chacun)</p>${
+        moves.length
+          ? moves.map((m) => `<p class="settle"><span class="av sm">${esc(memberEmoji(m.from))}</span> ${esc(memberName(m.from) === "toi" ? "Tu dois" : memberName(m.from) + " doit")} <b>${money(m.amount)}</b> à <span class="av sm">${esc(memberEmoji(m.to))}</span> ${esc(memberName(m.to))}</p>`).join("")
+          : `<p>Vous êtes à égalité 🎉</p>`
+      }</section>`;
+  }
+
+  if (list.length)
+    html += `<h3 class="sect">Derniers achats</h3><ul class="group">${list
+      .slice(0, 30)
+      .map(
+        (p) => `<li><button class="growrow" data-purchase="${esc(p.id)}"><span class="bubble" style="--tint:${catOf(p.cat).tint}">${catIll(p.cat, "ill sm")}</span>
+        <span class="gmain"><span class="gname">${esc(p.name)}</span><small>${S.members.length > 1 ? `payé par ${esc(memberName(p.paid_by))} · ` : ""}${esc(ago(p.bought_at))}${p._pending ? " · en attente" : ""}</small></span>
+        <span class="gval"><b>${money(p.amount)}</b></span></button></li>`,
+      )
+      .join("")}</ul>`;
+  else html += `<div class="empty"><p>Aucun achat sur cette période.</p></div>`;
+  return html;
+}
+
+// ---------- « Nous » : le foyer et mon compte ----------
+function row(id, icon, tint, label, extra = "", cls = "") {
+  return `<li><button class="growrow ${cls}" id="${id}"><span class="bubble" style="--tint:${tint}">${icon}</span><span class="gmain"><span class="gname">${label}</span>${
+    extra ? `<small>${extra}</small>` : ""
+  }</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></button></li>`;
+}
+function usHtml() {
+  const h = household();
+  const k = kindOf(h?.kind);
+  const todo = viewItems().filter((i) => !i.done);
+  return `<section class="profile">
+      <span class="av huge" style="--tint:${k.tint}">${esc(S.me?.emoji || "🙂")}</span>
+      <div><h1 class="serif">${esc(S.me?.name || "")}</h1><p class="date">${esc(k.l)} · « ${esc(h?.name || "")} »</p></div>
+    </section>
+    <h3 class="sect">Notre liste</h3>
+    <ul class="group">${S.members
+      .map(
+        (m) => `<li><span class="av">${esc(m.emoji || "🙂")}</span><span class="gmain"><span class="gname">${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</span><small>${
+          m.uid === h?.created_by ? "a créé la liste" : "membre"
+        }</small></span></li>`,
+      )
+      .join("")}
+      ${row("uInvite", ill("invite", "ill xs"), "#F8D3E3", "Inviter quelqu'un", `Code ${esc(h?.id || "")}`)}
+      ${todo.length ? row("uText", ill("liste", "ill xs"), "#F7EAB4", "Envoyer la liste de courses par message") : ""}
+    </ul>
+    <h3 class="sect">Mes listes</h3>
+    <ul class="group">${S.households
+      .map(
+        (x) => `<li><button class="growrow" data-hh="${esc(x.id)}"><span class="bubble" style="--tint:${kindOf(x.kind).tint}">${kindIll(x.kind, "ill xs")}</span><span class="gmain"><span class="gname">${esc(
+          x.name,
+        )}</span><small>${esc(kindOf(x.kind).l)}</small></span>${x.id === S.hid ? `<b class="tag">ouverte</b>` : `<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg>`}</button></li>`,
+      )
+      .join("")}
+      ${row("uNew", "+", "#DCEAC8", "Créer ou rejoindre une autre liste")}
+    </ul>
+    <h3 class="sect">Réglages de la liste</h3>
+    <ul class="group">
+      ${row("uRename", "✎", "#D3E2F6", "Renommer la liste", esc(h?.name || ""))}
+      ${row("uLeave", "⎋", "#F6CFCB", "Quitter cette liste", S.members.length <= 1 ? "Tu es seul·e : elle sera supprimée" : "Les autres la gardent", "danger")}
+    </ul>
+    <h3 class="sect">Mon compte</h3>
+    <ul class="group">
+      ${row("uMe", esc(S.me?.emoji || "🙂"), "#F7EAB4", "Modifier mon profil", "Prénom et emoji")}
+      ${
+        S.store?.account
+          ? row("uEmail", ill(S.email.email ? "ok" : "email", "ill xs"), S.email.email ? "#DCEAC8" : "#E6DDF6", S.email.email ? "Compte protégé" : "Protéger mon compte avec mon e-mail", esc(S.email.email || "Pour le retrouver sur un autre téléphone")) +
+            row("uLogin", ill("cle", "ill xs"), "#ECE6D8", "Ouvrir un autre compte sur cet appareil")
+          : ""
+      }
+    </ul>
+    ${S.store?.mode === "demo" ? `<p class="hint center">Mode démonstration : les données restent dans ce navigateur (code « e-mail » : 123456).</p>` : ""}`;
+}
+
 function emailHint() {
   if (!S.store?.account || S.email.email || loadJSON("courses:emailHintOff", false)) return "";
-  return `<section class="card hintcard">${ill("cle", "ill md")}<div><b>Protège ton compte</b>
+  return `<section class="note-card hintcard" style="--tint:#E6DDF6">${STAR}${ill("cle", "ill md")}<div><b>Protège ton compte</b>
     <p>Ajoute ton e-mail&nbsp;: si tu changes de téléphone, tu recevras un code pour retrouver tes listes.</p>
     <div class="row"><button class="btn small" id="hintEmail">Ajouter mon e-mail</button><button class="link" id="hintOff">Plus tard</button></div></div></section>`;
 }
@@ -763,14 +1028,15 @@ function chips(el, opts, val, htmlFn) {
     el.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x === b));
   };
 }
+const catChip = (c) => `<span class="dot" style="--tint:${c.tint}">${catIll(c.id, "ill xs")}</span>${esc(c.l)}`;
+const priceStr = (n) => (n == null ? "" : String(n).replace(".", ","));
 function openSheet(it, presetName) {
   S.editingId = it ? it.id : null;
-  S.sheetPlace = it ? (it.done ? "kitchen" : "list") : S.view;
+  S.sheetPlace = it ? (it.done ? "kitchen" : "list") : S.view === "kitchen" ? "kitchen" : "list";
   const kitchen = S.sheetPlace === "kitchen";
   $("#sheetTitle").textContent = it ? "Modifier l'article" : kitchen ? "Ajouter à la cuisine" : "Nouvel article";
-  $("#saveBtn").textContent = it ? "Enregistrer" : "Ajouter";
   $("#delBtn").hidden = !it;
-  $("#delBtn").textContent = kitchen ? "Retirer" : "Supprimer";
+  $("#delBtn").textContent = kitchen ? "Retirer de la cuisine" : "Supprimer l'article";
   // Priorité et magasin n'ont de sens que pour ce qu'il reste à acheter.
   $("#fPrioField").hidden = $("#fShopField").hidden = kitchen;
   const parsed = presetName ? parseQuick(presetName) : { name: "", qty: "" };
@@ -778,8 +1044,10 @@ function openSheet(it, presetName) {
   const memo = !it && name ? loadJSON("courses:memo", {})[norm(name)] : null;
   $("#fName").value = name;
   $("#fQty").value = it ? it.qty || "" : parsed.qty;
+  $("#fPrice").value = priceStr(it ? it.price : memo?.price);
   $("#fQuality").value = it ? it.quality || "" : memo?.quality || "";
-  chips($("#fCat"), CATS, it?.cat || (name ? guessCat(name) : "autre"), (c) => `${catIll(c.id, "ill xs")} ${esc(c.l)}`);
+  $("#fErr").textContent = "";
+  chips($("#fCat"), CATS, it?.cat || (name ? guessCat(name) : "autre"), catChip);
   chips($("#fPrio"), PRIOS, it?.prio || "bientot");
   chips($("#fShop"), SHOPS, it ? it.shop || "" : memo?.shop || "");
   const by = $("#fBy");
@@ -797,13 +1065,13 @@ $("#form").addEventListener("submit", (e) => {
   e.preventDefault();
   const name = $("#fName").value.trim();
   if (!name) return;
+  const price = parseMoney($("#fPrice").value);
+  if (Number.isNaN(price)) {
+    $("#fErr").textContent = "Le prix doit être un nombre, par exemple 2,50.";
+    return;
+  }
   const chosen = (el) => el.querySelector('[aria-pressed="true"]')?.dataset.v || "";
-  const data = {
-    name,
-    qty: $("#fQty").value.trim(),
-    quality: $("#fQuality").value.trim(),
-    cat: chosen($("#fCat")) || "autre",
-  };
+  const data = { name, qty: $("#fQty").value.trim(), quality: $("#fQuality").value.trim(), cat: chosen($("#fCat")) || "autre", price };
   if (S.sheetPlace === "list") Object.assign(data, { prio: chosen($("#fPrio")) || "bientot", shop: chosen($("#fShop")) });
   const id = S.editingId;
   $("#sheet").close();
@@ -820,29 +1088,124 @@ $("#delBtn").onclick = () => {
 };
 for (const d of ["#sheet", "#panel"]) $(d).addEventListener("click", (e) => e.target === $(d) && $(d).close());
 
-// ---------- panneaux : foyer, invitations, profil, e-mail ----------
+// ---------- panneaux ----------
 function openPanel(html, bind) {
   $("#panelBody").innerHTML = html;
   bind && bind();
   if (!$("#panel").open) $("#panel").showModal();
   $("#panelBody").querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => $("#panel").close()));
 }
-const inviteUrl = (code) => `${location.origin}${location.pathname}#rejoindre=${code}`;
+const panelHead = (title, okId) =>
+  `<div class="shead"><button type="button" class="round dashed" data-close aria-label="Fermer">✕</button><h3>${title}</h3>${
+    okId ? `<button type="submit" class="round ok" ${okId === true ? "" : `id="${okId}"`} aria-label="Valider">✓</button>` : `<span class="round ghost"></span>`
+  }</div>`;
+const payerChips = (sel) =>
+  `<div class="chips" id="payPick">${S.members.map((m) => `<button type="button" class="chip" data-v="${esc(m.uid)}" aria-pressed="${m.uid === sel}">${esc(m.emoji || "🙂")} ${esc(m.uid === S.uid ? "Moi" : m.name || "Sans nom")}</button>`).join("")}</div>`;
 
+// Prix d'un article qu'on vient d'acheter (pid : achat déjà enregistré à modifier).
+function openPrice(it, pid) {
+  const existing = pid ? rows("purchases").find((p) => p.id === pid) : null;
+  const many = S.members.length > 1;
+  openPanel(
+    `<form id="prForm" autocomplete="off">${panelHead("Combien ça a coûté&nbsp;?", true)}
+      <div class="pricebox" style="--tint:${catOf(it.cat).tint}">${STAR}${catIll(it.cat, "ill md")}<b>${esc(it.name)}</b>${it.qty ? `<small>${esc(it.qty)}</small>` : ""}</div>
+      <div class="field"><label for="prAmount">Prix payé</label><div class="money"><input id="prAmount" inputmode="decimal" placeholder="0,00" value="${esc(priceStr(existing ? existing.amount : it.price))}"><span>€</span></div></div>
+      ${many ? `<div class="field"><span>Payé par</span>${payerChips(existing?.paid_by || S.uid)}</div>` : ""}
+      <label class="checkline"><input type="checkbox" id="prKeep" checked> Retenir ce prix pour la prochaine fois</label>
+      <p class="err" id="prErr"></p>
+      <button class="btn wide" type="submit">Enregistrer</button>
+    </form>`,
+    () => {
+      if ($("#payPick")) bindPicker($("#payPick"));
+      setTimeout(() => $("#prAmount")?.focus(), 60);
+      $("#prForm").onsubmit = (e) => {
+        e.preventDefault();
+        const amount = parseMoney($("#prAmount").value);
+        if (amount == null || Number.isNaN(amount)) {
+          $("#prErr").textContent = "Indique un prix, par exemple 2,50.";
+          return;
+        }
+        const paidBy = ($("#payPick") && picked($("#payPick"))) || S.uid;
+        if (existing) enqueue({ tbl: "purchases", t: "patch", id: pid, patch: { amount, paid_by: paidBy } });
+        else enqueue({ tbl: "purchases", t: "insert", rows: [purchaseRow(it, amount, paidBy)] });
+        if ($("#prKeep").checked && viewItems().some((i) => i.id === it.id)) {
+          enqueue({ t: "patch", id: it.id, patch: { price: amount } });
+          remember({ ...it, price: amount });
+        }
+        $("#panel").close();
+        toast(`${money(amount)} ajouté aux dépenses`);
+      };
+    },
+  );
+}
+
+// Dépense ajoutée à la main (ticket de caisse, marché…) ou achat à modifier.
+function openExpense(p) {
+  const many = S.members.length > 1;
+  const d = p ? new Date(p.bought_at) : new Date();
+  const dateVal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  openPanel(
+    `<form id="exForm" autocomplete="off">${panelHead(p ? "Modifier l'achat" : "Nouvelle dépense", true)}
+      <div class="field"><label for="exAmount">Montant</label><div class="money"><input id="exAmount" inputmode="decimal" placeholder="0,00" value="${esc(priceStr(p?.amount))}"><span>€</span></div></div>
+      <div class="field"><label for="exName">Quoi&nbsp;?</label><input id="exName" maxlength="80" placeholder="ex : Courses au marché" value="${esc(p?.name || "")}"></div>
+      <div class="field"><span>Rayon</span><div class="chips" id="exCat"></div></div>
+      ${many ? `<div class="field"><span>Payé par</span>${payerChips(p?.paid_by || S.uid)}</div>` : ""}
+      <div class="field"><label for="exDate">Date</label><input id="exDate" type="date" value="${dateVal}" max="${new Date().toISOString().slice(0, 10)}"></div>
+      <p class="err" id="exErr"></p>
+      <button class="btn wide" type="submit">${p ? "Enregistrer" : "Ajouter la dépense"}</button>
+      ${p ? `<button type="button" class="btn danger wide" id="exDel" style="margin-top:10px">Supprimer cet achat</button>` : ""}
+    </form>`,
+    () => {
+      chips($("#exCat"), CATS, p?.cat || "autre", catChip);
+      $("#exName").addEventListener("input", () => {
+        const g = guessCat($("#exName").value);
+        if (g !== "autre") $("#exCat").querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x.dataset.v === g));
+      });
+      if ($("#payPick")) bindPicker($("#payPick"));
+      if (!p) setTimeout(() => $("#exAmount")?.focus(), 60);
+      $("#exForm").onsubmit = (e) => {
+        e.preventDefault();
+        const amount = parseMoney($("#exAmount").value);
+        if (amount == null || Number.isNaN(amount)) {
+          $("#exErr").textContent = "Indique un montant, par exemple 24,90.";
+          return;
+        }
+        const cat = picked($("#exCat")) || "autre";
+        const name = $("#exName").value.trim() || catOf(cat).l;
+        const paidBy = ($("#payPick") && picked($("#payPick"))) || S.uid;
+        const [y, m, dd] = ($("#exDate").value || dateVal).split("-").map(Number);
+        const when = new Date(y, m - 1, dd, ...(p ? [d.getHours(), d.getMinutes()] : [new Date().getHours(), new Date().getMinutes()])).toISOString();
+        const patch = { amount, name, cat, paid_by: paidBy, bought_at: when };
+        if (p) enqueue({ tbl: "purchases", t: "patch", id: p.id, patch });
+        else enqueue({ tbl: "purchases", t: "insert", rows: [{ ...purchaseRow({ name, cat }, amount, paidBy), bought_at: when }] });
+        $("#panel").close();
+        toast(p ? "Achat modifié" : `${money(amount)} ajouté aux dépenses`);
+      };
+      $("#exDel") &&
+        ($("#exDel").onclick = () => {
+          const { _pending, ...row } = p;
+          enqueue({ tbl: "purchases", t: "delete", ids: [p.id] });
+          $("#panel").close();
+          toast("Achat supprimé", [["Annuler", () => enqueue({ tbl: "purchases", t: "insert", rows: [row] })]]);
+        });
+    },
+  );
+}
+
+const inviteUrl = (code) => `${location.origin}${location.pathname}#rejoindre=${code}`;
 function openInvite(fresh) {
   const h = household();
   if (!h) return;
   const url = inviteUrl(h.id);
   openPanel(
-    `<div class="phead">${ill(fresh ? "fete" : "invite", "ill lg")}<h3>${fresh ? "Ta liste est prête&nbsp;!" : "Inviter quelqu'un"}</h3></div>
-    <p class="hint">Envoie ce lien à ${esc(kindOf(h.kind).pour === "vous deux" ? "ta moitié" : "ceux avec qui tu fais les courses")}. En l'ouvrant, ils créent leur profil et rejoignent « ${esc(
+    `${panelHead(fresh ? "Ta liste est prête&nbsp;!" : "Inviter quelqu'un")}
+    <div class="pricebox" style="--tint:#F8D3E3">${STAR}${ill(fresh ? "fete" : "invite", "ill lg")}<p>Envoie ce lien à ceux avec qui tu fais les courses. En l'ouvrant, ils créent leur profil et rejoignent « ${esc(
       h.name,
-    )} ». Ils peuvent aussi taper le code dans l'app.</p>
+    )} ». Ils peuvent aussi taper le code dans l'app.</p></div>
     <div class="bigcode" aria-label="Code de la liste">${esc(h.id)}</div>
     <div class="stack">
       <button class="btn wide" id="iShare">Envoyer le lien d'invitation</button>
       <button class="btn ghost wide" id="iCopy">Copier le lien</button>
-      <button class="link" data-close>${fresh ? "Plus tard" : "Fermer"}</button>
     </div>`,
     () => {
       $("#iShare").onclick = async () => {
@@ -870,73 +1233,50 @@ async function copy(text, msg) {
   }
 }
 
-function openHousehold() {
-  const h = household();
-  const todo = viewItems().filter((i) => !i.done);
+function openSwitch() {
   openPanel(
-    `<div class="phead">${kindIll(h?.kind, "ill lg")}<h3>${esc(h?.name || "")}</h3></div>
-    <h4>Membres</h4>
-    <ul class="people">${S.members
+    `${panelHead("Mes listes")}
+    <ul class="group">${S.households
       .map(
-        (m) =>
-          `<li><span class="av lg">${esc(m.emoji || "🙂")}</span><span><b>${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</b><br><small>${
-            m.uid === h?.created_by ? "a créé la liste" : "membre"
-          }</small></span></li>`,
+        (x) => `<li><button class="growrow" data-hh="${esc(x.id)}"><span class="bubble" style="--tint:${kindOf(x.kind).tint}">${kindIll(x.kind, "ill xs")}</span><span class="gmain"><span class="gname">${esc(
+          x.name,
+        )}</span><small>${esc(kindOf(x.kind).l)}</small></span>${x.id === S.hid ? `<b class="tag">ouverte</b>` : ""}</button></li>`,
       )
       .join("")}</ul>
-    <div class="stack" style="margin-top:10px">
-      <button class="btn wide" id="hInvite">Inviter quelqu'un</button>
-      <button class="btn ghost wide" id="hText" ${todo.length ? "" : "disabled"}>Envoyer la liste de courses par message</button>
-    </div>
-    <h4>Mes listes</h4>
-    ${S.households
-      .map((x) => `<button class="hh" data-hh="${esc(x.id)}" aria-current="${x.id === S.hid}">${kindIll(x.kind, "ill md")}<span><b>${esc(x.name)}</b><small>${esc(kindOf(x.kind).l)}</small></span></button>`)
-      .join("")}
-    <button class="btn ghost wide" id="hNew">+ Créer ou rejoindre une autre liste</button>
-    <h4>Réglages de la liste</h4>
-    <form class="field" id="hRename" autocomplete="off"><label for="hName">Nom</label>
-      <div class="inline"><input id="hName" maxlength="40" value="${esc(h?.name || "")}"><button class="btn" type="submit">OK</button></div></form>
-    <button class="btn danger wide" id="hLeave">Quitter cette liste</button>
-    <p class="hint" style="margin-top:8px">${S.members.length <= 1 ? "Tu es seul·e sur cette liste : en la quittant, elle sera supprimée." : "Les autres membres gardent la liste."}</p>
-    <button class="link" data-close>Fermer</button>`,
+    <button class="btn ghost wide" id="swNew" style="margin-top:12px">+ Créer ou rejoindre une autre liste</button>`,
     () => {
-      $("#hInvite").onclick = () => openInvite(false);
-      $("#hText").onclick = () => shareAsText(todo);
       $("#panelBody").querySelectorAll("[data-hh]").forEach(
         (b) =>
           (b.onclick = async () => {
             $("#panel").close();
-            await selectHousehold(b.dataset.hh);
+            if (b.dataset.hh !== S.hid) await selectHousehold(b.dataset.hh);
           }),
       );
-      $("#hNew").onclick = () =>
-        openPanel(`<h3>Une autre liste</h3>${createForm("n", "famille")}<p class="or">ou</p>${joinForm("n")}<button class="link" data-close>Annuler</button>`, () => bindHouseholdForms("n"));
-      $("#hRename").onsubmit = async (e) => {
+      $("#swNew").onclick = openNewHousehold;
+    },
+  );
+}
+function openNewHousehold() {
+  openPanel(`${panelHead("Une autre liste")}${createForm("n", "famille")}<p class="or">ou</p>${joinForm("n")}`, () => bindHouseholdForms("n"));
+}
+function openRename() {
+  const h = household();
+  openPanel(
+    `<form id="rnForm" autocomplete="off">${panelHead("Renommer la liste", true)}
+    <div class="field"><label for="hName">Nom</label><input id="hName" maxlength="40" value="${esc(h?.name || "")}"></div>
+    <button class="btn wide" type="submit">Enregistrer</button></form>`,
+    () => {
+      $("#rnForm").onsubmit = async (e) => {
         e.preventDefault();
         const name = $("#hName").value.trim();
-        if (!name || name === h.name) return;
+        if (!name || name === h.name) return $("#panel").close();
         try {
           await S.store.rename(h.id, name);
           h.name = name;
           saveJSON("courses:households", S.households);
+          $("#panel").close();
           render();
           toast("Liste renommée");
-        } catch (err) {
-          toast(errText(err));
-        }
-      };
-      $("#hLeave").onclick = async () => {
-        if (!confirm(S.members.length <= 1 ? `Supprimer « ${h.name} » et tous ses articles ?` : `Quitter « ${h.name} » ?`)) return;
-        try {
-          await S.store.leave(h.id);
-          localStorage.removeItem("courses:cache:" + h.id);
-          S.queue = S.queue.filter((o) => o.hid !== h.id);
-          saveJSON("courses:queue", S.queue);
-          $("#panel").close();
-          await refreshHouseholds();
-          S.onb = { kind: null, mode: null };
-          await selectHousehold(S.households[0]?.id || null);
-          toast("Tu as quitté la liste");
         } catch (err) {
           toast(errText(err));
         }
@@ -944,15 +1284,29 @@ function openHousehold() {
     },
   );
 }
+async function leaveHousehold() {
+  const h = household();
+  if (!confirm(S.members.length <= 1 ? `Supprimer « ${h.name} » et tous ses articles ?` : `Quitter « ${h.name} » ?`)) return;
+  try {
+    await S.store.leave(h.id);
+    localStorage.removeItem("courses:cache:" + h.id);
+    S.queue = S.queue.filter((o) => o.hid !== h.id);
+    saveJSON("courses:queue", S.queue);
+    await refreshHouseholds();
+    S.onb = { kind: null, mode: null };
+    setView("list");
+    await selectHousehold(S.households[0]?.id || null);
+    toast("Tu as quitté la liste");
+  } catch (err) {
+    toast(errText(err));
+  }
+}
 
 async function shareAsText(items) {
   const h = household();
   let text = `🛒 ${h?.name || "Courses"}\n`;
-  for (const c of CATS) {
-    const g = items.filter((i) => (i.cat || "autre") === c.id);
-    if (!g.length) continue;
+  for (const [c, g] of groupByCat(items))
     text += `\n${c.e} ${c.l}\n` + g.map((i) => `• ${i.name}${i.qty ? " (" + i.qty + ")" : ""}${i.quality ? " – " + i.quality : ""}${i.prio === "urgent" ? " 🔥" : ""}`).join("\n") + "\n";
-  }
   if (navigator.share) {
     try {
       await navigator.share({ text });
@@ -966,30 +1320,13 @@ async function shareAsText(items) {
 
 function openMe() {
   const me = S.me || { name: "", emoji: "🙂" };
-  const acc = S.store?.account;
   openPanel(
-    `<h3>Mon profil</h3>
-    <form id="mForm" autocomplete="off">
+    `<form id="mForm" autocomplete="off">${panelHead("Mon profil", true)}
       <div class="field"><label for="mName">Prénom</label><input id="mName" maxlength="30" required value="${esc(me.name)}"></div>
       <div class="field"><span>Emoji</span>${emojiPicker(me.emoji)}</div>
       <p class="err" id="mErr"></p>
       <button class="btn wide" type="submit">Enregistrer</button>
-    </form>
-    ${
-      acc
-        ? `<h4>Mon e-mail</h4>
-    ${
-      S.email.email
-        ? `<div class="okline">${ill("ok", "ill sm")}<span>Compte protégé par <b>${esc(S.email.email)}</b>. Sur un autre téléphone, choisis « J'ai déjà un compte » et entre cette adresse.</span></div>
-           <button class="link" id="mEmail">Changer d'adresse</button>`
-        : `<p class="hint">Ajoute ton e-mail pour retrouver ton compte et tes listes sur un autre téléphone : on t'y enverra un code.</p>
-           <button class="btn ghost wide" id="mEmail">${ill("email", "ill xs")} Protéger mon compte avec mon e-mail</button>`
-    }
-    <button class="link" id="mLogin">Ouvrir un autre compte sur cet appareil</button>`
-        : ""
-    }
-    ${S.store?.mode === "demo" ? `<p class="hint">Mode démonstration : les données restent dans ce navigateur (le code reçu « par e-mail » est 123456).</p>` : ""}
-    <button class="link" data-close>Fermer</button>`,
+    </form>`,
     () => {
       bindPicker($("#emojiPick"));
       $("#mForm").onsubmit = async (e) => {
@@ -1007,16 +1344,15 @@ function openMe() {
           $("#mErr").textContent = errText(err);
         }
       };
-      $("#mEmail") && ($("#mEmail").onclick = () => openEmailLink(!!S.email.email));
-      $("#mLogin") && ($("#mLogin").onclick = openRecover);
     },
   );
 }
 
+// ---------- e-mail : protéger son compte, le retrouver ----------
 // Formulaire en deux temps : l'adresse, puis le code reçu par e-mail.
 function codeStep({ email, title, intro, onVerify, onResend, onBack, done }) {
   openPanel(
-    `<div class="phead">${ill("email", "ill lg")}<h3>${title}</h3></div>
+    `${panelHead(title)}<div class="pricebox" style="--tint:#E6DDF6">${STAR}${ill("email", "ill lg")}</div>
     <p class="hint">${intro} <b>${esc(email)}</b>. Il peut mettre une minute à arriver&nbsp;: pense à regarder dans les spams.</p>
     <form id="cForm" autocomplete="off"><div class="field"><label for="cCode">Code reçu par e-mail</label>
       <input id="cCode" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></div>
@@ -1056,14 +1392,13 @@ function codeStep({ email, title, intro, onVerify, onResend, onBack, done }) {
 }
 function emailStep({ title, intro, cta, value, note, onSend }) {
   openPanel(
-    `<div class="phead">${ill("cle", "ill lg")}<h3>${title}</h3></div>
+    `${panelHead(title)}<div class="pricebox" style="--tint:#DCEAC8">${STAR}${ill("cle", "ill lg")}</div>
     <p class="hint">${intro}</p>
     <form id="eForm" autocomplete="off"><div class="field"><label for="eMail">Adresse e-mail</label>
       <input id="eMail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" value="${esc(value || "")}" placeholder="toi@exemple.fr"></div>
       ${note ? `<p class="note">${note}</p>` : ""}
       <p class="err" id="eErr"></p>
-      <button class="btn wide" type="submit">${cta}</button></form>
-    <button class="link" data-close>Annuler</button>`,
+      <button class="btn wide" type="submit">${cta}</button></form>`,
     () => {
       setTimeout(() => $("#eMail")?.focus(), 50);
       $("#eForm").onsubmit = async (e) => {
@@ -1151,6 +1486,7 @@ function openRecover() {
   });
 }
 
+
 // ---------- événements ----------
 $("#app").addEventListener("submit", (e) => {
   if (e.target.id !== "quick") return;
@@ -1161,21 +1497,24 @@ $("#app").addEventListener("submit", (e) => {
   input.value = "";
   const { name, qty } = parseQuick(raw);
   const memo = loadJSON("courses:memo", {})[norm(name)];
-  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view);
+  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
   $("#quickName")?.focus();
 });
 $("#app").addEventListener("click", (e) => {
   const t = (s) => e.target.closest(s);
   const byId = (id) => viewItems().find((i) => i.id === id);
-  if (t("#moreBtn")) {
-    const n = $("#quickName").value.trim();
-    $("#quickName").value = "";
-    openSheet(null, n);
+  if (t("#fab")) {
+    if (S.view === "spend") openExpense(null);
+    else if (S.view === "us") openInvite(false);
+    else {
+      const n = $("#quickName")?.value.trim() || "";
+      if ($("#quickName")) $("#quickName").value = "";
+      openSheet(null, n);
+    }
   } else if (t("[data-view]")) {
     const v = t("[data-view]").dataset.view;
     if (v === S.view) return window.scrollTo({ top: 0, behavior: "smooth" });
-    S.view = v;
-    saveJSON("courses:view", v);
+    setView(v);
     render();
     window.scrollTo(0, 0);
   } else if (t("[data-shop]")) {
@@ -1183,6 +1522,9 @@ $("#app").addEventListener("click", (e) => {
     render();
   } else if (t("[data-kf]")) {
     S.kfilter = t("[data-kf]").dataset.kf;
+    render();
+  } else if (t("[data-period]")) {
+    S.period = t("[data-period]").dataset.period;
     render();
   } else if (t("[data-toggle]")) {
     const it = byId(t("[data-toggle]").dataset.toggle);
@@ -1196,9 +1538,26 @@ $("#app").addEventListener("click", (e) => {
   } else if (t("[data-edit]")) {
     const it = byId(t("[data-edit]").dataset.edit);
     if (it) openSheet(it);
-  } else if (t("#hhBtn")) openHousehold();
-  else if (t("#facesBtn") || t("#inviteHint")) S.members.length > 1 ? openHousehold() : openInvite(false);
-  else if (t("#meBtn") || t("#editMe")) openMe();
+  } else if (t("[data-purchase]")) {
+    const p = rows("purchases").find((x) => x.id === t("[data-purchase]").dataset.purchase);
+    if (p) openExpense(p);
+  } else if (t("[data-hh]")) {
+    const id = t("[data-hh]").dataset.hh;
+    if (id !== S.hid) selectHousehold(id);
+  } else if (t("#addExpense")) openExpense(null);
+  else if (t("#hhBtn")) openSwitch();
+  else if (t("#meBtn")) {
+    setView("us");
+    render();
+    window.scrollTo(0, 0);
+  } else if (t("#inviteHint") || t("#uInvite")) openInvite(false);
+  else if (t("#uText")) shareAsText(viewItems().filter((i) => !i.done));
+  else if (t("#uNew")) openNewHousehold();
+  else if (t("#uRename")) openRename();
+  else if (t("#uLeave")) leaveHousehold();
+  else if (t("#uMe") || t("#editMe")) openMe();
+  else if (t("#uEmail")) openEmailLink(!!S.email.email);
+  else if (t("#uLogin")) openRecover();
   else if (t("#hintEmail")) openEmailLink(false);
   else if (t("#hintOff")) {
     saveJSON("courses:emailHintOff", true);
@@ -1228,11 +1587,12 @@ async function loadMembers() {
 async function loadItems() {
   if (!S.store || !S.hid) return;
   try {
-    const rows = await S.store.items(S.hid);
-    S.server = new Map(rows.map((r) => [r.id, r]));
+    const [items, purchases] = await Promise.all([S.store.items(S.hid), S.store.purchases(S.hid)]);
+    S.data.items = new Map(items.map((r) => [r.id, r]));
+    S.data.purchases = new Map(purchases.map((r) => [r.id, r]));
     // Les articles ajoutés par les autres enrichissent aussi les suggestions de cet appareil.
     const memo = loadJSON("courses:memo", {});
-    for (const r of rows) if (!memo[norm(r.name)]) remember(r);
+    for (const r of items) if (!memo[norm(r.name)]) remember(r);
     cacheHousehold();
     render();
   } catch (e) {
@@ -1264,9 +1624,9 @@ async function selectHousehold(hid) {
   render();
   if (!S.store) return;
   S.unsub = S.store.subscribe(hid, {
-    onItem(type, row) {
-      if (type === "DELETE") S.server.delete(row.id);
-      else if (row.household === S.hid) S.server.set(row.id, row);
+    onItem(tbl, type, row) {
+      if (type === "DELETE") S.data[tbl].delete(row.id);
+      else if (row.household === S.hid) S.data[tbl].set(row.id, row);
       cacheHousehold();
       render();
     },
@@ -1347,7 +1707,8 @@ async function connectOnce() {
   if (S.uid && S.uid !== S.store.uid) {
     // Autre compte que la dernière fois : on oublie ce qui était gardé pour l'ancien.
     forgetLocal();
-    Object.assign(S, { me: null, households: [], hid: null, queue: [], server: new Map(), members: [] });
+    Object.assign(S, { me: null, households: [], hid: null, queue: [], members: [] });
+    S.data = { items: new Map(), purchases: new Map() };
   }
   S.uid = S.store.uid;
   saveJSON("courses:uid", S.uid);
@@ -1382,7 +1743,7 @@ async function connectOnce() {
     saveJSON("courses:join", code);
     history.replaceState(null, "", location.pathname + location.search);
   }
-  if (S.view !== "list" && S.view !== "kitchen") S.view = "list";
+  setView(S.view);
   // Affichage immédiat de la dernière liste connue, avant même d'avoir le réseau.
   if (S.me && S.hid && !loadJSON("courses:join", null)) {
     restoreHousehold();

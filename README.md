@@ -38,7 +38,11 @@ et le même hébergement que Déclic.
 - **Accueil** : « C'est pour qui ? » (famille, coloc, couple, amis), puis le profil (prénom + emoji) et la création de la liste.
 - **Listes partagées** : on envoie le lien d'invitation ou le code à 6 caractères, et les autres rejoignent la liste.
   On peut en avoir plusieurs (la famille, la coloc…).
-- **Deux onglets en bas** : *Liste de courses* (ce qu'il faut acheter) et *Dans notre cuisine* (ce qu'on a déjà).
+- **Quatre onglets** dans la barre du bas, avec un bouton « + » au centre : *Courses*, *Cuisine*, *Dépenses* et *Nous* (membres, listes, compte).
+- **Dépenses** : en cochant un article, on note son prix (retenu pour la prochaine fois) et qui a payé. L'onglet montre un cercle par rayon
+  avec les pourcentages, la comparaison avec la période précédente, qui a payé quoi, et qui doit combien à qui pour partager à parts égales.
+  On peut aussi ajouter une dépense à la main (ticket de caisse, marché…).
+- **Liste de courses** et **cuisine** :
   Un article coché sur la liste est rangé dans la cuisine ; dans la cuisine, « Presque fini » le signale aux autres
   (il est proposé en haut de la liste de courses) et « Fini » le remet sur la liste.
 - **Synchronisation en direct**, avec qui a ajouté ou acheté quoi, et **marche sans réseau** (au fond du magasin) :

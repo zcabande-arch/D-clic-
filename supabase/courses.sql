@@ -6,6 +6,7 @@
 --   courses_households : une liste partagée (« foyer »), identifiée par un code de 6 caractères
 --   courses_members    : qui fait partie de quel foyer
 --   courses_items      : les articles, sur la liste de courses (done = false) ou dans la cuisine (done = true)
+--   courses_purchases  : les achats (prix payé, par qui), pour le graphique des dépenses
 
 create table if not exists public.courses_profiles (
   uid        uuid        primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -54,7 +55,24 @@ create table if not exists public.courses_items (
 -- done = false : sur la liste de courses ; done = true : acheté, donc « dans notre cuisine ».
 -- low = presque fini (seulement pour ce qui est dans la cuisine).
 alter table public.courses_items add column if not exists low boolean not null default false;
+-- Dernier prix payé, proposé automatiquement au prochain achat.
+alter table public.courses_items add column if not exists price numeric(10, 2) check (price is null or (price >= 0 and price < 100000));
 create index if not exists courses_items_household_idx on public.courses_items (household);
+
+-- Un achat : une ligne par article acheté (ou par dépense ajoutée à la main, item_id vide).
+-- Ils restent même si l'article est ensuite retiré de la cuisine.
+create table if not exists public.courses_purchases (
+  id         uuid        primary key default gen_random_uuid(),
+  household  text        not null references public.courses_households (id) on delete cascade,
+  item_id    uuid,
+  name       text        not null check (char_length(name) between 1 and 80),
+  cat        text        not null default 'autre' check (cat ~ '^[a-z]{1,20}$'),
+  amount     numeric(10, 2) not null check (amount >= 0 and amount < 100000),
+  paid_by    uuid        references auth.users (id) on delete set null,
+  created_by uuid        references auth.users (id) on delete set null,
+  bought_at  timestamptz not null default now()
+);
+create index if not exists courses_purchases_household_idx on public.courses_purchases (household, bought_at);
 
 create or replace function public.courses_touch() returns trigger
 language plpgsql as $$
@@ -87,6 +105,7 @@ alter table public.courses_profiles   enable row level security;
 alter table public.courses_households enable row level security;
 alter table public.courses_members    enable row level security;
 alter table public.courses_items      enable row level security;
+alter table public.courses_purchases  enable row level security;
 
 -- Profils : chacun écrit le sien, et voit celui des personnes avec qui il partage une liste.
 drop policy if exists courses_profiles_select on public.courses_profiles;
@@ -123,7 +142,24 @@ drop policy if exists courses_items_delete on public.courses_items;
 create policy courses_items_delete on public.courses_items for delete to authenticated
   using (courses_is_member(household));
 
-grant select, insert, update, delete on public.courses_profiles, public.courses_items to authenticated;
+-- Achats : visibles et modifiables par les membres ; celui qui paie doit être membre du foyer.
+drop policy if exists courses_purchases_select on public.courses_purchases;
+create policy courses_purchases_select on public.courses_purchases for select to authenticated
+  using (courses_is_member(household));
+drop policy if exists courses_purchases_insert on public.courses_purchases;
+create policy courses_purchases_insert on public.courses_purchases for insert to authenticated
+  with check (courses_is_member(household) and exists (
+    select 1 from courses_members m where m.household = courses_purchases.household and m.uid = courses_purchases.paid_by));
+drop policy if exists courses_purchases_update on public.courses_purchases;
+create policy courses_purchases_update on public.courses_purchases for update to authenticated
+  using (courses_is_member(household))
+  with check (courses_is_member(household) and exists (
+    select 1 from courses_members m where m.household = courses_purchases.household and m.uid = courses_purchases.paid_by));
+drop policy if exists courses_purchases_delete on public.courses_purchases;
+create policy courses_purchases_delete on public.courses_purchases for delete to authenticated
+  using (courses_is_member(household));
+
+grant select, insert, update, delete on public.courses_profiles, public.courses_items, public.courses_purchases to authenticated;
 grant select on public.courses_households, public.courses_members to authenticated;
 
 -- ---------- créer, rejoindre, renommer, quitter un foyer ----------
@@ -196,7 +232,7 @@ grant execute on function public.courses_create_household(text, text), public.co
 do $$
 declare t text;
 begin
-  foreach t in array array['courses_profiles', 'courses_households', 'courses_members', 'courses_items'] loop
+  foreach t in array array['courses_profiles', 'courses_households', 'courses_members', 'courses_items', 'courses_purchases'] loop
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
     end if;

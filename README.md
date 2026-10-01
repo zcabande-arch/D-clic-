@@ -53,7 +53,7 @@ et le même hébergement que Déclic.
   (`XXXX-XXXX-XXXX-XXXX`) et un lien personnel à s'envoyer. Sur un autre téléphone, on ouvre le lien ou on tape le code
   dans « J'ai déjà un compte ». Le compte et le code sont les mêmes que ceux de Déclic.
 
-Les illustrations viennent de [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) (Microsoft, licence MIT), voir `docs/courses/illus/LICENCE.txt`.
+Les illustrations au trait sont décrites dans `docs/courses/illus/LICENCE.txt`.
 
 ### Mise en route (une seule fois)
 

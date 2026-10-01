@@ -49,6 +49,7 @@ const PRANK = { urgent: 0, bientot: 1, plustard: 2 };
 // Illustrations (Fluent Emoji 3D, licence MIT : voir illus/LICENCE.txt).
 const ill = (name, cls = "ill") => `<img class="${cls}" src="illus/${name}.webp" alt="" aria-hidden="true" draggable="false">`;
 const catIll = (id, cls) => ill(CATS.some((c) => c.id === id) ? id : "autre", cls);
+const logo = (cls = "logo") => `<img class="${cls}" src="icons/logo.png" alt="Courses" draggable="false">`;
 const kindIll = (id, cls) => ill(KINDS.some((k) => k.id === id) ? id : "autre", cls);
 
 // ---------- rayon deviné à partir du nom ----------
@@ -343,7 +344,7 @@ function removeItems(list, msg) {
 function render() {
   const app = $("#app");
   document.body.classList.toggle("has-nav", S.screen === "main");
-  if (S.screen === "loading") app.innerHTML = `<p class="loading">${ill("autre", "ill xl bob")}</p>`;
+  if (S.screen === "loading") app.innerHTML = `<p class="loading">${logo("logo bob")}</p>`;
   else if (S.screen === "error") renderError(app);
   else if (S.screen === "welcome") renderWelcome(app);
   else if (S.screen === "profile") renderProfileSetup(app);
@@ -352,7 +353,7 @@ function render() {
 }
 
 function renderError(app) {
-  app.innerHTML = `<div class="intro">${ill("autre", "ill xl")}<h1>Courses</h1>
+  app.innerHTML = `<div class="intro">${logo()}<h1>Courses</h1>
     <p class="lead">${esc(errText(S.bootError))}</p>
     <button class="btn wide" id="retry">Réessayer</button></div>`;
   $("#retry").onclick = () => location.reload();
@@ -361,7 +362,7 @@ function renderError(app) {
 // Première ouverture : « C'est pour qui ? »
 function renderWelcome(app) {
   app.innerHTML = `<div class="intro">
-    ${ill("salut", "ill xl wave")}
+    ${logo()}
     <h1>Bienvenue&nbsp;!</h1>
     <p class="lead">La liste de courses partagée de ton foyer&nbsp;: ce qu'il faut acheter, et ce qu'il y a déjà dans la cuisine. Tout le monde voit les changements en direct.</p>
     <h2 class="q">C'est pour qui&nbsp;?</h2>

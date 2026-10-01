@@ -307,3 +307,30 @@ body.has-nav .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
   :root:not([data-theme="light"]) :is(.kind,.pricebox,.note-card,.empty,.hhpill,.chip) .ill:not(.hero-ill):not(.head-ill){background:#EFE7D3;border-radius:50%;padding:4px}}
 :root[data-theme="dark"] :is(.bubble,.dot,.donut .pin,.aisle h2 .bubble){background:#EFE7D3}
 :root[data-theme="dark"] :is(.kind,.pricebox,.note-card,.empty,.hhpill,.chip) .ill:not(.hero-ill):not(.head-ill){background:#EFE7D3;border-radius:50%;padding:4px}
+.note-card.budget .big{font-size:2rem;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin:2px 0}
+.note-card.budget .btn{margin-top:10px}
+.note-card small{opacity:.75}
+.bigcode.small{font-family:"Manrope",system-ui,sans-serif;font-weight:800;font-size:1.35rem;letter-spacing:.08em;padding:16px 10px}
+
+/* ---------- propositions pendant la saisie ---------- */
+.add{flex-wrap:nowrap}
+.sugg{position:absolute;left:0;right:0;top:calc(100% - 4px);z-index:8;background:var(--surface);border:1.5px solid var(--line);border-radius:22px;
+  padding:6px;box-shadow:0 14px 30px rgba(22,20,15,.16);max-height:min(340px,50vh);overflow-y:auto}
+.sopt{display:flex;align-items:center;gap:10px;width:100%;background:none;border:0;border-radius:14px;padding:9px 10px;text-align:left;color:var(--ink);font-weight:700}
+.sopt:hover,.sopt:active{background:var(--card)}
+.sopt .dot{margin:0;width:32px;height:32px}
+.sopt .dot .ill.xs{width:22px;height:22px;margin:0}
+.sname{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sname small{font-weight:500;color:var(--muted)}
+.sstate{flex:none;font-size:.75rem;font-weight:600;color:var(--muted);background:var(--card);border-radius:999px;padding:2px 8px}
+
+/* ---------- photos de profil ---------- */
+.av{overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.av.xs{width:22px;height:22px;font-size:.8rem;margin:-2px 6px -2px -6px;background:transparent}
+.av.me img{border-radius:50%}
+.photo-row{display:flex;align-items:center;gap:14px}
+.av.photo{width:72px;height:72px;font-size:1.8rem;background:var(--card);border:1.5px dashed var(--line)}
+.photo-btns{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.opt{font-weight:500;color:var(--muted)}
+.bubimg{width:100%;height:100%;object-fit:cover;border-radius:50%}

@@ -2,11 +2,11 @@
 -- À coller une seule fois dans Supabase › SQL Editor › New query, puis « Run ».
 -- Le script peut être relancé sans risque. Il ne touche pas aux tables de Déclic.
 --
---   courses_profiles   : un profil par personne (prénom + emoji)
+--   courses_profiles   : un profil par personne (prénom, emoji, photo facultative)
 --   courses_households : une liste partagée (« foyer »), identifiée par un code de 6 caractères
 --   courses_members    : qui fait partie de quel foyer
 --   courses_items      : les articles, sur la liste de courses (done = false) ou dans la cuisine (done = true)
---   courses_purchases  : les achats (prix payé, par qui), pour le graphique des dépenses
+--   courses_purchases  : les achats (quoi, quel rayon, prix éventuel, par qui), pour le bilan
 
 create table if not exists public.courses_profiles (
   uid        uuid        primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -22,6 +22,10 @@ create table if not exists public.courses_households (
   created_by uuid        references auth.users (id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- Photo de profil (facultative) : seulement une image du stockage « media » de l'application.
+alter table public.courses_profiles add column if not exists avatar text
+  check (avatar is null or (char_length(avatar) < 500 and avatar like '%/storage/v1/object/public/media/%'));
 
 -- Type de liste (relancer le script après une mise à jour suffit à appliquer la nouvelle règle).
 alter table public.courses_households drop constraint if exists courses_households_kind_check;
@@ -67,11 +71,13 @@ create table if not exists public.courses_purchases (
   item_id    uuid,
   name       text        not null check (char_length(name) between 1 and 80),
   cat        text        not null default 'autre' check (cat ~ '^[a-z]{1,20}$'),
-  amount     numeric(10, 2) not null check (amount >= 0 and amount < 100000),
+  amount     numeric(10, 2) check (amount is null or (amount >= 0 and amount < 100000)),
   paid_by    uuid        references auth.users (id) on delete set null,
   created_by uuid        references auth.users (id) on delete set null,
   bought_at  timestamptz not null default now()
 );
+-- Montant facultatif : chaque article acheté compte dans le bilan par type de nourriture, même sans prix.
+alter table public.courses_purchases alter column amount drop not null;
 create index if not exists courses_purchases_household_idx on public.courses_purchases (household, bought_at);
 
 create or replace function public.courses_touch() returns trigger

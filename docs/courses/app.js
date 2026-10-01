@@ -1,4 +1,4 @@
-// Courses : la liste de courses partagée du foyer (famille, coloc, couple, amis), ce qu'il y a déjà dans la cuisine,
+// Take Out : la liste de courses partagée du foyer (famille, coloc, couple, amis), ce qu'il y a déjà dans la cuisine,
 // et ce que l'on dépense, par rayon.
 // Un article est soit sur la liste de courses (done = false), soit acheté et « dans notre cuisine » (done = true).
 // Chaque achat avec un prix devient une ligne de « purchases », qui alimente l'onglet Dépenses.
@@ -57,7 +57,7 @@ const ill = (name, cls = "ill") => `<img class="${cls}" src="illus/${name}.${SVG
 // Petite frise de dessins pour les écrans vides.
 const doodles = (...names) => `<div class="doodles" aria-hidden="true">${names.map((n, i) => ill(n, `ill d${i}`)).join("")}</div>`;
 const catIll = (id, cls) => ill(catOf(id).id, cls);
-const logo = (cls = "logo") => `<img class="${cls}" src="icons/logo.png" alt="Courses" draggable="false">`;
+const logo = (cls = "logo") => `<img class="${cls}" src="icons/logo.png" alt="Take Out" draggable="false">`;
 const kindIll = (id, cls) => ill(KINDS.some((k) => k.id === id) ? id : "autre", cls);
 // Étoile décorative des cartes (comme les formes du design de référence).
 const STAR = `<svg class="deco" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 4l9 25 24-12-12 24 25 9-25 9 12 24-24-12-9 25-9-25-24 12 12-24-25-9 25-9-12-24 24 12z"/></svg>`;
@@ -71,9 +71,7 @@ const ICONS = {
 
 // ---------- montants ----------
 const EUR = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
-const EUR0 = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const money = (n) => EUR.format(n || 0);
-const money0 = (n) => (Math.abs(n) >= 100 ? EUR0.format(n) : EUR.format(n || 0));
 // « 2,50 », « 2.5 », « 2,50 € » → 2.5 ; vide → null ; incorrect → NaN.
 function parseMoney(s) {
   const t = String(s || "").replace(/[€\s]/g, "").replace(",", ".");
@@ -195,21 +193,17 @@ function errText(e) {
   if (e.code === "network") return "Pas de connexion. Réessaie quand le réseau revient.";
   if (e.code === "setup") return "La base n'est pas prête : il faut lancer supabase/courses.sql dans Supabase (voir le README).";
   if (e.code === "denied") return "Tu n'as pas accès à cette liste.";
-  if (e.code === "bad_code") return "Code incorrect ou expiré. Vérifie le dernier e-mail reçu.";
-  if (e.code === "email_taken") return "Cette adresse est déjà liée à un autre compte. Pour l'ouvrir ici, utilise « J'ai déjà un compte ».";
-  if (e.code === "no_account") return "Aucun compte n'est lié à cette adresse.";
-  if (e.code === "rate_limit") return "Trop de demandes d'un coup : attends quelques minutes avant de redemander un code.";
-  if (e.code === "bad_email") return "Cette adresse e-mail n'a pas l'air valide.";
+  if (e.code === "bad_code") return "Ce code ne correspond à aucun compte. Vérifie les lettres et les chiffres.";
+  if (e.code === "short_code") return "Le code fait 16 caractères, par exemple ABCD-EFGH-JKLM-NPQR.";
   return "Une erreur est survenue, réessaie.";
 }
-const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 // ---------- état ----------
 const S = {
   store: null,
   uid: loadJSON("courses:uid", null),
   me: loadJSON("courses:me", null),
-  email: { email: "", pending: "" },
+  acct: { hasCode: false }, // un code de sauvegarde existe-t-il ?
   households: loadJSON("courses:households", []),
   hid: loadJSON("courses:hid", null),
   members: [],
@@ -234,7 +228,10 @@ const S = {
 const household = () => S.households.find((h) => h.id === S.hid) || null;
 const member = (uid) => S.members.find((m) => m.uid === uid);
 const memberName = (uid) => (uid === S.uid ? "toi" : member(uid)?.name || "quelqu'un");
-const memberEmoji = (uid) => (uid === S.uid ? S.me?.emoji : member(uid)?.emoji) || "🙂";
+// Avatar d'une personne : sa photo, sinon son emoji.
+const face = (p, cls = "", style = "") =>
+  `<span class="av${cls ? " " + cls : ""}"${style ? ` style="${style}"` : ""}>${p?.avatar ? `<img src="${esc(p.avatar)}" alt="" loading="lazy">` : esc(p?.emoji || "🙂")}</span>`;
+const faceOf = (uid, cls) => face(uid === S.uid ? S.me : member(uid), cls);
 
 function cacheHousehold() {
   if (!S.hid) return;
@@ -375,17 +372,15 @@ const snapshot = (it) => ({ done: it.done, low: !!it.low, done_by: it.done_by, d
 function bought(it) {
   const before = snapshot(it);
   enqueue({ t: "patch", id: it.id, patch: TO_KITCHEN() });
-  let pid = null;
-  if (it.price != null) {
-    pid = uuid();
-    enqueue({ tbl: "purchases", t: "insert", rows: [purchaseRow(it, it.price, S.uid, pid)] });
-  }
+  // Chaque achat compte dans le bilan par type de nourriture, avec ou sans prix.
+  const pid = uuid();
+  enqueue({ tbl: "purchases", t: "insert", rows: [purchaseRow(it, it.price ?? null, S.uid, pid)] });
   const undo = () => {
     enqueue({ t: "patch", id: it.id, patch: before });
-    if (pid) enqueue({ tbl: "purchases", t: "delete", ids: [pid] });
+    enqueue({ tbl: "purchases", t: "delete", ids: [pid] });
   };
-  if (pid) toast(`« ${it.name} » acheté · ${money(it.price)}`, [["Modifier", () => openPrice(it, pid)], ["Annuler", undo]]);
-  else toast(`« ${it.name} » rangé dans la cuisine`, [["Ajouter le prix", () => openPrice(it, null)], ["Annuler", undo]]);
+  if (it.price != null) toast(`« ${it.name} » acheté · ${money(it.price)}`, [["Modifier", () => openPrice(it, pid)], ["Annuler", undo]]);
+  else toast(`« ${it.name} » rangé dans la cuisine`, [["Ajouter le prix", () => openPrice(it, pid)], ["Annuler", undo]]);
 }
 function purchaseRow(it, amount, paidBy, id = uuid()) {
   return { id, household: S.hid, item_id: it.id || null, name: it.name, cat: it.cat || "autre", amount, paid_by: paidBy, created_by: S.uid, bought_at: nowIso() };
@@ -416,7 +411,7 @@ function render() {
 }
 
 function renderError(app) {
-  app.innerHTML = `<div class="intro">${logo()}<h1>Courses</h1>
+  app.innerHTML = `<div class="intro">${logo()}<h1>Take Out</h1>
     <p class="lead">${esc(errText(S.bootError))}</p>
     <button class="btn wide" id="retry">Réessayer</button></div>`;
   $("#retry").onclick = () => location.reload();
@@ -425,7 +420,7 @@ function renderError(app) {
 // Première ouverture : « C'est pour qui ? »
 function renderWelcome(app) {
   app.innerHTML = `<div class="intro">
-    <div class="brand">${logo("logo sm")}<b>Courses</b></div>
+    <div class="brand">${logo("logo sm")}<b>Take Out</b></div>
     <div class="hero">${ill("mains", "hero-ill")}</div>
     <h1 class="serif">Bienvenue&nbsp;!</h1>
     <p class="lead">La liste de courses partagée de ton foyer&nbsp;: ce qu'il faut acheter, ce qu'il y a déjà dans la cuisine, et ce que vous dépensez.</p>
@@ -468,6 +463,63 @@ function bindPicker(el) {
 }
 const picked = (el) => el.querySelector('[aria-pressed="true"]')?.dataset.v || "";
 
+// ---------- photo de profil ----------
+// Recadrée en carré et réduite avant l'envoi (une photo de téléphone pèse plusieurs Mo).
+async function squarePhoto(file, size = 320) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    c.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+    return c.toDataURL("image/jpeg", 0.82);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+const photoPreview = (src) => (src ? `<img src="${esc(src)}" alt="">` : `<span aria-hidden="true">📷</span>`);
+function photoField(cur) {
+  if (!S.store?.canAvatar) return "";
+  return `<div class="field"><span>Ta photo <small class="opt">(facultatif)</small></span>
+    <div class="photo-row"><span class="av photo" id="phPrev">${photoPreview(cur)}</span>
+      <span class="photo-btns"><button type="button" class="btn small ghost" id="phPick">${cur ? "Changer la photo" : "Choisir une photo"}</button>
+      <button type="button" class="link" id="phDel" ${cur ? "" : "hidden"}>Retirer</button></span></div>
+    <input type="file" id="phFile" accept="image/*" hidden></div>`;
+}
+// state.avatar : adresse de la photo actuelle, image choisie (data:…) en attente d'envoi, ou "" sans photo.
+function bindPhoto(state) {
+  if (!$("#phPick")) return;
+  const show = () => {
+    $("#phPrev").innerHTML = photoPreview(state.avatar);
+    $("#phDel").hidden = !state.avatar;
+    $("#phPick").textContent = state.avatar ? "Changer la photo" : "Choisir une photo";
+  };
+  $("#phPick").onclick = () => $("#phFile").click();
+  $("#phFile").onchange = async () => {
+    const f = $("#phFile").files[0];
+    $("#phFile").value = "";
+    if (!f) return;
+    try {
+      state.avatar = await squarePhoto(f);
+      show();
+    } catch {
+      toast("Cette image n'a pas pu être lue, essaie une autre photo.");
+    }
+  };
+  $("#phDel").onclick = () => {
+    state.avatar = "";
+    show();
+  };
+  state.show = show;
+}
+const finalAvatar = async (state) => (state.avatar && state.avatar.startsWith("data:") ? await S.store.uploadAvatar(state.avatar) : state.avatar || "");
+
 async function renderProfileSetup(app) {
   const invited = loadJSON("courses:join", null);
   const k = S.onb.kind ? kindOf(S.onb.kind) : null;
@@ -484,13 +536,16 @@ async function renderProfileSetup(app) {
     <p class="lead">${lead}</p>
     <form class="card" id="pForm" autocomplete="off">
       <div class="field"><label for="pName">Ton prénom</label><input id="pName" maxlength="30" required placeholder="ex : Camille" autocomplete="given-name"></div>
-      <div class="field"><span>Ton emoji</span>${emojiPicker(emoji)}</div>
+      ${photoField("")}
+      <div class="field"><span>Ton emoji <small class="opt">(si pas de photo)</small></span>${emojiPicker(emoji)}</div>
       <p class="err" id="pErr"></p>
       <button class="btn wide" type="submit">Continuer</button>
     </form>
-    ${invited && S.store?.account ? `<p class="or">Tu as déjà un compte&nbsp;? <button class="link" id="pRecover">Me connecter avec mon e-mail</button></p>` : ""}
+    ${invited && S.store?.account ? `<p class="or">Tu as déjà un compte&nbsp;? <button class="link" id="pRecover">J'ai un code de sauvegarde</button></p>` : ""}
   </div>`;
   bindPicker($("#emojiPick"));
+  const photo = { avatar: "" };
+  bindPhoto(photo);
   $("#pBack") &&
     ($("#pBack").onclick = () => {
       S.screen = "welcome";
@@ -504,7 +559,7 @@ async function renderProfileSetup(app) {
     const btn = $("#pForm button[type=submit]");
     btn.disabled = true;
     try {
-      const me = { name, emoji: picked($("#emojiPick")) || emoji };
+      const me = { name, emoji: picked($("#emojiPick")) || emoji, avatar: await finalAvatar(photo) };
       await S.store.saveProfile(me);
       S.me = me;
       saveJSON("courses:me", me);
@@ -516,8 +571,13 @@ async function renderProfileSetup(app) {
   };
   // Prénom déjà choisi dans Déclic : on le propose.
   if (S.store) {
-    const n = await S.store.suggestedName().catch(() => "");
-    if (n && $("#pName") && !$("#pName").value) $("#pName").value = n;
+    // Prénom et photo déjà choisis dans Déclic : on les propose.
+    const sug = await S.store.suggested().catch(() => ({}));
+    if (sug.name && $("#pName") && !$("#pName").value) $("#pName").value = sug.name;
+    if (sug.avatar && !photo.avatar && photo.show) {
+      photo.avatar = sug.avatar;
+      photo.show();
+    }
   }
 }
 
@@ -612,7 +672,7 @@ function renderHouseholdSetup(app) {
   else if (mode === "create") body = `${createForm("s", S.onb.kind)}<p class="or"><button class="link" id="sSwap">J'ai plutôt un code d'invitation</button></p>`;
   else body = `${createForm("s", "famille")}<p class="or">ou</p>${joinForm("s")}`;
   app.innerHTML = `<div class="intro">
-    <p class="hello"><span class="av xl">${esc(S.me?.emoji || "🙂")}</span></p>
+    <p class="hello">${face(S.me, "xl")}</p>
     <h1 class="serif">Salut ${esc(S.me?.name || "")}&nbsp;!</h1>
     <p class="lead">${mode === "join" ? "Plus qu'une étape pour rejoindre la liste partagée." : "Donne un nom à ta liste, puis invite les autres."}</p>
     ${body}
@@ -652,7 +712,7 @@ function renderMain(app) {
     <div class="top">
       <button class="hhpill" id="hhBtn" aria-label="Changer de liste">${kindIll(h?.kind, "ill xs")}<span>${esc(h?.name || "")}</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></button>
       <span class="grow"></span>
-      <button class="round" id="meBtn" aria-label="Nous : membres et profil"><span class="av me">${esc(S.me?.emoji || "🙂")}</span></button>
+      <button class="round" id="meBtn" aria-label="Nous : membres et profil">${face(S.me, "me")}</button>
     </div>`;
 
   let body;
@@ -666,8 +726,8 @@ function renderMain(app) {
   const nav = `<nav class="nav" aria-label="Pages"><div class="navbar">
       ${tab("list", "Courses", todo.length ? `<b class="badge">${todo.length}</b>` : "")}
       ${tab("kitchen", "Cuisine", lowCount ? `<b class="badge warn">${lowCount}</b>` : "")}
-      <button class="fab" id="fab" aria-label="${S.view === "spend" ? "Ajouter une dépense" : S.view === "us" ? "Inviter quelqu'un" : "Ajouter un article"}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-      ${tab("spend", "Dépenses")}
+      <button class="fab" id="fab" aria-label="${S.view === "us" ? "Inviter quelqu'un" : "Ajouter un article"}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      ${tab("spend", "Bilan")}
       ${tab("us", "Nous")}
     </div></nav>`;
 
@@ -676,6 +736,7 @@ function renderMain(app) {
   if (keep && keep.view === S.view && $("#quickName")) {
     $("#quickName").value = keep.v;
     if (keep.f) $("#quickName").focus();
+    updateSuggest();
   }
   if (S.flashId) {
     const li = document.querySelector(`li[data-id="${CSS.escape(S.flashId)}"]`);
@@ -689,10 +750,11 @@ function renderMain(app) {
 
 function quickForm(view, placeholder) {
   return `<form class="add" id="quick" autocomplete="off">
-      <input id="quickName" data-view="${view}" list="suggest" maxlength="80" placeholder="${esc(placeholder)}" aria-label="Article à ajouter" enterkeyhint="done">
+      <input id="quickName" data-view="${view}" maxlength="80" placeholder="${esc(placeholder)}" aria-label="Article à ajouter" enterkeyhint="done"
+        autocomplete="off" autocorrect="off" spellcheck="false" role="combobox" aria-controls="sugg" aria-expanded="false">
       <button class="btn" type="submit">Ajouter</button>
-    </form>
-    <datalist id="suggest">${suggestions().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>`;
+      <div class="sugg" id="sugg" role="listbox" aria-label="Propositions" hidden></div>
+    </form>`;
 }
 
 function aisle(c, n, inner) {
@@ -701,9 +763,6 @@ function aisle(c, n, inner) {
 const groupByCat = (list) => CATS.map((c) => [c, list.filter((i) => catOf(i.cat).id === c.id)]).filter(([, g]) => g.length);
 
 function listHtml(todo, stock) {
-  const urgent = todo.filter((i) => i.prio === "urgent").length;
-  const priced = todo.filter((i) => i.price != null);
-  const estimate = priced.reduce((s, i) => s + i.price, 0);
   // Filtre par magasin : seulement les magasins présents dans la liste.
   const shops = SHOPS.filter((s) => s.id && todo.some((i) => i.shop === s.id));
   if (S.shop && !shops.some((s) => s.id === S.shop)) S.shop = "";
@@ -711,11 +770,6 @@ function listHtml(todo, stock) {
   const low = stock.filter((i) => i.low);
   const others = S.members.filter((m) => m.uid !== S.uid);
   let html = `<header class="head with-ill">${ill("mains", "head-ill")}<h1 class="serif">Liste de courses</h1><p class="date">${esc(today())}</p></header>
-    <div class="stats">
-      <div class="stat" style="--tint:#F7EAB4">${STAR}<b>${todo.length}</b><span>à acheter</span></div>
-      <div class="stat" style="--tint:#F8D3E3">${STAR}<b>${urgent}</b><span>urgent${urgent > 1 ? "s" : ""}</span></div>
-      <div class="stat" style="--tint:#D3E2F6">${STAR}<b>${priced.length ? money0(estimate) : "–"}</b><span>estimé${priced.length && priced.length < todo.length ? ` (${priced.length}/${todo.length})` : ""}</span></div>
-    </div>
     ${quickForm("list", "Il manque quoi ?")}`;
   if (shops.length)
     html += `<div class="bar" role="group" aria-label="Filtrer par magasin"><button class="fchip" data-shop="" aria-pressed="${!S.shop}">Partout</button>${shops
@@ -734,7 +788,7 @@ function listHtml(todo, stock) {
     g.sort((a, b) => (PRANK[a.prio] ?? 1) - (PRANK[b.prio] ?? 1) || String(a.created_at).localeCompare(String(b.created_at)));
     html += aisle(c, g.length, g.map(listItemHtml).join(""));
   }
-  html += `</main>` + emailHint();
+  html += `</main>` + backupHint();
   return html;
 }
 
@@ -876,80 +930,93 @@ function settle(paid, uids) {
   return out;
 }
 
+// Bilan : la part de chaque type de nourriture dans ce que vous achetez (en nombre d'articles),
+// puis, plus bas, le budget quand des prix sont notés.
+const nArt = (n) => `${n} article${n > 1 ? "s" : ""}`;
 function spendHtml() {
   const all = rows("purchases");
   const [a, b, pa, pb, label] = periodRange(S.period);
   const list = all.filter((p) => inRange(p, a, b)).sort((x, y) => String(y.bought_at).localeCompare(String(x.bought_at)));
-  const prev = all.filter((p) => inRange(p, pa, pb)).reduce((s, p) => s + p.amount, 0);
-  const total = list.reduce((s, p) => s + p.amount, 0);
+  const count = list.length;
+  const prevList = all.filter((p) => inRange(p, pa, pb));
   const byCat = {};
-  for (const p of list) byCat[catOf(p.cat).id] = (byCat[catOf(p.cat).id] || 0) + p.amount;
+  for (const p of list) byCat[catOf(p.cat).id] = (byCat[catOf(p.cat).id] || 0) + 1;
   const parts = Object.entries(byCat)
     .map(([id, value]) => ({ id, value, color: catOf(id).tone, label: catOf(id).l }))
     .sort((x, y) => y.value - x.value);
 
-  let html = `<header class="head"><h1 class="serif">Nos dépenses</h1><p class="date">${esc(label.replace(/^./, (c) => c.toUpperCase()))}</p></header>
+  let html = `<header class="head"><h1 class="serif">Ce qu'on achète</h1><p class="date">${esc(label.replace(/^./, (c) => c.toUpperCase()))}</p></header>
     <div class="bar seg" role="group" aria-label="Période">${PERIODS.map((p) => `<button class="fchip" data-period="${p.id}" aria-pressed="${S.period === p.id}">${p.l}</button>`).join("")}</div>`;
 
-  if (!all.length) {
+  if (!count) {
     return (
       html +
-      `<div class="empty">${doodles("orange", "crevette", "boissons")}${donut([], 0, `<b>0 €</b><span>pour l'instant</span>`)}
-      <p>Quand tu coches un article, ajoute son prix&nbsp;: vos dépenses s'afficheront ici, en cercle, rayon par rayon.</p>
-      <button class="btn" id="addExpense">Ajouter une dépense</button></div>`
+      `<div class="empty">${doodles("fruits", "epices", "viande")}${donut([], 0, `<b>0</b><span>article</span>`)}
+      <p>${all.length ? "Aucun achat sur cette période." : "Coche les articles de la liste quand tu les achètes&nbsp;: la part de chaque type de nourriture s'affichera ici, en cercle."}</p></div>`
     );
   }
 
-  html += `<section class="card chart">${donut(parts, total, `<b>${money0(total)}</b><span>${esc(label)}</span>`)}
-    <div class="row center"><button class="btn small" id="addExpense">Ajouter une dépense</button></div></section>`;
+  html += `<section class="card chart">${donut(parts, count, `<b>${count}</b><span>${count > 1 ? "articles achetés" : "article acheté"}</span>`)}</section>`;
 
-  // Le petit mot du jour, comme une carte d'assistant.
-  let insight = "";
-  if (total && prev) {
-    const d = (total - prev) / prev;
-    insight = Math.abs(d) < 0.03 ? `Vous dépensez <b>autant</b> que sur la période précédente.` : `Vous avez dépensé <b class="${d > 0 ? "up" : "down"}">${pct(Math.abs(d))} ${d > 0 ? "de plus" : "de moins"}</b> que sur la période précédente.`;
-  } else if (parts.length) insight = `Le rayon qui pèse le plus&nbsp;: <b>${esc(parts[0].label)}</b>, ${pct(parts[0].value / total)} des dépenses.`;
-  if (insight) html += `<section class="note-card" style="--tint:#F8D3E3">${STAR}<p class="tiny">Le point sur vos courses</p><p>${insight}</p></section>`;
+  // Le petit mot sur vos habitudes.
+  const share = (id) => (byCat[id] || 0) / count;
+  let insight = `Ce qui revient le plus&nbsp;: <b>${esc(parts[0].label)}</b>, ${pct(parts[0].value / count)} de vos courses.`;
+  const fresh = share("fruits"),
+    sweet = share("snacks");
+  if (count >= 8 && sweet > fresh && sweet >= 0.15) insight += ` Un peu plus de snacks (${pct(sweet)}) que de fruits & légumes (${pct(fresh)}) 🍫`;
+  else if (count >= 8 && fresh >= 0.25) insight += ` Bravo, ${pct(fresh)} de fruits & légumes 🥦`;
+  if (prevList.length) {
+    const d = (count - prevList.length) / prevList.length;
+    if (Math.abs(d) >= 0.1) insight += `<br><small>${d > 0 ? "Plus" : "Moins"} d'articles que sur la période précédente (${prevList.length}).</small>`;
+  }
+  html += `<section class="note-card" style="--tint:#F8D3E3">${STAR}<p class="tiny">Vos habitudes</p><p>${insight}</p></section>`;
 
-  if (parts.length)
-    html += `<h3 class="sect">Par rayon</h3><ul class="group">${parts
-      .map(
-        (p) => `<li><span class="bubble" style="--tint:${catOf(p.id).tint}">${catIll(p.id, "ill sm")}</span>
+  html += `<h3 class="sect">Par type de nourriture</h3><ul class="group">${parts
+    .map(
+      (p) => `<li><span class="bubble" style="--tint:${catOf(p.id).tint}">${catIll(p.id, "ill sm")}</span>
         <span class="gmain"><span class="gname">${esc(p.label)}</span><span class="gbar"><i style="width:${(p.value / parts[0].value) * 100}%;background:${p.color}"></i></span></span>
-        <span class="gval"><b class="tag">${pct(p.value / total)}</b><small>${money(p.value)}</small></span></li>`,
-      )
-      .join("")}</ul>`;
+        <span class="gval"><b class="tag">${pct(p.value / count)}</b><small>${nArt(p.value)}</small></span></li>`,
+    )
+    .join("")}</ul>`;
 
-  // Qui a payé, et comment s'équilibrer (utile en coloc et entre amis).
-  if (S.members.length > 1 && total) {
-    const paid = {};
-    for (const p of list) paid[p.paid_by] = (paid[p.paid_by] || 0) + p.amount;
-    const uids = S.members.map((m) => m.uid);
-    const top = Math.max(...uids.map((u) => paid[u] || 0), 0.01);
-    const moves = settle(paid, uids);
-    html += `<h3 class="sect">Qui a payé</h3><ul class="group">${uids
-      .map(
-        (u) => `<li><span class="av">${esc(memberEmoji(u))}</span><span class="gmain"><span class="gname">${esc(u === S.uid ? (S.me?.name || "Toi") + " (toi)" : member(u)?.name || "Sans nom")}</span>
+  // Côté budget : seulement ce qui a un prix.
+  const priced = list.filter((p) => p.amount != null);
+  const total = priced.reduce((s, p) => s + p.amount, 0);
+  html += `<h3 class="sect">Côté budget</h3>`;
+  if (priced.length) {
+    html += `<section class="note-card budget" style="--tint:#D3E2F6">${STAR}<p class="tiny">${esc(label.replace(/^./, (c) => c.toUpperCase()))}</p><p class="big">${money(total)}</p><p><small>pour ${nArt(priced.length)} avec un prix${
+      priced.length < count ? ` (sur ${count})` : ""
+    }</small></p><button class="btn small" id="addExpense">Ajouter une dépense</button></section>`;
+    // Qui a payé, et comment s'équilibrer (utile en coloc et entre amis).
+    if (S.members.length > 1 && total) {
+      const paid = {};
+      for (const p of priced) paid[p.paid_by] = (paid[p.paid_by] || 0) + p.amount;
+      const uids = S.members.map((m) => m.uid);
+      const top = Math.max(...uids.map((u) => paid[u] || 0), 0.01);
+      const moves = settle(paid, uids);
+      html += `<ul class="group">${uids
+        .map(
+          (u) => `<li>${faceOf(u)}<span class="gmain"><span class="gname">${esc(u === S.uid ? (S.me?.name || "Toi") + " (toi)" : member(u)?.name || "Sans nom")}</span>
         <span class="gbar"><i style="width:${((paid[u] || 0) / top) * 100}%"></i></span></span><span class="gval"><b class="tag">${pct((paid[u] || 0) / total)}</b><small>${money(paid[u] || 0)}</small></span></li>`,
-      )
-      .join("")}</ul>
-      <section class="note-card" style="--tint:#DCEAC8">${STAR}<p class="tiny">Pour partager à parts égales (${money(total / uids.length)} chacun)</p>${
+        )
+        .join("")}</ul>
+      <section class="note-card" style="--tint:#DCEAC8;margin-top:12px">${STAR}<p class="tiny">Pour partager à parts égales (${money(total / uids.length)} chacun)</p>${
         moves.length
-          ? moves.map((m) => `<p class="settle"><span class="av sm">${esc(memberEmoji(m.from))}</span> ${esc(memberName(m.from) === "toi" ? "Tu dois" : memberName(m.from) + " doit")} <b>${money(m.amount)}</b> à <span class="av sm">${esc(memberEmoji(m.to))}</span> ${esc(memberName(m.to))}</p>`).join("")
+          ? moves.map((m) => `<p class="settle">${faceOf(m.from, "sm")} ${esc(memberName(m.from) === "toi" ? "Tu dois" : memberName(m.from) + " doit")} <b>${money(m.amount)}</b> à ${faceOf(m.to, "sm")} ${esc(memberName(m.to))}</p>`).join("")
           : `<p>Vous êtes à égalité 🎉</p>`
       }</section>`;
-  }
+    }
+  } else
+    html += `<section class="note-card budget" style="--tint:#D3E2F6">${STAR}<p>Note le prix quand tu coches un article (ou ajoute un ticket de caisse) pour suivre aussi votre budget.</p><button class="btn small" id="addExpense" style="margin-top:10px">Ajouter une dépense</button></section>`;
 
-  if (list.length)
-    html += `<h3 class="sect">Derniers achats</h3><ul class="group">${list
-      .slice(0, 30)
-      .map(
-        (p) => `<li><button class="growrow" data-purchase="${esc(p.id)}"><span class="bubble" style="--tint:${catOf(p.cat).tint}">${catIll(p.cat, "ill sm")}</span>
-        <span class="gmain"><span class="gname">${esc(p.name)}</span><small>${S.members.length > 1 ? `payé par ${esc(memberName(p.paid_by))} · ` : ""}${esc(ago(p.bought_at))}${p._pending ? " · en attente" : ""}</small></span>
-        <span class="gval"><b>${money(p.amount)}</b></span></button></li>`,
-      )
-      .join("")}</ul>`;
-  else html += `<div class="empty"><p>Aucun achat sur cette période.</p></div>`;
+  html += `<h3 class="sect">Derniers achats</h3><ul class="group">${list
+    .slice(0, 30)
+    .map(
+      (p) => `<li><button class="growrow" data-purchase="${esc(p.id)}"><span class="bubble" style="--tint:${catOf(p.cat).tint}">${catIll(p.cat, "ill sm")}</span>
+        <span class="gmain"><span class="gname">${esc(p.name)}</span><small>${S.members.length > 1 ? `par ${esc(memberName(p.paid_by))} · ` : ""}${esc(ago(p.bought_at))}${p._pending ? " · en attente" : ""}</small></span>
+        <span class="gval">${p.amount != null ? `<b>${money(p.amount)}</b>` : `<small>+ prix</small>`}</span></button></li>`,
+    )
+    .join("")}</ul>`;
   return html;
 }
 
@@ -964,13 +1031,13 @@ function usHtml() {
   const k = kindOf(h?.kind);
   const todo = viewItems().filter((i) => !i.done);
   return `<section class="profile">
-      <span class="av huge" style="--tint:${k.tint}">${esc(S.me?.emoji || "🙂")}</span>
+      ${face(S.me, "huge", `--tint:${k.tint}`)}
       <div><h1 class="serif">${esc(S.me?.name || "")}</h1><p class="date">${esc(k.l)} · « ${esc(h?.name || "")} »</p></div>
     </section>
     <h3 class="sect">Notre liste</h3>
     <ul class="group">${S.members
       .map(
-        (m) => `<li><span class="av">${esc(m.emoji || "🙂")}</span><span class="gmain"><span class="gname">${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</span><small>${
+        (m) => `<li>${face(m)}<span class="gmain"><span class="gname">${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</span><small>${
           m.uid === h?.created_by ? "a créé la liste" : "membre"
         }</small></span></li>`,
       )
@@ -995,33 +1062,122 @@ function usHtml() {
     </ul>
     <h3 class="sect">Mon compte</h3>
     <ul class="group">
-      ${row("uMe", esc(S.me?.emoji || "🙂"), "#F7EAB4", "Modifier mon profil", "Prénom et emoji")}
+      ${row("uMe", S.me?.avatar ? `<img class="bubimg" src="${esc(S.me.avatar)}" alt="">` : esc(S.me?.emoji || "🙂"), "#F7EAB4", "Modifier mon profil", "Prénom, photo et emoji")}
       ${
         S.store?.account
-          ? row("uEmail", ill(S.email.email ? "ok" : "email", "ill xs"), S.email.email ? "#DCEAC8" : "#E6DDF6", S.email.email ? "Compte protégé" : "Protéger mon compte avec mon e-mail", esc(S.email.email || "Pour le retrouver sur un autre téléphone")) +
-            row("uLogin", ill("cle", "ill xs"), "#ECE6D8", "Ouvrir un autre compte sur cet appareil")
+          ? row("uBackup", ill(S.acct.hasCode ? "ok" : "cle", "ill xs"), S.acct.hasCode ? "#DCEAC8" : "#F7EAB4", S.acct.hasCode ? "Compte sauvegardé" : "Sauvegarder mon compte", S.acct.hasCode ? "Créer un nouveau code ou lien" : "Pour le retrouver sur un autre téléphone") +
+            row("uLogin", ill("invite", "ill xs"), "#ECE6D8", "J'ai déjà un compte", "Ouvrir un compte sauvegardé ici")
           : ""
       }
     </ul>
-    ${S.store?.mode === "demo" ? `<p class="hint center">Mode démonstration : les données restent dans ce navigateur (code « e-mail » : 123456).</p>` : ""}`;
+    ${S.store?.mode === "demo" ? `<p class="hint center">Mode démonstration : les données restent dans ce navigateur (code de sauvegarde : DEMO-2345-6789-ABCD).</p>` : ""}`;
 }
 
-function emailHint() {
-  if (!S.store?.account || S.email.email || loadJSON("courses:emailHintOff", false)) return "";
-  return `<section class="note-card hintcard" style="--tint:#E6DDF6">${STAR}${ill("cle", "ill md")}<div><b>Protège ton compte</b>
-    <p>Ajoute ton e-mail&nbsp;: si tu changes de téléphone, tu recevras un code pour retrouver tes listes.</p>
-    <div class="row"><button class="btn small" id="hintEmail">Ajouter mon e-mail</button><button class="link" id="hintOff">Plus tard</button></div></div></section>`;
+function backupHint() {
+  if (!S.store?.account || S.acct.hasCode || loadJSON("courses:backupHintOff", false)) return "";
+  return `<section class="note-card hintcard" style="--tint:#F7EAB4">${STAR}${ill("cle", "ill md")}<div><b>Sauvegarde ton compte</b>
+    <p>Crée ton code de sauvegarde&nbsp;: si tu changes de téléphone, tu retrouveras tes listes en un instant.</p>
+    <div class="row"><button class="btn small" id="hintBackup">Sauvegarder</button><button class="link" id="hintOff">Plus tard</button></div></div></section>`;
 }
 
-function suggestions() {
-  const onList = new Set(viewItems().map((i) => norm(i.name)));
+// ---------- propositions pendant la saisie ----------
+// Produits courants, proposés dès les premières lettres (en plus de ce que le foyer achète déjà).
+const COMMON = `Pommes, Poires, Bananes, Oranges, Clémentines, Citrons, Fraises, Framboises, Myrtilles, Raisin, Kiwis, Mangue, Ananas, Melon, Pastèque, Pêches, Abricots, Cerises, Avocats,
+Tomates, Tomates cerises, Salade, Roquette, Mâche, Carottes, Courgettes, Aubergines, Poivrons, Concombre, Oignons, Oignons rouges, Ail, Échalotes, Pommes de terre, Patates douces,
+Champignons, Épinards, Brocoli, Chou-fleur, Poireaux, Haricots verts, Petits pois, Radis, Betteraves, Céleri, Fenouil, Potiron, Gingembre, Basilic, Persil, Coriandre, Menthe, Ciboulette,
+Poulet, Blancs de poulet, Steak haché, Bœuf, Jambon, Jambon cru, Lardons, Saucisses, Merguez, Chipolatas, Dinde, Escalopes, Côtes de porc, Saumon, Cabillaud, Thon, Crevettes, Moules,
+Lait, Lait d'avoine, Lait d'amande, Lait de soja, Beurre, Crème fraîche, Crème liquide, Œufs, Yaourts, Yaourts nature, Fromage blanc, Skyr, Petits suisses, Fromage râpé, Emmental,
+Comté, Mozzarella, Burrata, Parmesan, Feta, Chèvre, Camembert, Raclette, Ricotta, Mascarpone, Tofu, Houmous, Pâte feuilletée, Pâte brisée, Pâte à pizza, Gnocchis,
+Pâtes, Spaghetti, Penne, Coquillettes, Tagliatelles, Lasagnes, Riz, Riz basmati, Quinoa, Semoule, Boulgour, Lentilles, Pois chiches, Farine, Sucre, Sel, Poivre, Huile d'olive,
+Huile de tournesol, Vinaigre, Vinaigre balsamique, Moutarde, Ketchup, Mayonnaise, Sauce soja, Sauce tomate, Pesto, Concentré de tomate, Bouillon cube, Épices, Curry, Paprika,
+Cumin, Cannelle, Herbes de Provence, Levure, Maïzena, Café, Capsules de café, Thé, Tisane, Chocolat en poudre, Miel, Confiture, Pâte à tartiner, Beurre de cacahuète, Céréales,
+Muesli, Flocons d'avoine, Biscottes, Pain, Baguette, Pain de mie, Brioche, Croissants, Tortillas, Wraps, Pain burger, Chocolat, Chocolat noir, Biscuits, Cookies, Gâteaux, Chips,
+Cacahuètes, Amandes, Noix, Bonbons, Compotes, Crackers, Pop-corn, Glace, Frites surgelées, Pizza surgelée, Légumes surgelés, Poisson pané, Eau, Eau gazeuse, Jus d'orange,
+Jus de pomme, Soda, Coca, Sirop, Bière, Vin rouge, Vin blanc, Rosé, Cidre, Papier toilette, Essuie-tout, Mouchoirs, Liquide vaisselle, Tablettes lave-vaisselle, Lessive,
+Adoucissant, Éponges, Sacs poubelle, Nettoyant, Vinaigre blanc, Javel, Papier cuisson, Papier aluminium, Film alimentaire, Piles, Ampoules, Dentifrice, Brosses à dents,
+Shampoing, Après-shampoing, Gel douche, Savon, Déodorant, Cotons, Coton-tiges, Rasoirs, Serviettes hygiéniques, Tampons, Crème solaire, Couches, Lingettes, Lait infantile,
+Petits pots, Croquettes, Pâtée, Litière`
+  .split(",")
+  .map((x) => x.trim())
+  .filter(Boolean);
+
+// Les meilleures propositions pour ce qui est tapé : d'abord ce que le foyer achète souvent, puis les produits courants.
+function suggestFor(text) {
+  const q = norm(parseQuick(text).name);
+  if (!q) return [];
+  const items = viewItems();
   const memo = loadJSON("courses:memo", {});
-  return Object.entries(memo)
-    .filter(([k]) => !onList.has(k))
-    .sort((a, b) => b[1].n - a[1].n || b[1].at - a[1].at)
-    .slice(0, 60)
-    .map(([, v]) => v.name);
+  const seen = new Map();
+  const consider = (name, bonus) => {
+    const k = norm(name);
+    if (!k || k === q) return;
+    let score;
+    if (k.startsWith(q)) score = 30;
+    else if (k.includes(" " + q) || k.includes("'" + q) || k.includes("-" + q)) score = 20;
+    else if (q.length >= 3 && k.includes(q)) score = 8;
+    else return;
+    score += bonus - k.length / 100;
+    if (!seen.has(k) || seen.get(k).score < score) seen.set(k, { name, score });
+  };
+  for (const v of Object.values(memo)) consider(v.name, 10 + Math.min(v.n || 1, 10));
+  for (const it of items) consider(it.name, 5);
+  for (const n of COMMON) consider(n, 0);
+  return [...seen.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(({ name }) => {
+      const it = items.find((i) => norm(i.name) === norm(name));
+      return { name, state: it ? (it.done ? "kitchen" : "list") : "" };
+    });
 }
+
+function updateSuggest() {
+  const input = $("#quickName"),
+    box = $("#sugg");
+  if (!input || !box) return;
+  const list = document.activeElement === input ? suggestFor(input.value) : [];
+  box.hidden = !list.length;
+  input.setAttribute("aria-expanded", String(!!list.length));
+  const qty = parseQuick(input.value).qty;
+  box.innerHTML = list
+    .map(
+      (s) => `<button type="button" class="sopt" role="option" data-sugg="${esc(s.name)}"><span class="dot" style="--tint:${catOf(guessCat(s.name)).tint}">${catIll(guessCat(s.name), "ill xs")}</span>
+      <span class="sname">${esc(s.name)}${qty ? ` <small>· ${esc(qty)}</small>` : ""}</span>${
+        s.state === "list" ? `<small class="sstate">déjà sur la liste</small>` : s.state === "kitchen" ? `<small class="sstate">dans la cuisine</small>` : ""
+      }</button>`,
+    )
+    .join("");
+}
+function pickSuggestion(name) {
+  const input = $("#quickName");
+  const { qty } = parseQuick(input?.value || "");
+  if (input) {
+    input.value = "";
+    // Produit choisi : on range le clavier (avant de redessiner l'écran, qui sinon redonnerait le focus).
+    input.blur();
+  }
+  const memo = loadJSON("courses:memo", {})[norm(name)];
+  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
+  updateSuggest();
+}
+$("#app").addEventListener("input", (e) => e.target.id === "quickName" && updateSuggest());
+$("#app").addEventListener("focusin", (e) => e.target.id === "quickName" && updateSuggest());
+$("#app").addEventListener("focusout", (e) => {
+  // Laisse le temps au toucher sur une proposition d'être pris en compte.
+  if (e.target.id === "quickName") setTimeout(updateSuggest, 150);
+});
+// Une proposition se choisit au premier toucher, sans fermer le clavier.
+$("#app").addEventListener("pointerdown", (e) => {
+  const b = e.target.closest && e.target.closest("[data-sugg]");
+  if (!b) return;
+  e.preventDefault();
+  pickSuggestion(b.dataset.sugg);
+});
+$("#app").addEventListener("keydown", (e) => {
+  if (e.target.id === "quickName" && e.key === "Escape") {
+    e.target.blur();
+  }
+});
 
 // ---------- feuille article ----------
 function chips(el, opts, val, htmlFn) {
@@ -1104,7 +1260,7 @@ const panelHead = (title, okId) =>
     okId ? `<button type="submit" class="round ok" ${okId === true ? "" : `id="${okId}"`} aria-label="Valider">✓</button>` : `<span class="round ghost"></span>`
   }</div>`;
 const payerChips = (sel) =>
-  `<div class="chips" id="payPick">${S.members.map((m) => `<button type="button" class="chip" data-v="${esc(m.uid)}" aria-pressed="${m.uid === sel}">${esc(m.emoji || "🙂")} ${esc(m.uid === S.uid ? "Moi" : m.name || "Sans nom")}</button>`).join("")}</div>`;
+  `<div class="chips" id="payPick">${S.members.map((m) => `<button type="button" class="chip" data-v="${esc(m.uid)}" aria-pressed="${m.uid === sel}">${face(m, "xs")} ${esc(m.uid === S.uid ? "Moi" : m.name || "Sans nom")}</button>`).join("")}</div>`;
 
 // Prix d'un article qu'on vient d'acheter (pid : achat déjà enregistré à modifier).
 function openPrice(it, pid) {
@@ -1113,7 +1269,7 @@ function openPrice(it, pid) {
   openPanel(
     `<form id="prForm" autocomplete="off">${panelHead("Combien ça a coûté&nbsp;?", true)}
       <div class="pricebox" style="--tint:${catOf(it.cat).tint}">${STAR}${catIll(it.cat, "ill md")}<b>${esc(it.name)}</b>${it.qty ? `<small>${esc(it.qty)}</small>` : ""}</div>
-      <div class="field"><label for="prAmount">Prix payé</label><div class="money"><input id="prAmount" inputmode="decimal" placeholder="0,00" value="${esc(priceStr(existing ? existing.amount : it.price))}"><span>€</span></div></div>
+      <div class="field"><label for="prAmount">Prix payé</label><div class="money"><input id="prAmount" inputmode="decimal" placeholder="0,00" value="${esc(priceStr(existing?.amount ?? it.price))}"><span>€</span></div></div>
       ${many ? `<div class="field"><span>Payé par</span>${payerChips(existing?.paid_by || S.uid)}</div>` : ""}
       <label class="checkline"><input type="checkbox" id="prKeep" checked> Retenir ce prix pour la prochaine fois</label>
       <p class="err" id="prErr"></p>
@@ -1170,7 +1326,8 @@ function openExpense(p) {
       $("#exForm").onsubmit = (e) => {
         e.preventDefault();
         const amount = parseMoney($("#exAmount").value);
-        if (amount == null || Number.isNaN(amount)) {
+        // Un achat existant peut rester sans prix ; une dépense ajoutée à la main en a besoin.
+        if (Number.isNaN(amount) || (amount == null && !p)) {
           $("#exErr").textContent = "Indique un montant, par exemple 24,90.";
           return;
         }
@@ -1213,10 +1370,10 @@ function openInvite(fresh) {
     </div>`,
     () => {
       $("#iShare").onclick = async () => {
-        const text = `Rejoins notre liste de courses « ${h.name} » : ${url}`;
+        const text = `Rejoins notre liste de courses « ${h.name} » sur Take Out : ${url}`;
         if (navigator.share) {
           try {
-            await navigator.share({ title: "Courses", text: `Rejoins notre liste de courses « ${h.name} »`, url });
+            await navigator.share({ title: "Take Out", text: `Rejoins notre liste de courses « ${h.name} » sur Take Out`, url });
             return;
           } catch (e) {
             if (e && e.name === "AbortError") return;
@@ -1308,7 +1465,7 @@ async function leaveHousehold() {
 
 async function shareAsText(items) {
   const h = household();
-  let text = `🛒 ${h?.name || "Courses"}\n`;
+  let text = `🛒 ${h?.name || "Take Out"}\n`;
   for (const [c, g] of groupByCat(items))
     text += `\n${c.e} ${c.l}\n` + g.map((i) => `• ${i.name}${i.qty ? " (" + i.qty + ")" : ""}${i.quality ? " – " + i.quality : ""}${i.prio === "urgent" ? " 🔥" : ""}`).join("\n") + "\n";
   if (navigator.share) {
@@ -1327,97 +1484,32 @@ function openMe() {
   openPanel(
     `<form id="mForm" autocomplete="off">${panelHead("Mon profil", true)}
       <div class="field"><label for="mName">Prénom</label><input id="mName" maxlength="30" required value="${esc(me.name)}"></div>
-      <div class="field"><span>Emoji</span>${emojiPicker(me.emoji)}</div>
+      ${photoField(me.avatar)}
+      <div class="field"><span>Emoji <small class="opt">(si pas de photo)</small></span>${emojiPicker(me.emoji)}</div>
       <p class="err" id="mErr"></p>
       <button class="btn wide" type="submit">Enregistrer</button>
     </form>`,
     () => {
       bindPicker($("#emojiPick"));
+      const photo = { avatar: me.avatar || "" };
+      bindPhoto(photo);
       $("#mForm").onsubmit = async (e) => {
         e.preventDefault();
-        const p = { name: $("#mName").value.trim(), emoji: picked($("#emojiPick")) || me.emoji };
-        if (!p.name) return;
+        const name = $("#mName").value.trim();
+        if (!name) return;
+        const btn = $("#mForm button.btn[type=submit]");
+        btn.disabled = true;
         try {
+          const p = { name, emoji: picked($("#emojiPick")) || me.emoji, avatar: await finalAvatar(photo) };
           await S.store.saveProfile(p);
           S.me = p;
           saveJSON("courses:me", p);
           await loadMembers();
           $("#panel").close();
+          render();
           toast("Profil mis à jour");
         } catch (err) {
           $("#mErr").textContent = errText(err);
-        }
-      };
-    },
-  );
-}
-
-// ---------- e-mail : protéger son compte, le retrouver ----------
-// Formulaire en deux temps : l'adresse, puis le code reçu par e-mail.
-function codeStep({ email, title, intro, onVerify, onResend, onBack, done }) {
-  openPanel(
-    `${panelHead(title)}<div class="pricebox" style="--tint:#E6DDF6">${STAR}${ill("email", "ill lg")}</div>
-    <p class="hint">${intro} <b>${esc(email)}</b>. Il peut mettre une minute à arriver&nbsp;: pense à regarder dans les spams.</p>
-    <form id="cForm" autocomplete="off"><div class="field"><label for="cCode">Code reçu par e-mail</label>
-      <input id="cCode" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></div>
-      <p class="err" id="cErr"></p>
-      <button class="btn wide" type="submit">Valider</button></form>
-    <div class="row spread"><button class="link" id="cBack">Changer d'adresse</button><button class="link" id="cResend">Renvoyer le code</button></div>`,
-    () => {
-      setTimeout(() => $("#cCode")?.focus(), 50);
-      $("#cBack").onclick = onBack;
-      $("#cResend").onclick = async () => {
-        try {
-          await onResend();
-          toast("Nouveau code envoyé");
-        } catch (err) {
-          $("#cErr").textContent = errText(err);
-        }
-      };
-      $("#cForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const code = $("#cCode").value.replace(/\D/g, "");
-        if (code.length < 6) {
-          $("#cErr").textContent = "Le code fait au moins 6 chiffres.";
-          return;
-        }
-        const btn = $("#cForm button[type=submit]");
-        btn.disabled = true;
-        try {
-          await onVerify(code);
-          done();
-        } catch (err) {
-          $("#cErr").textContent = errText(err);
-          btn.disabled = false;
-        }
-      };
-    },
-  );
-}
-function emailStep({ title, intro, cta, value, note, onSend }) {
-  openPanel(
-    `${panelHead(title)}<div class="pricebox" style="--tint:#DCEAC8">${STAR}${ill("cle", "ill lg")}</div>
-    <p class="hint">${intro}</p>
-    <form id="eForm" autocomplete="off"><div class="field"><label for="eMail">Adresse e-mail</label>
-      <input id="eMail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" value="${esc(value || "")}" placeholder="toi@exemple.fr"></div>
-      ${note ? `<p class="note">${note}</p>` : ""}
-      <p class="err" id="eErr"></p>
-      <button class="btn wide" type="submit">${cta}</button></form>`,
-    () => {
-      setTimeout(() => $("#eMail")?.focus(), 50);
-      $("#eForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const email = $("#eMail").value.trim().toLowerCase();
-        if (!isEmail(email)) {
-          $("#eErr").textContent = "Cette adresse e-mail n'a pas l'air valide.";
-          return;
-        }
-        const btn = $("#eForm button[type=submit]");
-        btn.disabled = true;
-        try {
-          await onSend(email);
-        } catch (err) {
-          $("#eErr").textContent = errText(err);
           btn.disabled = false;
         }
       };
@@ -1425,71 +1517,96 @@ function emailStep({ title, intro, cta, value, note, onSend }) {
   );
 }
 
-// Lier une adresse au compte de cet appareil.
-function openEmailLink(change) {
-  const acc = S.store.account;
-  const step2 = (email) =>
-    codeStep({
-      email,
-      title: "Vérifie ton e-mail",
-      intro: "On vient d'envoyer un code à",
-      onVerify: (code) => acc.confirmEmail(email, code),
-      onResend: () => acc.linkEmail(email),
-      onBack: () => openEmailLink(change),
-      done: () => {
-        S.email = { email, pending: "" };
-        $("#panel").close();
-        render();
-        toast("C'est fait : ton compte est protégé");
-      },
-    });
-  // Un code déjà demandé et pas encore confirmé : on reprend là.
-  if (S.email.pending && !change) return step2(S.email.pending);
-  emailStep({
-    title: change ? "Changer d'adresse" : "Protéger mon compte",
-    intro: "Ton compte est lié à ce téléphone. Avec ton e-mail, tu pourras le retrouver sur un autre appareil (et dans Déclic) en recevant un code.",
-    cta: "Recevoir un code",
-    value: change ? "" : S.email.pending,
-    onSend: async (email) => {
-      await acc.linkEmail(email);
-      S.email.pending = email;
-      step2(email);
+// ---------- sauvegarde du compte : un code et un lien personnel, sans e-mail ----------
+const loginUrl = (code) => `${location.origin}${location.pathname}#compte=${String(code).replace(/[^A-Za-z0-9]/g, "")}`;
+
+function openBackup() {
+  const acc = S.store?.account;
+  if (!acc) return;
+  openPanel(
+    `${panelHead("Sauvegarder mon compte")}
+    <div class="pricebox" style="--tint:#F7EAB4">${STAR}${ill("cle", "ill lg")}<p>Ton compte est lié à ce téléphone. Crée un <b>code de sauvegarde</b>&nbsp;: avec lui (ou avec ton lien personnel), tu retrouves tes listes sur n'importe quel autre appareil. Il marche aussi pour Déclic.</p></div>
+    ${S.acct.hasCode ? `<p class="note">Tu as déjà un code. En créer un nouveau désactive l'ancien et ton ancien lien.</p>` : ""}
+    <p class="err" id="bkErr"></p>
+    <button class="btn wide" id="bkGo">${S.acct.hasCode ? "Créer un nouveau code" : "Créer mon code"}</button>`,
+    () => {
+      $("#bkGo").onclick = async () => {
+        $("#bkGo").disabled = true;
+        try {
+          const code = await acc.createCode();
+          S.acct.hasCode = true;
+          saveJSON("courses:backupHintOff", true);
+          showCode(code);
+          render();
+        } catch (e) {
+          $("#bkErr").textContent = errText(e);
+          $("#bkGo").disabled = false;
+        }
+      };
     },
-  });
+  );
+}
+function showCode(code) {
+  const url = loginUrl(code);
+  openPanel(
+    `${panelHead("Ton code de sauvegarde")}
+    <div class="bigcode small" aria-label="Code de sauvegarde">${esc(code)}</div>
+    <p class="hint">Note-le, fais une capture d'écran, ou envoie-toi ton lien personnel (dans tes notes, par message…). Sur un autre téléphone, il suffit d'ouvrir le lien, ou de choisir « J'ai déjà un compte » et de taper le code.</p>
+    <p class="note">Garde-les pour toi&nbsp;: avec ce code ou ce lien, n'importe qui peut ouvrir ton compte. Ils ne seront plus affichés.</p>
+    <div class="stack">
+      <button class="btn wide" id="cdShare">M'envoyer mon lien personnel</button>
+      <button class="btn ghost wide" id="cdCopy">Copier le code</button>
+      <button class="link" data-close>C'est noté</button>
+    </div>`,
+    () => {
+      $("#cdCopy").onclick = () => copy(code, "Code copié");
+      $("#cdShare").onclick = async () => {
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: "Mon compte Take Out", text: "Mon lien pour ouvrir mon compte Take Out (à garder pour moi)", url });
+            return;
+          } catch (e) {
+            if (e && e.name === "AbortError") return;
+          }
+        }
+        copy(url, "Lien copié : colle-le dans tes notes");
+      };
+    },
+  );
 }
 
-// Se connecter à un compte existant grâce au code envoyé par e-mail.
+// Ouvrir un compte sauvegardé sur cet appareil, avec son code.
 function openRecover() {
   const acc = S.store?.account;
   if (!acc) return;
-  const risky = S.households.length && !S.email.email;
-  const step2 = (email) =>
-    codeStep({
-      email,
-      title: "Entre le code",
-      intro: "On vient d'envoyer un code de connexion à",
-      onVerify: (code) => acc.loginWithCode(email, code),
-      onResend: () => acc.sendLoginCode(email),
-      onBack: openRecover,
-      done: () => {
-        // Nouveau compte sur cet appareil : on repart de zéro (ce qui était gardé appartenait à l'ancien).
-        for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
-        toast("Compte retrouvé !");
-        setTimeout(() => location.reload(), 600);
-      },
-    });
-  emailStep({
-    title: "Retrouver mon compte",
-    intro: "Entre l'adresse e-mail liée à ton compte : on t'envoie un code pour l'ouvrir sur cet appareil.",
-    cta: "Recevoir un code",
-    note: risky ? "Attention : le compte actuel de cet appareil n'a pas d'e-mail. Ses listes resteront accessibles aux autres membres, mais plus à toi." : "",
-    onSend: async (email) => {
-      await acc.sendLoginCode(email);
-      step2(email);
+  const risky = S.households.length && !S.acct.hasCode;
+  openPanel(
+    `<form id="rcForm" autocomplete="off">${panelHead("J'ai déjà un compte", true)}
+    <div class="pricebox" style="--tint:#DCEAC8">${STAR}${ill("cle", "ill lg")}<p>Tape ton code de sauvegarde. Tu peux aussi simplement ouvrir le lien personnel que tu t'es envoyé.</p></div>
+    <div class="field"><label for="rcCode">Code de sauvegarde</label>
+      <input id="rcCode" class="code-in" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX"></div>
+    ${risky ? `<p class="note">Attention : le compte actuel de cet appareil n'est pas sauvegardé. Ses listes resteront aux autres membres, mais plus à toi.</p>` : ""}
+    <p class="err" id="rcErr"></p>
+    <button class="btn wide" type="submit">Ouvrir mon compte</button></form>`,
+    () => {
+      setTimeout(() => $("#rcCode")?.focus(), 60);
+      $("#rcForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = $("#rcForm button.btn[type=submit]");
+        btn.disabled = true;
+        try {
+          await acc.login($("#rcCode").value);
+          forgetLocal();
+          toast("Compte retrouvé !");
+          setTimeout(() => location.reload(), 600);
+        } catch (err) {
+          $("#rcErr").textContent = errText(err);
+          btn.disabled = false;
+        }
+      };
     },
-  });
+  );
 }
-
 
 // ---------- événements ----------
 $("#app").addEventListener("submit", (e) => {
@@ -1499,17 +1616,18 @@ $("#app").addEventListener("submit", (e) => {
   const raw = input.value.trim();
   if (!raw) return;
   input.value = "";
+  // Produit ajouté : le clavier se range.
+  input.blur();
   const { name, qty } = parseQuick(raw);
   const memo = loadJSON("courses:memo", {})[norm(name)];
   addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
-  $("#quickName")?.focus();
+  updateSuggest();
 });
 $("#app").addEventListener("click", (e) => {
   const t = (s) => e.target.closest(s);
   const byId = (id) => viewItems().find((i) => i.id === id);
   if (t("#fab")) {
-    if (S.view === "spend") openExpense(null);
-    else if (S.view === "us") openInvite(false);
+    if (S.view === "us") openInvite(false);
     else {
       const n = $("#quickName")?.value.trim() || "";
       if ($("#quickName")) $("#quickName").value = "";
@@ -1560,11 +1678,11 @@ $("#app").addEventListener("click", (e) => {
   else if (t("#uRename")) openRename();
   else if (t("#uLeave")) leaveHousehold();
   else if (t("#uMe") || t("#editMe")) openMe();
-  else if (t("#uEmail")) openEmailLink(!!S.email.email);
+  else if (t("#uBackup")) openBackup();
   else if (t("#uLogin")) openRecover();
-  else if (t("#hintEmail")) openEmailLink(false);
+  else if (t("#hintBackup")) openBackup();
   else if (t("#hintOff")) {
-    saveJSON("courses:emailHintOff", true);
+    saveJSON("courses:backupHintOff", true);
     render();
   }
 });
@@ -1603,10 +1721,10 @@ async function loadItems() {
     if (e.code !== "network") toast(errText(e));
   }
 }
-async function loadEmail() {
+async function loadAccount() {
   if (!S.store?.account) return;
   try {
-    S.email = await S.store.account.email();
+    S.acct = await S.store.account.status();
     render();
   } catch {}
 }
@@ -1679,7 +1797,7 @@ async function afterProfile() {
 }
 
 const forgetLocal = () => {
-  for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
+  for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && !["courses:memo", "courses:join", "courses:login"].includes(k)) localStorage.removeItem(k);
 };
 
 async function connect() {
@@ -1716,7 +1834,22 @@ async function connectOnce() {
   }
   S.uid = S.store.uid;
   saveJSON("courses:uid", S.uid);
-  loadEmail();
+  // Lien personnel ouvert (#compte=…) : on ouvre le compte sauvegardé sur cet appareil.
+  const linkCode = loadJSON("courses:login", null);
+  if (linkCode) {
+    localStorage.removeItem("courses:login");
+    if (!S.me || confirm("Ouvrir ton compte sauvegardé sur cet appareil ? Le compte actuel de cet appareil sera remplacé.")) {
+      try {
+        await S.store.account.login(linkCode);
+        forgetLocal();
+        location.replace(location.pathname + location.search);
+        return;
+      } catch (e) {
+        toast(errText(e));
+      }
+    }
+  }
+  loadAccount();
   try {
     const p = await S.store.getProfile();
     if (!p) {
@@ -1725,7 +1858,7 @@ async function connectOnce() {
       render();
       return;
     }
-    S.me = { name: p.name, emoji: p.emoji };
+    S.me = { name: p.name, emoji: p.emoji, avatar: p.avatar || "" };
     saveJSON("courses:me", S.me);
     await afterProfile();
   } catch (e) {
@@ -1745,6 +1878,11 @@ async function connectOnce() {
   const code = (hash.get("rejoindre") || "").toUpperCase();
   if (/^[A-Z0-9]{6}$/.test(code)) {
     saveJSON("courses:join", code);
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  const acct = (hash.get("compte") || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (acct.length === 16) {
+    saveJSON("courses:login", acct);
     history.replaceState(null, "", location.pathname + location.search);
   }
   setView(S.view);

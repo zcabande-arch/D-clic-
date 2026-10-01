@@ -29,6 +29,28 @@ Tout se configure depuis un navigateur, y compris sur iPad. Les rappels push ne 
 
 Pour inviter des proches : ouvre un groupe, touche *Inviter des proches* et envoie le lien. Ils l'ouvrent dans Safari (ou Chrome), l'ajoutent à l'écran d'accueil et rejoignent le groupe directement.
 
+## Courses : la liste de courses partagée
+
+Le dossier `docs/courses/` contient une deuxième application, **Courses** : une liste de courses partagée en direct
+avec sa moitié, sa coloc ou sa famille. Elle utilise le même projet Supabase et le même hébergement que Déclic.
+
+- **Profil** (prénom + emoji) et **listes partagées** (« foyers ») : on crée une liste, on envoie le lien d'invitation
+  ou le code à 6 caractères, et les autres la rejoignent. On peut avoir plusieurs listes (le couple, la coloc, la famille…).
+- **Synchronisation en direct** : un article ajouté ou coché apparaît tout de suite chez les autres, avec qui l'a ajouté ou acheté.
+- **Marche sans réseau** (au fond du magasin) : les changements sont gardés sur le téléphone et envoyés au retour de la connexion.
+- **Saisie rapide** : « 2 paquets de pâtes » ou « lait x3 » remplissent la quantité, le rayon est deviné
+  (et retenu quand on le corrige), les articles déjà achetés sont proposés en suggestion et remis dans la liste au lieu d'être dupliqués.
+- Tri par rayon et priorité, filtre par magasin, « Annuler » après avoir coché ou supprimé, envoi de la liste par message.
+- Même compte que Déclic : le code de récupération de l'un marche pour l'autre.
+
+Mise en route (une seule fois) :
+
+1. Dans Supabase › *SQL Editor › New query*, colle tout le contenu de [`supabase/courses.sql`](supabase/courses.sql) et touche *Run*.
+2. Une fois GitHub Pages actif (voir plus haut), l'application est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/courses/**.
+   Ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
+
+Pour l'essayer sans toucher à la base : **…/courses/?demo** (données gardées dans le navigateur, avec un membre fictif).
+
 ## Version avec serveur (auto-hébergée)
 
 Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.

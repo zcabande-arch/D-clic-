@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Courses</title>
+<meta name="description" content="La liste de courses partagée avec ton ou ta partenaire, ta coloc ou ta famille.">
+<meta name="theme-color" content="#F1F5EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121A11" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Courses">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div class="wrap" id="app"><p class="loading">Chargement…</p></div>
+
+<!-- Ajouter / modifier un article -->
+<dialog id="sheet">
+  <form class="sheet" id="form" method="dialog" autocomplete="off">
+    <h3 id="sheetTitle">Nouvel article</h3>
+    <div class="field"><label for="fName">Article</label><input id="fName" maxlength="80" required></div>
+    <div class="row2">
+      <div class="field"><label for="fQty">Quantité</label><input id="fQty" maxlength="40" placeholder="ex : 2 paquets"></div>
+      <div class="field"><label for="fQuality">Qualité / marque</label><input id="fQuality" maxlength="80" placeholder="ex : bio, Barilla"></div>
+    </div>
+    <div class="field"><span>Rayon</span><div class="chips" id="fCat"></div></div>
+    <div class="field"><span>Priorité</span><div class="chips" id="fPrio"></div></div>
+    <div class="field"><span>Où l'acheter</span><div class="chips" id="fShop"></div></div>
+    <p class="by" id="fBy" hidden></p>
+    <div class="actions">
+      <button type="button" class="del" id="delBtn" hidden>Supprimer</button>
+      <button type="button" class="btn ghost" id="cancelBtn">Annuler</button>
+      <button type="submit" class="btn" id="saveBtn">Ajouter</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Panneaux : foyer, profil, invitations… (contenu rempli par app.js) -->
+<dialog id="panel"><div class="sheet" id="panelBody"></div></dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastText"></span><button type="button" id="toastBtn" hidden></button></div>
+</body>
+</html>

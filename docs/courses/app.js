@@ -228,7 +228,10 @@ const S = {
 const household = () => S.households.find((h) => h.id === S.hid) || null;
 const member = (uid) => S.members.find((m) => m.uid === uid);
 const memberName = (uid) => (uid === S.uid ? "toi" : member(uid)?.name || "quelqu'un");
-const memberEmoji = (uid) => (uid === S.uid ? S.me?.emoji : member(uid)?.emoji) || "🙂";
+// Avatar d'une personne : sa photo, sinon son emoji.
+const face = (p, cls = "", style = "") =>
+  `<span class="av${cls ? " " + cls : ""}"${style ? ` style="${style}"` : ""}>${p?.avatar ? `<img src="${esc(p.avatar)}" alt="" loading="lazy">` : esc(p?.emoji || "🙂")}</span>`;
+const faceOf = (uid, cls) => face(uid === S.uid ? S.me : member(uid), cls);
 
 function cacheHousehold() {
   if (!S.hid) return;
@@ -460,6 +463,63 @@ function bindPicker(el) {
 }
 const picked = (el) => el.querySelector('[aria-pressed="true"]')?.dataset.v || "";
 
+// ---------- photo de profil ----------
+// Recadrée en carré et réduite avant l'envoi (une photo de téléphone pèse plusieurs Mo).
+async function squarePhoto(file, size = 320) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    c.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+    return c.toDataURL("image/jpeg", 0.82);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+const photoPreview = (src) => (src ? `<img src="${esc(src)}" alt="">` : `<span aria-hidden="true">📷</span>`);
+function photoField(cur) {
+  if (!S.store?.canAvatar) return "";
+  return `<div class="field"><span>Ta photo <small class="opt">(facultatif)</small></span>
+    <div class="photo-row"><span class="av photo" id="phPrev">${photoPreview(cur)}</span>
+      <span class="photo-btns"><button type="button" class="btn small ghost" id="phPick">${cur ? "Changer la photo" : "Choisir une photo"}</button>
+      <button type="button" class="link" id="phDel" ${cur ? "" : "hidden"}>Retirer</button></span></div>
+    <input type="file" id="phFile" accept="image/*" hidden></div>`;
+}
+// state.avatar : adresse de la photo actuelle, image choisie (data:…) en attente d'envoi, ou "" sans photo.
+function bindPhoto(state) {
+  if (!$("#phPick")) return;
+  const show = () => {
+    $("#phPrev").innerHTML = photoPreview(state.avatar);
+    $("#phDel").hidden = !state.avatar;
+    $("#phPick").textContent = state.avatar ? "Changer la photo" : "Choisir une photo";
+  };
+  $("#phPick").onclick = () => $("#phFile").click();
+  $("#phFile").onchange = async () => {
+    const f = $("#phFile").files[0];
+    $("#phFile").value = "";
+    if (!f) return;
+    try {
+      state.avatar = await squarePhoto(f);
+      show();
+    } catch {
+      toast("Cette image n'a pas pu être lue, essaie une autre photo.");
+    }
+  };
+  $("#phDel").onclick = () => {
+    state.avatar = "";
+    show();
+  };
+  state.show = show;
+}
+const finalAvatar = async (state) => (state.avatar && state.avatar.startsWith("data:") ? await S.store.uploadAvatar(state.avatar) : state.avatar || "");
+
 async function renderProfileSetup(app) {
   const invited = loadJSON("courses:join", null);
   const k = S.onb.kind ? kindOf(S.onb.kind) : null;
@@ -476,13 +536,16 @@ async function renderProfileSetup(app) {
     <p class="lead">${lead}</p>
     <form class="card" id="pForm" autocomplete="off">
       <div class="field"><label for="pName">Ton prénom</label><input id="pName" maxlength="30" required placeholder="ex : Camille" autocomplete="given-name"></div>
-      <div class="field"><span>Ton emoji</span>${emojiPicker(emoji)}</div>
+      ${photoField("")}
+      <div class="field"><span>Ton emoji <small class="opt">(si pas de photo)</small></span>${emojiPicker(emoji)}</div>
       <p class="err" id="pErr"></p>
       <button class="btn wide" type="submit">Continuer</button>
     </form>
     ${invited && S.store?.account ? `<p class="or">Tu as déjà un compte&nbsp;? <button class="link" id="pRecover">J'ai un code de sauvegarde</button></p>` : ""}
   </div>`;
   bindPicker($("#emojiPick"));
+  const photo = { avatar: "" };
+  bindPhoto(photo);
   $("#pBack") &&
     ($("#pBack").onclick = () => {
       S.screen = "welcome";
@@ -496,7 +559,7 @@ async function renderProfileSetup(app) {
     const btn = $("#pForm button[type=submit]");
     btn.disabled = true;
     try {
-      const me = { name, emoji: picked($("#emojiPick")) || emoji };
+      const me = { name, emoji: picked($("#emojiPick")) || emoji, avatar: await finalAvatar(photo) };
       await S.store.saveProfile(me);
       S.me = me;
       saveJSON("courses:me", me);
@@ -508,8 +571,13 @@ async function renderProfileSetup(app) {
   };
   // Prénom déjà choisi dans Déclic : on le propose.
   if (S.store) {
-    const n = await S.store.suggestedName().catch(() => "");
-    if (n && $("#pName") && !$("#pName").value) $("#pName").value = n;
+    // Prénom et photo déjà choisis dans Déclic : on les propose.
+    const sug = await S.store.suggested().catch(() => ({}));
+    if (sug.name && $("#pName") && !$("#pName").value) $("#pName").value = sug.name;
+    if (sug.avatar && !photo.avatar && photo.show) {
+      photo.avatar = sug.avatar;
+      photo.show();
+    }
   }
 }
 
@@ -604,7 +672,7 @@ function renderHouseholdSetup(app) {
   else if (mode === "create") body = `${createForm("s", S.onb.kind)}<p class="or"><button class="link" id="sSwap">J'ai plutôt un code d'invitation</button></p>`;
   else body = `${createForm("s", "famille")}<p class="or">ou</p>${joinForm("s")}`;
   app.innerHTML = `<div class="intro">
-    <p class="hello"><span class="av xl">${esc(S.me?.emoji || "🙂")}</span></p>
+    <p class="hello">${face(S.me, "xl")}</p>
     <h1 class="serif">Salut ${esc(S.me?.name || "")}&nbsp;!</h1>
     <p class="lead">${mode === "join" ? "Plus qu'une étape pour rejoindre la liste partagée." : "Donne un nom à ta liste, puis invite les autres."}</p>
     ${body}
@@ -644,7 +712,7 @@ function renderMain(app) {
     <div class="top">
       <button class="hhpill" id="hhBtn" aria-label="Changer de liste">${kindIll(h?.kind, "ill xs")}<span>${esc(h?.name || "")}</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></button>
       <span class="grow"></span>
-      <button class="round" id="meBtn" aria-label="Nous : membres et profil"><span class="av me">${esc(S.me?.emoji || "🙂")}</span></button>
+      <button class="round" id="meBtn" aria-label="Nous : membres et profil">${face(S.me, "me")}</button>
     </div>`;
 
   let body;
@@ -928,13 +996,13 @@ function spendHtml() {
       const moves = settle(paid, uids);
       html += `<ul class="group">${uids
         .map(
-          (u) => `<li><span class="av">${esc(memberEmoji(u))}</span><span class="gmain"><span class="gname">${esc(u === S.uid ? (S.me?.name || "Toi") + " (toi)" : member(u)?.name || "Sans nom")}</span>
+          (u) => `<li>${faceOf(u)}<span class="gmain"><span class="gname">${esc(u === S.uid ? (S.me?.name || "Toi") + " (toi)" : member(u)?.name || "Sans nom")}</span>
         <span class="gbar"><i style="width:${((paid[u] || 0) / top) * 100}%"></i></span></span><span class="gval"><b class="tag">${pct((paid[u] || 0) / total)}</b><small>${money(paid[u] || 0)}</small></span></li>`,
         )
         .join("")}</ul>
       <section class="note-card" style="--tint:#DCEAC8;margin-top:12px">${STAR}<p class="tiny">Pour partager à parts égales (${money(total / uids.length)} chacun)</p>${
         moves.length
-          ? moves.map((m) => `<p class="settle"><span class="av sm">${esc(memberEmoji(m.from))}</span> ${esc(memberName(m.from) === "toi" ? "Tu dois" : memberName(m.from) + " doit")} <b>${money(m.amount)}</b> à <span class="av sm">${esc(memberEmoji(m.to))}</span> ${esc(memberName(m.to))}</p>`).join("")
+          ? moves.map((m) => `<p class="settle">${faceOf(m.from, "sm")} ${esc(memberName(m.from) === "toi" ? "Tu dois" : memberName(m.from) + " doit")} <b>${money(m.amount)}</b> à ${faceOf(m.to, "sm")} ${esc(memberName(m.to))}</p>`).join("")
           : `<p>Vous êtes à égalité 🎉</p>`
       }</section>`;
     }
@@ -963,13 +1031,13 @@ function usHtml() {
   const k = kindOf(h?.kind);
   const todo = viewItems().filter((i) => !i.done);
   return `<section class="profile">
-      <span class="av huge" style="--tint:${k.tint}">${esc(S.me?.emoji || "🙂")}</span>
+      ${face(S.me, "huge", `--tint:${k.tint}`)}
       <div><h1 class="serif">${esc(S.me?.name || "")}</h1><p class="date">${esc(k.l)} · « ${esc(h?.name || "")} »</p></div>
     </section>
     <h3 class="sect">Notre liste</h3>
     <ul class="group">${S.members
       .map(
-        (m) => `<li><span class="av">${esc(m.emoji || "🙂")}</span><span class="gmain"><span class="gname">${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</span><small>${
+        (m) => `<li>${face(m)}<span class="gmain"><span class="gname">${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</span><small>${
           m.uid === h?.created_by ? "a créé la liste" : "membre"
         }</small></span></li>`,
       )
@@ -994,7 +1062,7 @@ function usHtml() {
     </ul>
     <h3 class="sect">Mon compte</h3>
     <ul class="group">
-      ${row("uMe", esc(S.me?.emoji || "🙂"), "#F7EAB4", "Modifier mon profil", "Prénom et emoji")}
+      ${row("uMe", S.me?.avatar ? `<img class="bubimg" src="${esc(S.me.avatar)}" alt="">` : esc(S.me?.emoji || "🙂"), "#F7EAB4", "Modifier mon profil", "Prénom, photo et emoji")}
       ${
         S.store?.account
           ? row("uBackup", ill(S.acct.hasCode ? "ok" : "cle", "ill xs"), S.acct.hasCode ? "#DCEAC8" : "#F7EAB4", S.acct.hasCode ? "Compte sauvegardé" : "Sauvegarder mon compte", S.acct.hasCode ? "Créer un nouveau code ou lien" : "Pour le retrouver sur un autre téléphone") +
@@ -1083,10 +1151,13 @@ function updateSuggest() {
 function pickSuggestion(name) {
   const input = $("#quickName");
   const { qty } = parseQuick(input?.value || "");
-  if (input) input.value = "";
+  if (input) {
+    input.value = "";
+    // Produit choisi : on range le clavier (avant de redessiner l'écran, qui sinon redonnerait le focus).
+    input.blur();
+  }
   const memo = loadJSON("courses:memo", {})[norm(name)];
   addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
-  $("#quickName")?.focus();
   updateSuggest();
 }
 $("#app").addEventListener("input", (e) => e.target.id === "quickName" && updateSuggest());
@@ -1189,7 +1260,7 @@ const panelHead = (title, okId) =>
     okId ? `<button type="submit" class="round ok" ${okId === true ? "" : `id="${okId}"`} aria-label="Valider">✓</button>` : `<span class="round ghost"></span>`
   }</div>`;
 const payerChips = (sel) =>
-  `<div class="chips" id="payPick">${S.members.map((m) => `<button type="button" class="chip" data-v="${esc(m.uid)}" aria-pressed="${m.uid === sel}">${esc(m.emoji || "🙂")} ${esc(m.uid === S.uid ? "Moi" : m.name || "Sans nom")}</button>`).join("")}</div>`;
+  `<div class="chips" id="payPick">${S.members.map((m) => `<button type="button" class="chip" data-v="${esc(m.uid)}" aria-pressed="${m.uid === sel}">${face(m, "xs")} ${esc(m.uid === S.uid ? "Moi" : m.name || "Sans nom")}</button>`).join("")}</div>`;
 
 // Prix d'un article qu'on vient d'acheter (pid : achat déjà enregistré à modifier).
 function openPrice(it, pid) {
@@ -1413,25 +1484,33 @@ function openMe() {
   openPanel(
     `<form id="mForm" autocomplete="off">${panelHead("Mon profil", true)}
       <div class="field"><label for="mName">Prénom</label><input id="mName" maxlength="30" required value="${esc(me.name)}"></div>
-      <div class="field"><span>Emoji</span>${emojiPicker(me.emoji)}</div>
+      ${photoField(me.avatar)}
+      <div class="field"><span>Emoji <small class="opt">(si pas de photo)</small></span>${emojiPicker(me.emoji)}</div>
       <p class="err" id="mErr"></p>
       <button class="btn wide" type="submit">Enregistrer</button>
     </form>`,
     () => {
       bindPicker($("#emojiPick"));
+      const photo = { avatar: me.avatar || "" };
+      bindPhoto(photo);
       $("#mForm").onsubmit = async (e) => {
         e.preventDefault();
-        const p = { name: $("#mName").value.trim(), emoji: picked($("#emojiPick")) || me.emoji };
-        if (!p.name) return;
+        const name = $("#mName").value.trim();
+        if (!name) return;
+        const btn = $("#mForm button.btn[type=submit]");
+        btn.disabled = true;
         try {
+          const p = { name, emoji: picked($("#emojiPick")) || me.emoji, avatar: await finalAvatar(photo) };
           await S.store.saveProfile(p);
           S.me = p;
           saveJSON("courses:me", p);
           await loadMembers();
           $("#panel").close();
+          render();
           toast("Profil mis à jour");
         } catch (err) {
           $("#mErr").textContent = errText(err);
+          btn.disabled = false;
         }
       };
     },
@@ -1537,10 +1616,11 @@ $("#app").addEventListener("submit", (e) => {
   const raw = input.value.trim();
   if (!raw) return;
   input.value = "";
+  // Produit ajouté : le clavier se range.
+  input.blur();
   const { name, qty } = parseQuick(raw);
   const memo = loadJSON("courses:memo", {})[norm(name)];
   addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
-  $("#quickName")?.focus();
   updateSuggest();
 });
 $("#app").addEventListener("click", (e) => {
@@ -1778,7 +1858,7 @@ async function connectOnce() {
       render();
       return;
     }
-    S.me = { name: p.name, emoji: p.emoji };
+    S.me = { name: p.name, emoji: p.emoji, avatar: p.avatar || "" };
     saveJSON("courses:me", S.me);
     await afterProfile();
   } catch (e) {

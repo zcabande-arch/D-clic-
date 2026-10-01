@@ -47,20 +47,45 @@ async function openSupabase() {
     session = r.data.session;
   }
   const uid = session.user.id;
+  // Lecture des profils avec la photo ; si la colonne n'existe pas encore (script SQL pas relancé), sans elle.
+  let hasAvatar = true;
+  async function profilesQuery(build) {
+    if (hasAvatar) {
+      const r = await build("uid,name,emoji,avatar");
+      if (!r.error || !/avatar/i.test(r.error.message || "")) return r;
+      hasAvatar = false;
+    }
+    return build("uid,name,emoji");
+  }
 
   return {
     uid,
     mode: "supabase",
     async getProfile() {
-      return must(await sb.from("courses_profiles").select("uid,name,emoji").eq("uid", uid).maybeSingle());
+      return must(await profilesQuery((cols) => sb.from("courses_profiles").select(cols).eq("uid", uid).maybeSingle()));
     },
     async saveProfile(p) {
-      must(await sb.from("courses_profiles").upsert({ uid, name: p.name, emoji: p.emoji, updated_at: new Date().toISOString() }));
+      const row = { uid, name: p.name, emoji: p.emoji, updated_at: new Date().toISOString() };
+      // La colonne « avatar » n'existe qu'une fois supabase/courses.sql relancé : on ne l'envoie que si elle est connue.
+      if (hasAvatar) row.avatar = p.avatar || null;
+      must(await sb.from("courses_profiles").upsert(row));
     },
-    // Prénom déjà choisi dans Déclic, pour préremplir le profil.
-    async suggestedName() {
+    // Prénom et photo déjà choisis dans Déclic, pour préremplir le profil.
+    async suggested() {
       const r = await sb.from("docs").select("data").eq("coll", "profiles").eq("id", uid).maybeSingle();
-      return (r.data && r.data.data && r.data.data.name) || "";
+      const d = (r.data && r.data.data) || {};
+      return { name: d.name || "", avatar: d.avatar || "" };
+    },
+    // Photo de profil : envoyée dans le stockage « media » (dossier de la personne), renvoie son adresse publique.
+    async uploadAvatar(dataUrl) {
+      const blob = await (await fetch(dataUrl)).blob();
+      const path = `${uid}/courses-avatar-${Date.now()}.jpg`;
+      const { error } = await sb.storage.from("media").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+      if (error) throw mapError(error);
+      return sb.storage.from("media").getPublicUrl(path).data.publicUrl;
+    },
+    get canAvatar() {
+      return hasAvatar;
     },
     async households() {
       const rows = must(await sb.from("courses_members").select("household,courses_households(id,name,kind,created_by)").eq("uid", uid));
@@ -69,9 +94,9 @@ async function openSupabase() {
     async members(hid) {
       const rows = must(await sb.from("courses_members").select("uid,joined_at").eq("household", hid).order("joined_at"));
       const ids = rows.map((r) => r.uid);
-      const ps = ids.length ? must(await sb.from("courses_profiles").select("uid,name,emoji").in("uid", ids)) : [];
+      const ps = ids.length ? must(await profilesQuery((cols) => sb.from("courses_profiles").select(cols).in("uid", ids))) : [];
       const byId = Object.fromEntries(ps.map((p) => [p.uid, p]));
-      return rows.map((r) => ({ uid: r.uid, joined_at: r.joined_at, name: byId[r.uid]?.name || "", emoji: byId[r.uid]?.emoji || "🙂" }));
+      return rows.map((r) => ({ uid: r.uid, joined_at: r.joined_at, name: byId[r.uid]?.name || "", emoji: byId[r.uid]?.emoji || "🙂", avatar: byId[r.uid]?.avatar || "" }));
     },
     async createHousehold(name, kind) {
       return must(await sb.rpc("courses_create_household", { hname: name, hkind: kind }));
@@ -196,12 +221,17 @@ function openDemo() {
       return st.profiles[uid] || null;
     },
     async saveProfile(p) {
-      st.profiles[uid] = { uid, name: p.name, emoji: p.emoji };
+      st.profiles[uid] = { uid, name: p.name, emoji: p.emoji, avatar: p.avatar || "" };
       save();
     },
-    async suggestedName() {
-      return "";
+    async suggested() {
+      return { name: "", avatar: "" };
     },
+    // En démonstration, la photo reste dans ce navigateur.
+    async uploadAvatar(dataUrl) {
+      return dataUrl;
+    },
+    canAvatar: true,
     async households() {
       return st.members.filter((m) => m.uid === uid).map((m) => st.households[m.household]).filter(Boolean);
     },

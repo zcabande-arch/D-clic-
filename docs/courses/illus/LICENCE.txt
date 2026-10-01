@@ -1,3 +1,4 @@
-Illustrations : Fluent Emoji 3D de Microsoft (https://github.com/microsoft/fluentui-emoji),
-distribuées sous licence MIT, via le paquet npm @lobehub/fluent-emoji-3d (MIT).
-Copyright (c) Microsoft Corporation.
+Illustrations au trait de Courses.
+- Les fichiers .webp sont découpés dans des images fournies pour le projet
+  (dessins de nourriture colorés, mains avec fourchette et couteau, main qui assaisonne un bol).
+- Les fichiers .svg sont dessinés pour l'application dans le même style.

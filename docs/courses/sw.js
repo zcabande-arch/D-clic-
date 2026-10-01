@@ -1,8 +1,8 @@
 // Service worker de Courses : l'app s'ouvre même sans réseau (au fond du magasin).
-const SHELL = "courses-shell-v4";
+const SHELL = "courses-shell-v5";
 const LIBS = "courses-libs-v1";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./store.js", "../config.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png", "./icons/logo.png",
-  "./illus/amis.webp", "./illus/autre.webp", "./illus/bebe.webp", "./illus/boissons.webp", "./illus/cle.webp", "./illus/coloc.webp", "./illus/conserves.webp", "./illus/couple.webp", "./illus/cuisine.webp", "./illus/email.webp", "./illus/epicerie.webp", "./illus/epices.webp", "./illus/famille.webp", "./illus/fete.webp", "./illus/frais.webp", "./illus/fruits.webp", "./illus/hygiene.webp", "./illus/invite.webp", "./illus/liste.webp", "./illus/maison.webp", "./illus/ok.webp", "./illus/pain.webp", "./illus/salut.webp", "./illus/snacks.webp", "./illus/surgeles.webp", "./illus/viande.webp",
+  "./illus/ail.webp", "./illus/amis.svg", "./illus/autre.svg", "./illus/bebe.svg", "./illus/boissons.webp", "./illus/citron.webp", "./illus/cle.svg", "./illus/coloc.svg", "./illus/conserves.webp", "./illus/couple.svg", "./illus/couteau.webp", "./illus/crevette.webp", "./illus/cuisine.webp", "./illus/email.svg", "./illus/epicerie.webp", "./illus/epices.webp", "./illus/famille.svg", "./illus/fete.svg", "./illus/fourchette.webp", "./illus/frais.webp", "./illus/fraise.webp", "./illus/fruits.webp", "./illus/huile.webp", "./illus/huitre.webp", "./illus/hygiene.svg", "./illus/invite.svg", "./illus/liste.svg", "./illus/mains.webp", "./illus/maison.svg", "./illus/ok.svg", "./illus/olive.webp", "./illus/orange.webp", "./illus/pain.svg", "./illus/snacks.svg", "./illus/surgeles.svg", "./illus/viande.webp",
 ];
 
 self.addEventListener("install", (e) => {

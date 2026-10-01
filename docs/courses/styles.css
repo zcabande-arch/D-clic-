@@ -282,3 +282,28 @@ body.has-nav .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
   .check{transition:background .15s}
   .toast{transition:opacity .2s,transform .2s}
 }
+
+/* ---------- illustrations au trait ---------- */
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.1rem}
+.logo.sm{width:44px;height:44px;border-radius:12px;margin:0;box-shadow:0 4px 12px rgba(30,60,25,.12)}
+.hero{display:flex;justify-content:center;margin:6px 0 4px}
+.hero-ill{width:auto;height:min(210px,26vh);user-select:none;-webkit-user-drag:none}
+.head.with-ill{position:relative;padding-right:96px;min-height:96px}
+.head-ill{position:absolute;right:-4px;top:-6px;width:100px;height:100px;object-fit:contain;user-select:none;-webkit-user-drag:none}
+.doodles{display:flex;justify-content:center;align-items:flex-end;gap:6px;margin:0 0 10px}
+.doodles .ill{width:64px;height:64px}
+.doodles .d0{transform:rotate(-10deg)}
+.doodles .d1{transform:translateY(-10px) rotate(6deg)}
+.doodles .d2{transform:rotate(-4deg)}
+.doodles .d3{transform:translateY(-6px) rotate(12deg)}
+.ill.cat{width:32px;height:32px}
+.bubble .ill.xs{width:26px;height:26px}
+.kind .ill.lg{width:70px;height:70px}
+/* En mode sombre, les traits foncés (bleu, vert) restent lisibles sur un petit fond clair. */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) :is(.hero-ill,.head-ill){filter:brightness(1.9) saturate(.8)}}
+:root[data-theme="dark"] :is(.hero-ill,.head-ill){filter:brightness(1.9) saturate(.8)}
+/* En mode sombre, les dessins gardent un petit fond crème pour que les traits fins restent visibles. */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) :is(.bubble,.dot,.donut .pin,.aisle h2 .bubble){background:#EFE7D3}
+  :root:not([data-theme="light"]) :is(.kind,.pricebox,.note-card,.empty,.hhpill,.chip) .ill:not(.hero-ill):not(.head-ill){background:#EFE7D3;border-radius:50%;padding:4px}}
+:root[data-theme="dark"] :is(.bubble,.dot,.donut .pin,.aisle h2 .bubble){background:#EFE7D3}
+:root[data-theme="dark"] :is(.kind,.pricebox,.note-card,.empty,.hhpill,.chip) .ill:not(.hero-ill):not(.head-ill){background:#EFE7D3;border-radius:50%;padding:4px}

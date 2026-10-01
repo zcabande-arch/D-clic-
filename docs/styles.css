@@ -342,3 +342,7 @@ dialog.sheet .row{justify-content:flex-start;margin-top:10px}
 /* Bouton « ↑ » : remonter en haut de la conversation */
 .topbtn{position:absolute;right:max(16px,calc((100% - 600px) / 2 + 8px));top:-58px;width:46px;height:46px;border-radius:50%;border:0;background:var(--surface);color:var(--ink);font-size:22px;font-weight:800;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .topbtn[hidden]{display:none}
+/* Aperçu de la photo : bouton « ⇆ Retourner » (effet miroir des selfies) */
+.prevwrap{position:relative}
+.flipbtn{position:absolute;right:10px;bottom:10px;border:0;border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;background:rgba(0,0,0,.6);color:#fff}
+.flipbtn.on{background:var(--flash);color:var(--flash-ink)}

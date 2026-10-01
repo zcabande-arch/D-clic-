@@ -191,12 +191,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // ---------- images ----------
   function loadImage(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>{URL.revokeObjectURL(u);res(i)};i.onerror=rej;i.src=u;});}
   // limit = longueur maximale de la data URL (≈ 1,37 × le poids réel) : ~60 à 70 Ko par photo, ~40 Ko par photo de réponse.
-  async function compress(file,max=900,limit=100000){
+  // flip = retourner horizontalement (effet miroir des selfies).
+  async function compress(file,max=900,limit=100000,flip=false){
     const img=await loadImage(file);let q=.72,out="";
     for(let t=0;t<8;t++){
       const sc=Math.min(1,max/Math.max(img.width,img.height));
       const c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
-      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      const x=c.getContext("2d");if(flip){x.translate(c.width,0);x.scale(-1,1);}
+      x.drawImage(img,0,0,c.width,c.height);
       out=c.toDataURL("image/jpeg",q); if(out.length<limit)return out;
       if(q>.55)q-=.1;else max=Math.round(max*.8);
     }
@@ -216,7 +218,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const f=e.target.files[0];e.target.value="";if(!f)return;
     try{
       if(S.fileTarget==="avatar"){S.draftAvatar=await squareAvatar(f);render();}
-      else if(S.fileTarget==="shot"){S.pendingShot=await compress(f);$("#sPrev").src=S.pendingShot;$("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta photo de ${sl.hour}h`:"Ta photo";openDlg("#dlgShot");}
+      else if(S.fileTarget==="shot"){
+        S.shotFile=f;S.shotFront=await isFrontCamera(f);
+        S.shotFlip=S.shotFront&&selfieFlipPref();
+        S.pendingShot=await compress(f,undefined,undefined,S.shotFlip);$("#sPrev").src=S.pendingShot;updateFlipBtn();$("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta photo de ${sl.hour}h`:"Ta photo";openDlg("#dlgShot");}
       else if(S.fileTarget==="theme"){const g=S.groups.find(x=>x.id===S.current);if(!g)return;toast("Envoi de la photo…");const url=await S.db.uploadImage(await compress(f,1400,280000));await setTheme(g,{image:url});}
       else if(S.fileTarget==="apptheme"){toast("Envoi de la photo…");const url=await S.db.uploadImage(await compress(f,1400,280000));await setAppTheme({image:url});}
       else if(S.fileTarget==="reply"){S.pendingReplyImg=await compress(f,700,60000);const p=$("#rPrev");p.src=S.pendingReplyImg;p.style.display="block";}
@@ -767,6 +772,22 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     btn.disabled=false;input.focus();
   });
 
+  // ---------- selfies : effet miroir ----------
+  // L'iPhone montre le selfie en miroir pendant la prise, puis l'enregistre dans l'autre sens.
+  // « ⇆ Retourner » corrige ; pour les selfies, le choix est retenu pour les suivants.
+  async function isFrontCamera(file){
+    try{const t=new TextDecoder("latin1").decode(await file.slice(0,131072).arrayBuffer());return /front camera|frontcamera|front-facing|FaceTime/i.test(t);}
+    catch(e){return false;}
+  }
+  function selfieFlipPref(){try{return localStorage.getItem("declic.selfieFlip")==="1";}catch(e){return false;}}
+  function updateFlipBtn(){const b=$("#sFlip");b.classList.toggle("on",!!S.shotFlip);b.textContent=S.shotFlip?"⇆ Retournée ✓":"⇆ Retourner";}
+  $("#sFlip").addEventListener("click",async()=>{
+    if(!S.shotFile)return;
+    S.shotFlip=!S.shotFlip;
+    if(S.shotFront){try{localStorage.setItem("declic.selfieFlip",S.shotFlip?"1":"0");}catch(e){}}
+    S.pendingShot=await compress(S.shotFile,undefined,undefined,S.shotFlip);$("#sPrev").src=S.pendingShot;updateFlipBtn();
+    if(S.shotFront)toast(S.shotFlip?"Tes prochains selfies seront retournés pareil":"Tes prochains selfies ne seront plus retournés");
+  });
   $("#sRetake").addEventListener("click",()=>{$("#dlgShot").close();setTimeout(()=>pickFile("shot","environment"),50);});
   $("#sGo").addEventListener("click",async()=>{
     const sl=slotNow();if(!S.pendingShot||!S.current)return;

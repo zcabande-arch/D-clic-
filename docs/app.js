@@ -53,9 +53,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   function openDlg(sel){const d=$(sel);d.querySelectorAll(".err").forEach(e=>e.textContent="");d.showModal();}
   document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>b.closest("dialog").close()));
   $("#newPill").addEventListener("click",()=>{window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"});});
-  // Bouton « ↑ » pour remonter en haut de la conversation, visible dès qu'on est descendu.
+  // Boutons « ↑ » / « ↓ » pour aller en haut ou en bas de la conversation.
   $("#topBtn").addEventListener("click",()=>{window.scrollTo({top:0,behavior:"smooth"});});
-  function updateTopBtn(){$("#topBtn").hidden=!S.current||scrollY<400;}
+  $("#downBtn").addEventListener("click",()=>{window.scrollTo({top:document.documentElement.scrollHeight,behavior:"smooth"});});
+  function updateTopBtn(){
+    const left=document.documentElement.scrollHeight-innerHeight-scrollY;
+    $("#topBtn").hidden=!S.current||scrollY<400;
+    $("#downBtn").hidden=!S.current||left<400||!$("#newPill").hidden;
+  }
   addEventListener("scroll",()=>{
     updateTopBtn();
     if(!S.current)return;
@@ -407,8 +412,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const lastTs=Math.max(0,...[...S.photos,...S.messages].map(x=>x.ts||0));
     if(!isToday||S.scrollBottom||nearBottom||!S.bottomTs)S.bottomTs=lastTs;
     const fresh=isToday?[...S.photos,...S.messages].filter(x=>x.uid!==S.uid&&x.ts>S.bottomTs).length:0;
-    requestAnimationFrame(updateTopBtn);
     const pill=$("#newPill");pill.hidden=!fresh;if(fresh)pill.textContent=`↓ ${fresh} nouveau${fresh>1?"x":""} message${fresh>1?"s":""}`;
+    requestAnimationFrame(updateTopBtn);
     showQuote();
     tick();
   }
@@ -704,7 +709,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   }
   function openGroup(id){if(!(history.state&&history.state.g===id))history.pushState({g:id},"");S.daysLoaded=false;S.current=id;S.boardOpen=false;subscribeDays();subscribeLive(id);S.day=todayKey();S.panelOpen=true;S.scrollBottom=true;S.quote=null;S.bottomTs=0;subscribeDay();render();loadNotifStatus(id);}
   function setDay(d){S.day=d;S.scrollBottom=true;subscribeDay();render();}
-  function closeGroup(){if(history.state&&history.state.g)history.replaceState(null,"");$("#newPill").hidden=true;$("#topBtn").hidden=true;S.quote=null;$("#quoteBar").hidden=true;if($("#dlgInfo").open)$("#dlgInfo").close();S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
+  function closeGroup(){if(history.state&&history.state.g)history.replaceState(null,"");$("#newPill").hidden=true;$("#topBtn").hidden=true;$("#downBtn").hidden=true;S.quote=null;$("#quoteBar").hidden=true;if($("#dlgInfo").open)$("#dlgInfo").close();S.current=null;unsubAll();if(S.daySub){S.daySub();S.daySub=null;}closeLive();render();window.scrollTo(0,0);}
   // Retour à l'accueil : passe par l'historique pour que le bouton/geste « retour » du navigateur fasse pareil.
   function goHome(){if(history.state&&history.state.g)history.back();else closeGroup();}
   addEventListener("popstate",()=>{if(S.current&&!(history.state&&history.state.g))closeGroup();});

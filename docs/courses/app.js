@@ -71,9 +71,7 @@ const ICONS = {
 
 // ---------- montants ----------
 const EUR = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
-const EUR0 = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const money = (n) => EUR.format(n || 0);
-const money0 = (n) => (Math.abs(n) >= 100 ? EUR0.format(n) : EUR.format(n || 0));
 // « 2,50 », « 2.5 », « 2,50 € » → 2.5 ; vide → null ; incorrect → NaN.
 function parseMoney(s) {
   const t = String(s || "").replace(/[€\s]/g, "").replace(",", ".");
@@ -670,6 +668,7 @@ function renderMain(app) {
   if (keep && keep.view === S.view && $("#quickName")) {
     $("#quickName").value = keep.v;
     if (keep.f) $("#quickName").focus();
+    updateSuggest();
   }
   if (S.flashId) {
     const li = document.querySelector(`li[data-id="${CSS.escape(S.flashId)}"]`);
@@ -683,10 +682,11 @@ function renderMain(app) {
 
 function quickForm(view, placeholder) {
   return `<form class="add" id="quick" autocomplete="off">
-      <input id="quickName" data-view="${view}" list="suggest" maxlength="80" placeholder="${esc(placeholder)}" aria-label="Article à ajouter" enterkeyhint="done">
+      <input id="quickName" data-view="${view}" maxlength="80" placeholder="${esc(placeholder)}" aria-label="Article à ajouter" enterkeyhint="done"
+        autocomplete="off" autocorrect="off" spellcheck="false" role="combobox" aria-controls="sugg" aria-expanded="false">
       <button class="btn" type="submit">Ajouter</button>
-    </form>
-    <datalist id="suggest">${suggestions().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>`;
+      <div class="sugg" id="sugg" role="listbox" aria-label="Propositions" hidden></div>
+    </form>`;
 }
 
 function aisle(c, n, inner) {
@@ -695,9 +695,6 @@ function aisle(c, n, inner) {
 const groupByCat = (list) => CATS.map((c) => [c, list.filter((i) => catOf(i.cat).id === c.id)]).filter(([, g]) => g.length);
 
 function listHtml(todo, stock) {
-  const urgent = todo.filter((i) => i.prio === "urgent").length;
-  const priced = todo.filter((i) => i.price != null);
-  const estimate = priced.reduce((s, i) => s + i.price, 0);
   // Filtre par magasin : seulement les magasins présents dans la liste.
   const shops = SHOPS.filter((s) => s.id && todo.some((i) => i.shop === s.id));
   if (S.shop && !shops.some((s) => s.id === S.shop)) S.shop = "";
@@ -705,11 +702,6 @@ function listHtml(todo, stock) {
   const low = stock.filter((i) => i.low);
   const others = S.members.filter((m) => m.uid !== S.uid);
   let html = `<header class="head with-ill">${ill("mains", "head-ill")}<h1 class="serif">Liste de courses</h1><p class="date">${esc(today())}</p></header>
-    <div class="stats">
-      <div class="stat" style="--tint:#F7EAB4">${STAR}<b>${todo.length}</b><span>à acheter</span></div>
-      <div class="stat" style="--tint:#F8D3E3">${STAR}<b>${urgent}</b><span>urgent${urgent > 1 ? "s" : ""}</span></div>
-      <div class="stat" style="--tint:#D3E2F6">${STAR}<b>${priced.length ? money0(estimate) : "–"}</b><span>estimé${priced.length && priced.length < todo.length ? ` (${priced.length}/${todo.length})` : ""}</span></div>
-    </div>
     ${quickForm("list", "Il manque quoi ?")}`;
   if (shops.length)
     html += `<div class="bar" role="group" aria-label="Filtrer par magasin"><button class="fchip" data-shop="" aria-pressed="${!S.shop}">Partout</button>${shops
@@ -1020,15 +1012,101 @@ function backupHint() {
     <div class="row"><button class="btn small" id="hintBackup">Sauvegarder</button><button class="link" id="hintOff">Plus tard</button></div></div></section>`;
 }
 
-function suggestions() {
-  const onList = new Set(viewItems().map((i) => norm(i.name)));
+// ---------- propositions pendant la saisie ----------
+// Produits courants, proposés dès les premières lettres (en plus de ce que le foyer achète déjà).
+const COMMON = `Pommes, Poires, Bananes, Oranges, Clémentines, Citrons, Fraises, Framboises, Myrtilles, Raisin, Kiwis, Mangue, Ananas, Melon, Pastèque, Pêches, Abricots, Cerises, Avocats,
+Tomates, Tomates cerises, Salade, Roquette, Mâche, Carottes, Courgettes, Aubergines, Poivrons, Concombre, Oignons, Oignons rouges, Ail, Échalotes, Pommes de terre, Patates douces,
+Champignons, Épinards, Brocoli, Chou-fleur, Poireaux, Haricots verts, Petits pois, Radis, Betteraves, Céleri, Fenouil, Potiron, Gingembre, Basilic, Persil, Coriandre, Menthe, Ciboulette,
+Poulet, Blancs de poulet, Steak haché, Bœuf, Jambon, Jambon cru, Lardons, Saucisses, Merguez, Chipolatas, Dinde, Escalopes, Côtes de porc, Saumon, Cabillaud, Thon, Crevettes, Moules,
+Lait, Lait d'avoine, Lait d'amande, Lait de soja, Beurre, Crème fraîche, Crème liquide, Œufs, Yaourts, Yaourts nature, Fromage blanc, Skyr, Petits suisses, Fromage râpé, Emmental,
+Comté, Mozzarella, Burrata, Parmesan, Feta, Chèvre, Camembert, Raclette, Ricotta, Mascarpone, Tofu, Houmous, Pâte feuilletée, Pâte brisée, Pâte à pizza, Gnocchis,
+Pâtes, Spaghetti, Penne, Coquillettes, Tagliatelles, Lasagnes, Riz, Riz basmati, Quinoa, Semoule, Boulgour, Lentilles, Pois chiches, Farine, Sucre, Sel, Poivre, Huile d'olive,
+Huile de tournesol, Vinaigre, Vinaigre balsamique, Moutarde, Ketchup, Mayonnaise, Sauce soja, Sauce tomate, Pesto, Concentré de tomate, Bouillon cube, Épices, Curry, Paprika,
+Cumin, Cannelle, Herbes de Provence, Levure, Maïzena, Café, Capsules de café, Thé, Tisane, Chocolat en poudre, Miel, Confiture, Pâte à tartiner, Beurre de cacahuète, Céréales,
+Muesli, Flocons d'avoine, Biscottes, Pain, Baguette, Pain de mie, Brioche, Croissants, Tortillas, Wraps, Pain burger, Chocolat, Chocolat noir, Biscuits, Cookies, Gâteaux, Chips,
+Cacahuètes, Amandes, Noix, Bonbons, Compotes, Crackers, Pop-corn, Glace, Frites surgelées, Pizza surgelée, Légumes surgelés, Poisson pané, Eau, Eau gazeuse, Jus d'orange,
+Jus de pomme, Soda, Coca, Sirop, Bière, Vin rouge, Vin blanc, Rosé, Cidre, Papier toilette, Essuie-tout, Mouchoirs, Liquide vaisselle, Tablettes lave-vaisselle, Lessive,
+Adoucissant, Éponges, Sacs poubelle, Nettoyant, Vinaigre blanc, Javel, Papier cuisson, Papier aluminium, Film alimentaire, Piles, Ampoules, Dentifrice, Brosses à dents,
+Shampoing, Après-shampoing, Gel douche, Savon, Déodorant, Cotons, Coton-tiges, Rasoirs, Serviettes hygiéniques, Tampons, Crème solaire, Couches, Lingettes, Lait infantile,
+Petits pots, Croquettes, Pâtée, Litière`
+  .split(",")
+  .map((x) => x.trim())
+  .filter(Boolean);
+
+// Les meilleures propositions pour ce qui est tapé : d'abord ce que le foyer achète souvent, puis les produits courants.
+function suggestFor(text) {
+  const q = norm(parseQuick(text).name);
+  if (!q) return [];
+  const items = viewItems();
   const memo = loadJSON("courses:memo", {});
-  return Object.entries(memo)
-    .filter(([k]) => !onList.has(k))
-    .sort((a, b) => b[1].n - a[1].n || b[1].at - a[1].at)
-    .slice(0, 60)
-    .map(([, v]) => v.name);
+  const seen = new Map();
+  const consider = (name, bonus) => {
+    const k = norm(name);
+    if (!k || k === q) return;
+    let score;
+    if (k.startsWith(q)) score = 30;
+    else if (k.includes(" " + q) || k.includes("'" + q) || k.includes("-" + q)) score = 20;
+    else if (q.length >= 3 && k.includes(q)) score = 8;
+    else return;
+    score += bonus - k.length / 100;
+    if (!seen.has(k) || seen.get(k).score < score) seen.set(k, { name, score });
+  };
+  for (const v of Object.values(memo)) consider(v.name, 10 + Math.min(v.n || 1, 10));
+  for (const it of items) consider(it.name, 5);
+  for (const n of COMMON) consider(n, 0);
+  return [...seen.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(({ name }) => {
+      const it = items.find((i) => norm(i.name) === norm(name));
+      return { name, state: it ? (it.done ? "kitchen" : "list") : "" };
+    });
 }
+
+function updateSuggest() {
+  const input = $("#quickName"),
+    box = $("#sugg");
+  if (!input || !box) return;
+  const list = document.activeElement === input ? suggestFor(input.value) : [];
+  box.hidden = !list.length;
+  input.setAttribute("aria-expanded", String(!!list.length));
+  const qty = parseQuick(input.value).qty;
+  box.innerHTML = list
+    .map(
+      (s) => `<button type="button" class="sopt" role="option" data-sugg="${esc(s.name)}"><span class="dot" style="--tint:${catOf(guessCat(s.name)).tint}">${catIll(guessCat(s.name), "ill xs")}</span>
+      <span class="sname">${esc(s.name)}${qty ? ` <small>· ${esc(qty)}</small>` : ""}</span>${
+        s.state === "list" ? `<small class="sstate">déjà sur la liste</small>` : s.state === "kitchen" ? `<small class="sstate">dans la cuisine</small>` : ""
+      }</button>`,
+    )
+    .join("");
+}
+function pickSuggestion(name) {
+  const input = $("#quickName");
+  const { qty } = parseQuick(input?.value || "");
+  if (input) input.value = "";
+  const memo = loadJSON("courses:memo", {})[norm(name)];
+  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
+  $("#quickName")?.focus();
+  updateSuggest();
+}
+$("#app").addEventListener("input", (e) => e.target.id === "quickName" && updateSuggest());
+$("#app").addEventListener("focusin", (e) => e.target.id === "quickName" && updateSuggest());
+$("#app").addEventListener("focusout", (e) => {
+  // Laisse le temps au toucher sur une proposition d'être pris en compte.
+  if (e.target.id === "quickName") setTimeout(updateSuggest, 150);
+});
+// Une proposition se choisit au premier toucher, sans fermer le clavier.
+$("#app").addEventListener("pointerdown", (e) => {
+  const b = e.target.closest && e.target.closest("[data-sugg]");
+  if (!b) return;
+  e.preventDefault();
+  pickSuggestion(b.dataset.sugg);
+});
+$("#app").addEventListener("keydown", (e) => {
+  if (e.target.id === "quickName" && e.key === "Escape") {
+    e.target.blur();
+  }
+});
 
 // ---------- feuille article ----------
 function chips(el, opts, val, htmlFn) {
@@ -1463,6 +1541,7 @@ $("#app").addEventListener("submit", (e) => {
   const memo = loadJSON("courses:memo", {})[norm(name)];
   addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
   $("#quickName")?.focus();
+  updateSuggest();
 });
 $("#app").addEventListener("click", (e) => {
   const t = (s) => e.target.closest(s);

@@ -1,5 +1,5 @@
 // Service worker de Courses : l'app s'ouvre même sans réseau (au fond du magasin).
-const SHELL = "courses-shell-v7";
+const SHELL = "courses-shell-v8";
 const LIBS = "courses-libs-v1";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./store.js", "../config.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png", "./icons/logo.png",
   "./illus/ail.webp", "./illus/amis.svg", "./illus/autre.svg", "./illus/bebe.svg", "./illus/boissons.webp", "./illus/citron.webp", "./illus/cle.svg", "./illus/coloc.svg", "./illus/conserves.webp", "./illus/couple.svg", "./illus/couteau.webp", "./illus/crevette.webp", "./illus/cuisine.webp", "./illus/email.svg", "./illus/epicerie.webp", "./illus/epices.webp", "./illus/famille.svg", "./illus/fete.svg", "./illus/fourchette.webp", "./illus/frais.webp", "./illus/fraise.webp", "./illus/fruits.webp", "./illus/huile.webp", "./illus/huitre.webp", "./illus/hygiene.svg", "./illus/invite.svg", "./illus/liste.svg", "./illus/mains.webp", "./illus/maison.svg", "./illus/ok.svg", "./illus/olive.webp", "./illus/orange.webp", "./illus/pain.svg", "./illus/snacks.svg", "./illus/surgeles.svg", "./illus/viande.webp",

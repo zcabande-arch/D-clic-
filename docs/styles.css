@@ -340,9 +340,11 @@ dialog.sheet .row{justify-content:flex-start;margin-top:10px}
 .news .newshead .x{border:0;background:var(--bg);color:var(--ink);width:30px;height:30px;border-radius:50%;flex:none}
 .news ul{margin:6px 0 0;padding-left:20px;display:grid;gap:3px;font-size:14px}
 /* Bouton « ↑ » : remonter en haut de la conversation */
-.scrollbtns{position:absolute;right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(100% + 12px);display:flex;flex-direction:column;gap:8px;pointer-events:none}
+/* En haut à droite de l'écran ; sur téléphone, sous l'en-tête pour ne pas cacher ⓘ */
+.scrollbtns{position:fixed;z-index:6;right:calc(12px + env(safe-area-inset-right,0px));top:calc(76px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .topbtn{pointer-events:auto;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:20px;font-weight:800;line-height:1;opacity:.92;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 .topbtn[hidden]{display:none}
+@media (min-width:700px){.scrollbtns{top:calc(14px + env(safe-area-inset-top,0px))}}
 /* Aperçu de la photo : bouton « ⇆ Retourner » (effet miroir des selfies) */
 .prevwrap{position:relative}
 .flipbtn{position:absolute;right:10px;bottom:10px;border:0;border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;background:rgba(0,0,0,.6);color:#fff}

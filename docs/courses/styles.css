@@ -307,3 +307,6 @@ body.has-nav .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
   :root:not([data-theme="light"]) :is(.kind,.pricebox,.note-card,.empty,.hhpill,.chip) .ill:not(.hero-ill):not(.head-ill){background:#EFE7D3;border-radius:50%;padding:4px}}
 :root[data-theme="dark"] :is(.bubble,.dot,.donut .pin,.aisle h2 .bubble){background:#EFE7D3}
 :root[data-theme="dark"] :is(.kind,.pricebox,.note-card,.empty,.hhpill,.chip) .ill:not(.hero-ill):not(.head-ill){background:#EFE7D3;border-radius:50%;padding:4px}
+.note-card.budget .big{font-size:2rem;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin:2px 0}
+.note-card.budget .btn{margin-top:10px}
+.note-card small{opacity:.75}

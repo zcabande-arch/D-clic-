@@ -375,17 +375,15 @@ const snapshot = (it) => ({ done: it.done, low: !!it.low, done_by: it.done_by, d
 function bought(it) {
   const before = snapshot(it);
   enqueue({ t: "patch", id: it.id, patch: TO_KITCHEN() });
-  let pid = null;
-  if (it.price != null) {
-    pid = uuid();
-    enqueue({ tbl: "purchases", t: "insert", rows: [purchaseRow(it, it.price, S.uid, pid)] });
-  }
+  // Chaque achat compte dans le bilan par type de nourriture, avec ou sans prix.
+  const pid = uuid();
+  enqueue({ tbl: "purchases", t: "insert", rows: [purchaseRow(it, it.price ?? null, S.uid, pid)] });
   const undo = () => {
     enqueue({ t: "patch", id: it.id, patch: before });
-    if (pid) enqueue({ tbl: "purchases", t: "delete", ids: [pid] });
+    enqueue({ tbl: "purchases", t: "delete", ids: [pid] });
   };
-  if (pid) toast(`« ${it.name} » acheté · ${money(it.price)}`, [["Modifier", () => openPrice(it, pid)], ["Annuler", undo]]);
-  else toast(`« ${it.name} » rangé dans la cuisine`, [["Ajouter le prix", () => openPrice(it, null)], ["Annuler", undo]]);
+  if (it.price != null) toast(`« ${it.name} » acheté · ${money(it.price)}`, [["Modifier", () => openPrice(it, pid)], ["Annuler", undo]]);
+  else toast(`« ${it.name} » rangé dans la cuisine`, [["Ajouter le prix", () => openPrice(it, pid)], ["Annuler", undo]]);
 }
 function purchaseRow(it, amount, paidBy, id = uuid()) {
   return { id, household: S.hid, item_id: it.id || null, name: it.name, cat: it.cat || "autre", amount, paid_by: paidBy, created_by: S.uid, bought_at: nowIso() };
@@ -666,8 +664,8 @@ function renderMain(app) {
   const nav = `<nav class="nav" aria-label="Pages"><div class="navbar">
       ${tab("list", "Courses", todo.length ? `<b class="badge">${todo.length}</b>` : "")}
       ${tab("kitchen", "Cuisine", lowCount ? `<b class="badge warn">${lowCount}</b>` : "")}
-      <button class="fab" id="fab" aria-label="${S.view === "spend" ? "Ajouter une dépense" : S.view === "us" ? "Inviter quelqu'un" : "Ajouter un article"}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-      ${tab("spend", "Dépenses")}
+      <button class="fab" id="fab" aria-label="${S.view === "us" ? "Inviter quelqu'un" : "Ajouter un article"}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      ${tab("spend", "Bilan")}
       ${tab("us", "Nous")}
     </div></nav>`;
 
@@ -876,80 +874,93 @@ function settle(paid, uids) {
   return out;
 }
 
+// Bilan : la part de chaque type de nourriture dans ce que vous achetez (en nombre d'articles),
+// puis, plus bas, le budget quand des prix sont notés.
+const nArt = (n) => `${n} article${n > 1 ? "s" : ""}`;
 function spendHtml() {
   const all = rows("purchases");
   const [a, b, pa, pb, label] = periodRange(S.period);
   const list = all.filter((p) => inRange(p, a, b)).sort((x, y) => String(y.bought_at).localeCompare(String(x.bought_at)));
-  const prev = all.filter((p) => inRange(p, pa, pb)).reduce((s, p) => s + p.amount, 0);
-  const total = list.reduce((s, p) => s + p.amount, 0);
+  const count = list.length;
+  const prevList = all.filter((p) => inRange(p, pa, pb));
   const byCat = {};
-  for (const p of list) byCat[catOf(p.cat).id] = (byCat[catOf(p.cat).id] || 0) + p.amount;
+  for (const p of list) byCat[catOf(p.cat).id] = (byCat[catOf(p.cat).id] || 0) + 1;
   const parts = Object.entries(byCat)
     .map(([id, value]) => ({ id, value, color: catOf(id).tone, label: catOf(id).l }))
     .sort((x, y) => y.value - x.value);
 
-  let html = `<header class="head"><h1 class="serif">Nos dépenses</h1><p class="date">${esc(label.replace(/^./, (c) => c.toUpperCase()))}</p></header>
+  let html = `<header class="head"><h1 class="serif">Ce qu'on achète</h1><p class="date">${esc(label.replace(/^./, (c) => c.toUpperCase()))}</p></header>
     <div class="bar seg" role="group" aria-label="Période">${PERIODS.map((p) => `<button class="fchip" data-period="${p.id}" aria-pressed="${S.period === p.id}">${p.l}</button>`).join("")}</div>`;
 
-  if (!all.length) {
+  if (!count) {
     return (
       html +
-      `<div class="empty">${doodles("orange", "crevette", "boissons")}${donut([], 0, `<b>0 €</b><span>pour l'instant</span>`)}
-      <p>Quand tu coches un article, ajoute son prix&nbsp;: vos dépenses s'afficheront ici, en cercle, rayon par rayon.</p>
-      <button class="btn" id="addExpense">Ajouter une dépense</button></div>`
+      `<div class="empty">${doodles("fruits", "epices", "viande")}${donut([], 0, `<b>0</b><span>article</span>`)}
+      <p>${all.length ? "Aucun achat sur cette période." : "Coche les articles de la liste quand tu les achètes&nbsp;: la part de chaque type de nourriture s'affichera ici, en cercle."}</p></div>`
     );
   }
 
-  html += `<section class="card chart">${donut(parts, total, `<b>${money0(total)}</b><span>${esc(label)}</span>`)}
-    <div class="row center"><button class="btn small" id="addExpense">Ajouter une dépense</button></div></section>`;
+  html += `<section class="card chart">${donut(parts, count, `<b>${count}</b><span>${count > 1 ? "articles achetés" : "article acheté"}</span>`)}</section>`;
 
-  // Le petit mot du jour, comme une carte d'assistant.
-  let insight = "";
-  if (total && prev) {
-    const d = (total - prev) / prev;
-    insight = Math.abs(d) < 0.03 ? `Vous dépensez <b>autant</b> que sur la période précédente.` : `Vous avez dépensé <b class="${d > 0 ? "up" : "down"}">${pct(Math.abs(d))} ${d > 0 ? "de plus" : "de moins"}</b> que sur la période précédente.`;
-  } else if (parts.length) insight = `Le rayon qui pèse le plus&nbsp;: <b>${esc(parts[0].label)}</b>, ${pct(parts[0].value / total)} des dépenses.`;
-  if (insight) html += `<section class="note-card" style="--tint:#F8D3E3">${STAR}<p class="tiny">Le point sur vos courses</p><p>${insight}</p></section>`;
+  // Le petit mot sur vos habitudes.
+  const share = (id) => (byCat[id] || 0) / count;
+  let insight = `Ce qui revient le plus&nbsp;: <b>${esc(parts[0].label)}</b>, ${pct(parts[0].value / count)} de vos courses.`;
+  const fresh = share("fruits"),
+    sweet = share("snacks");
+  if (count >= 8 && sweet > fresh && sweet >= 0.15) insight += ` Un peu plus de snacks (${pct(sweet)}) que de fruits & légumes (${pct(fresh)}) 🍫`;
+  else if (count >= 8 && fresh >= 0.25) insight += ` Bravo, ${pct(fresh)} de fruits & légumes 🥦`;
+  if (prevList.length) {
+    const d = (count - prevList.length) / prevList.length;
+    if (Math.abs(d) >= 0.1) insight += `<br><small>${d > 0 ? "Plus" : "Moins"} d'articles que sur la période précédente (${prevList.length}).</small>`;
+  }
+  html += `<section class="note-card" style="--tint:#F8D3E3">${STAR}<p class="tiny">Vos habitudes</p><p>${insight}</p></section>`;
 
-  if (parts.length)
-    html += `<h3 class="sect">Par rayon</h3><ul class="group">${parts
-      .map(
-        (p) => `<li><span class="bubble" style="--tint:${catOf(p.id).tint}">${catIll(p.id, "ill sm")}</span>
+  html += `<h3 class="sect">Par type de nourriture</h3><ul class="group">${parts
+    .map(
+      (p) => `<li><span class="bubble" style="--tint:${catOf(p.id).tint}">${catIll(p.id, "ill sm")}</span>
         <span class="gmain"><span class="gname">${esc(p.label)}</span><span class="gbar"><i style="width:${(p.value / parts[0].value) * 100}%;background:${p.color}"></i></span></span>
-        <span class="gval"><b class="tag">${pct(p.value / total)}</b><small>${money(p.value)}</small></span></li>`,
-      )
-      .join("")}</ul>`;
+        <span class="gval"><b class="tag">${pct(p.value / count)}</b><small>${nArt(p.value)}</small></span></li>`,
+    )
+    .join("")}</ul>`;
 
-  // Qui a payé, et comment s'équilibrer (utile en coloc et entre amis).
-  if (S.members.length > 1 && total) {
-    const paid = {};
-    for (const p of list) paid[p.paid_by] = (paid[p.paid_by] || 0) + p.amount;
-    const uids = S.members.map((m) => m.uid);
-    const top = Math.max(...uids.map((u) => paid[u] || 0), 0.01);
-    const moves = settle(paid, uids);
-    html += `<h3 class="sect">Qui a payé</h3><ul class="group">${uids
-      .map(
-        (u) => `<li><span class="av">${esc(memberEmoji(u))}</span><span class="gmain"><span class="gname">${esc(u === S.uid ? (S.me?.name || "Toi") + " (toi)" : member(u)?.name || "Sans nom")}</span>
+  // Côté budget : seulement ce qui a un prix.
+  const priced = list.filter((p) => p.amount != null);
+  const total = priced.reduce((s, p) => s + p.amount, 0);
+  html += `<h3 class="sect">Côté budget</h3>`;
+  if (priced.length) {
+    html += `<section class="note-card budget" style="--tint:#D3E2F6">${STAR}<p class="tiny">${esc(label.replace(/^./, (c) => c.toUpperCase()))}</p><p class="big">${money(total)}</p><p><small>pour ${nArt(priced.length)} avec un prix${
+      priced.length < count ? ` (sur ${count})` : ""
+    }</small></p><button class="btn small" id="addExpense">Ajouter une dépense</button></section>`;
+    // Qui a payé, et comment s'équilibrer (utile en coloc et entre amis).
+    if (S.members.length > 1 && total) {
+      const paid = {};
+      for (const p of priced) paid[p.paid_by] = (paid[p.paid_by] || 0) + p.amount;
+      const uids = S.members.map((m) => m.uid);
+      const top = Math.max(...uids.map((u) => paid[u] || 0), 0.01);
+      const moves = settle(paid, uids);
+      html += `<ul class="group">${uids
+        .map(
+          (u) => `<li><span class="av">${esc(memberEmoji(u))}</span><span class="gmain"><span class="gname">${esc(u === S.uid ? (S.me?.name || "Toi") + " (toi)" : member(u)?.name || "Sans nom")}</span>
         <span class="gbar"><i style="width:${((paid[u] || 0) / top) * 100}%"></i></span></span><span class="gval"><b class="tag">${pct((paid[u] || 0) / total)}</b><small>${money(paid[u] || 0)}</small></span></li>`,
-      )
-      .join("")}</ul>
-      <section class="note-card" style="--tint:#DCEAC8">${STAR}<p class="tiny">Pour partager à parts égales (${money(total / uids.length)} chacun)</p>${
+        )
+        .join("")}</ul>
+      <section class="note-card" style="--tint:#DCEAC8;margin-top:12px">${STAR}<p class="tiny">Pour partager à parts égales (${money(total / uids.length)} chacun)</p>${
         moves.length
           ? moves.map((m) => `<p class="settle"><span class="av sm">${esc(memberEmoji(m.from))}</span> ${esc(memberName(m.from) === "toi" ? "Tu dois" : memberName(m.from) + " doit")} <b>${money(m.amount)}</b> à <span class="av sm">${esc(memberEmoji(m.to))}</span> ${esc(memberName(m.to))}</p>`).join("")
           : `<p>Vous êtes à égalité 🎉</p>`
       }</section>`;
-  }
+    }
+  } else
+    html += `<section class="note-card budget" style="--tint:#D3E2F6">${STAR}<p>Note le prix quand tu coches un article (ou ajoute un ticket de caisse) pour suivre aussi votre budget.</p><button class="btn small" id="addExpense" style="margin-top:10px">Ajouter une dépense</button></section>`;
 
-  if (list.length)
-    html += `<h3 class="sect">Derniers achats</h3><ul class="group">${list
-      .slice(0, 30)
-      .map(
-        (p) => `<li><button class="growrow" data-purchase="${esc(p.id)}"><span class="bubble" style="--tint:${catOf(p.cat).tint}">${catIll(p.cat, "ill sm")}</span>
-        <span class="gmain"><span class="gname">${esc(p.name)}</span><small>${S.members.length > 1 ? `payé par ${esc(memberName(p.paid_by))} · ` : ""}${esc(ago(p.bought_at))}${p._pending ? " · en attente" : ""}</small></span>
-        <span class="gval"><b>${money(p.amount)}</b></span></button></li>`,
-      )
-      .join("")}</ul>`;
-  else html += `<div class="empty"><p>Aucun achat sur cette période.</p></div>`;
+  html += `<h3 class="sect">Derniers achats</h3><ul class="group">${list
+    .slice(0, 30)
+    .map(
+      (p) => `<li><button class="growrow" data-purchase="${esc(p.id)}"><span class="bubble" style="--tint:${catOf(p.cat).tint}">${catIll(p.cat, "ill sm")}</span>
+        <span class="gmain"><span class="gname">${esc(p.name)}</span><small>${S.members.length > 1 ? `par ${esc(memberName(p.paid_by))} · ` : ""}${esc(ago(p.bought_at))}${p._pending ? " · en attente" : ""}</small></span>
+        <span class="gval">${p.amount != null ? `<b>${money(p.amount)}</b>` : `<small>+ prix</small>`}</span></button></li>`,
+    )
+    .join("")}</ul>`;
   return html;
 }
 
@@ -1113,7 +1124,7 @@ function openPrice(it, pid) {
   openPanel(
     `<form id="prForm" autocomplete="off">${panelHead("Combien ça a coûté&nbsp;?", true)}
       <div class="pricebox" style="--tint:${catOf(it.cat).tint}">${STAR}${catIll(it.cat, "ill md")}<b>${esc(it.name)}</b>${it.qty ? `<small>${esc(it.qty)}</small>` : ""}</div>
-      <div class="field"><label for="prAmount">Prix payé</label><div class="money"><input id="prAmount" inputmode="decimal" placeholder="0,00" value="${esc(priceStr(existing ? existing.amount : it.price))}"><span>€</span></div></div>
+      <div class="field"><label for="prAmount">Prix payé</label><div class="money"><input id="prAmount" inputmode="decimal" placeholder="0,00" value="${esc(priceStr(existing?.amount ?? it.price))}"><span>€</span></div></div>
       ${many ? `<div class="field"><span>Payé par</span>${payerChips(existing?.paid_by || S.uid)}</div>` : ""}
       <label class="checkline"><input type="checkbox" id="prKeep" checked> Retenir ce prix pour la prochaine fois</label>
       <p class="err" id="prErr"></p>
@@ -1170,7 +1181,8 @@ function openExpense(p) {
       $("#exForm").onsubmit = (e) => {
         e.preventDefault();
         const amount = parseMoney($("#exAmount").value);
-        if (amount == null || Number.isNaN(amount)) {
+        // Un achat existant peut rester sans prix ; une dépense ajoutée à la main en a besoin.
+        if (Number.isNaN(amount) || (amount == null && !p)) {
           $("#exErr").textContent = "Indique un montant, par exemple 24,90.";
           return;
         }
@@ -1508,8 +1520,7 @@ $("#app").addEventListener("click", (e) => {
   const t = (s) => e.target.closest(s);
   const byId = (id) => viewItems().find((i) => i.id === id);
   if (t("#fab")) {
-    if (S.view === "spend") openExpense(null);
-    else if (S.view === "us") openInvite(false);
+    if (S.view === "us") openInvite(false);
     else {
       const n = $("#quickName")?.value.trim() || "";
       if ($("#quickName")) $("#quickName").value = "";

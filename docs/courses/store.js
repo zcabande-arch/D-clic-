@@ -1,6 +1,6 @@
 // Accès aux données de Courses : Supabase (tables de supabase/courses.sql) ou, avec « ?demo » dans l'adresse,
 // une version de démonstration gardée dans ce navigateur. Les deux exposent la même API.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "../config.js";
 
 const ITEM_COLS = "id,household,name,qty,quality,cat,prio,shop,done,low,price,added_by,done_by,created_at,done_at";
 const PURCHASE_COLS = "id,household,item_id,name,cat,amount,paid_by,created_by,bought_at";
@@ -126,42 +126,43 @@ async function openSupabase() {
   };
 }
 
-// Compte protégé par e-mail : Supabase envoie un code à 6 chiffres (modèles d'e-mails à régler, voir le README).
-const realEmail = (e) => (e && !/\.invalid$/i.test(e) ? e : "");
-function emailError(error) {
-  const m = error?.message || "";
-  if (/already.*(registered|exists|been)/i.test(m)) return storeError("email_taken", m);
-  if (/signups? not allowed|user not found/i.test(m)) return storeError("no_account", m);
-  if (/expired|invalid|token/i.test(m)) return storeError("bad_code", m);
-  if (/rate limit|too many|security purposes/i.test(m)) return storeError("rate_limit", m);
-  if (/email.*invalid|valid email/i.test(m)) return storeError("bad_email", m);
-  return mapError(error);
+// Sauvegarde du compte sans e-mail, commune avec Déclic : un code de 16 caractères sert de mot de passe,
+// et l'adresse de connexion en est dérivée (même calcul que la fonction Edge supabase/functions/notify).
+// Créer un code ne déconnecte pas ; il remplace l'ancien.
+const RECOVERY_DOMAIN = "@declic-recup.invalid";
+const normCode = (c) => String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+async function recoveryEmail(norm) {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("declic:" + norm)));
+  return `r-${Array.from(h.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("")}${RECOVERY_DOMAIN}`;
 }
 function makeAccount(sb) {
   return {
-    // Adresse confirmée du compte, et adresse en attente de confirmation.
-    async email() {
+    // Un code existe-t-il déjà pour ce compte ?
+    async status() {
       const { data } = await sb.auth.getUser();
-      const u = data?.user;
-      return { email: realEmail(u?.email), pending: realEmail(u?.new_email) };
+      return { hasCode: !!data?.user?.email?.endsWith(RECOVERY_DOMAIN) };
     },
-    // 1. Lier une adresse : un code part sur cette adresse. 2. On le confirme.
-    async linkEmail(email) {
-      const { error } = await sb.auth.updateUser({ email });
-      if (error) throw emailError(error);
+    async createCode() {
+      const { data } = await sb.auth.getSession();
+      let r;
+      try {
+        r = await fetch(NOTIFY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + (data?.session?.access_token || "") },
+          body: JSON.stringify({ type: "recovery-create" }),
+        });
+      } catch (e) {
+        throw storeError("network", e.message);
+      }
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.code) throw storeError(j.error || "internal", j.detail || "Création du code impossible");
+      return j.code;
     },
-    async confirmEmail(email, token) {
-      const { error } = await sb.auth.verifyOtp({ email, token: token.replace(/\D/g, ""), type: "email_change" });
-      if (error) throw emailError(error);
-    },
-    // Sur un autre appareil : un code part sur l'adresse du compte, et on se connecte avec.
-    async sendLoginCode(email) {
-      const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-      if (error) throw emailError(error);
-    },
-    async loginWithCode(email, token) {
-      const { error } = await sb.auth.verifyOtp({ email, token: token.replace(/\D/g, ""), type: "email" });
-      if (error) throw emailError(error);
+    async login(code) {
+      const norm = normCode(code);
+      if (norm.length !== 16) throw storeError("short_code", "Code incomplet");
+      const { error } = await sb.auth.signInWithPassword({ email: await recoveryEmail(norm), password: norm });
+      if (error) throw storeError(/invalid/i.test(error.message) ? "bad_code" : "network", error.message);
     },
   };
 }
@@ -285,26 +286,20 @@ function openDemo() {
       onStatus && onStatus(true);
       return () => listeners.delete(l);
     },
-    // Faux e-mails : le code est toujours 123456.
+    // Code de démonstration toujours identique.
     account: {
-      async email() {
-        return { email: st.email || "", pending: st.pending || "" };
+      async status() {
+        return { hasCode: !!st.code };
       },
-      async linkEmail(email) {
-        st.pending = email;
+      async createCode() {
+        st.code = "DEMO-2345-6789-ABCD";
         save();
+        return st.code;
       },
-      async confirmEmail(email, token) {
-        if (token.replace(/\D/g, "") !== "123456") throw storeError("bad_code");
-        st.email = email;
-        st.pending = "";
-        save();
-      },
-      async sendLoginCode(email) {
-        if (email !== st.email) throw storeError("no_account");
-      },
-      async loginWithCode(email, token) {
-        if (token.replace(/\D/g, "") !== "123456") throw storeError("bad_code");
+      async login(code) {
+        const n = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (n.length !== 16) throw storeError("short_code");
+        if (n !== "DEMO23456789ABCD") throw storeError("bad_code");
       },
     },
   });

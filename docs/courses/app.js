@@ -195,21 +195,17 @@ function errText(e) {
   if (e.code === "network") return "Pas de connexion. Réessaie quand le réseau revient.";
   if (e.code === "setup") return "La base n'est pas prête : il faut lancer supabase/courses.sql dans Supabase (voir le README).";
   if (e.code === "denied") return "Tu n'as pas accès à cette liste.";
-  if (e.code === "bad_code") return "Code incorrect ou expiré. Vérifie le dernier e-mail reçu.";
-  if (e.code === "email_taken") return "Cette adresse est déjà liée à un autre compte. Pour l'ouvrir ici, utilise « J'ai déjà un compte ».";
-  if (e.code === "no_account") return "Aucun compte n'est lié à cette adresse.";
-  if (e.code === "rate_limit") return "Trop de demandes d'un coup : attends quelques minutes avant de redemander un code.";
-  if (e.code === "bad_email") return "Cette adresse e-mail n'a pas l'air valide.";
+  if (e.code === "bad_code") return "Ce code ne correspond à aucun compte. Vérifie les lettres et les chiffres.";
+  if (e.code === "short_code") return "Le code fait 16 caractères, par exemple ABCD-EFGH-JKLM-NPQR.";
   return "Une erreur est survenue, réessaie.";
 }
-const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 // ---------- état ----------
 const S = {
   store: null,
   uid: loadJSON("courses:uid", null),
   me: loadJSON("courses:me", null),
-  email: { email: "", pending: "" },
+  acct: { hasCode: false }, // un code de sauvegarde existe-t-il ?
   households: loadJSON("courses:households", []),
   hid: loadJSON("courses:hid", null),
   members: [],
@@ -486,7 +482,7 @@ async function renderProfileSetup(app) {
       <p class="err" id="pErr"></p>
       <button class="btn wide" type="submit">Continuer</button>
     </form>
-    ${invited && S.store?.account ? `<p class="or">Tu as déjà un compte&nbsp;? <button class="link" id="pRecover">Me connecter avec mon e-mail</button></p>` : ""}
+    ${invited && S.store?.account ? `<p class="or">Tu as déjà un compte&nbsp;? <button class="link" id="pRecover">J'ai un code de sauvegarde</button></p>` : ""}
   </div>`;
   bindPicker($("#emojiPick"));
   $("#pBack") &&
@@ -732,7 +728,7 @@ function listHtml(todo, stock) {
     g.sort((a, b) => (PRANK[a.prio] ?? 1) - (PRANK[b.prio] ?? 1) || String(a.created_at).localeCompare(String(b.created_at)));
     html += aisle(c, g.length, g.map(listItemHtml).join(""));
   }
-  html += `</main>` + emailHint();
+  html += `</main>` + backupHint();
   return html;
 }
 
@@ -1009,19 +1005,19 @@ function usHtml() {
       ${row("uMe", esc(S.me?.emoji || "🙂"), "#F7EAB4", "Modifier mon profil", "Prénom et emoji")}
       ${
         S.store?.account
-          ? row("uEmail", ill(S.email.email ? "ok" : "email", "ill xs"), S.email.email ? "#DCEAC8" : "#E6DDF6", S.email.email ? "Compte protégé" : "Protéger mon compte avec mon e-mail", esc(S.email.email || "Pour le retrouver sur un autre téléphone")) +
-            row("uLogin", ill("cle", "ill xs"), "#ECE6D8", "Ouvrir un autre compte sur cet appareil")
+          ? row("uBackup", ill(S.acct.hasCode ? "ok" : "cle", "ill xs"), S.acct.hasCode ? "#DCEAC8" : "#F7EAB4", S.acct.hasCode ? "Compte sauvegardé" : "Sauvegarder mon compte", S.acct.hasCode ? "Créer un nouveau code ou lien" : "Pour le retrouver sur un autre téléphone") +
+            row("uLogin", ill("invite", "ill xs"), "#ECE6D8", "J'ai déjà un compte", "Ouvrir un compte sauvegardé ici")
           : ""
       }
     </ul>
-    ${S.store?.mode === "demo" ? `<p class="hint center">Mode démonstration : les données restent dans ce navigateur (code « e-mail » : 123456).</p>` : ""}`;
+    ${S.store?.mode === "demo" ? `<p class="hint center">Mode démonstration : les données restent dans ce navigateur (code de sauvegarde : DEMO-2345-6789-ABCD).</p>` : ""}`;
 }
 
-function emailHint() {
-  if (!S.store?.account || S.email.email || loadJSON("courses:emailHintOff", false)) return "";
-  return `<section class="note-card hintcard" style="--tint:#E6DDF6">${STAR}${ill("cle", "ill md")}<div><b>Protège ton compte</b>
-    <p>Ajoute ton e-mail&nbsp;: si tu changes de téléphone, tu recevras un code pour retrouver tes listes.</p>
-    <div class="row"><button class="btn small" id="hintEmail">Ajouter mon e-mail</button><button class="link" id="hintOff">Plus tard</button></div></div></section>`;
+function backupHint() {
+  if (!S.store?.account || S.acct.hasCode || loadJSON("courses:backupHintOff", false)) return "";
+  return `<section class="note-card hintcard" style="--tint:#F7EAB4">${STAR}${ill("cle", "ill md")}<div><b>Sauvegarde ton compte</b>
+    <p>Crée ton code de sauvegarde&nbsp;: si tu changes de téléphone, tu retrouveras tes listes en un instant.</p>
+    <div class="row"><button class="btn small" id="hintBackup">Sauvegarder</button><button class="link" id="hintOff">Plus tard</button></div></div></section>`;
 }
 
 function suggestions() {
@@ -1364,144 +1360,96 @@ function openMe() {
   );
 }
 
-// ---------- e-mail : protéger son compte, le retrouver ----------
-// Formulaire en deux temps : l'adresse, puis le code reçu par e-mail.
-function codeStep({ email, title, intro, onVerify, onResend, onBack, done }) {
+// ---------- sauvegarde du compte : un code et un lien personnel, sans e-mail ----------
+const loginUrl = (code) => `${location.origin}${location.pathname}#compte=${String(code).replace(/[^A-Za-z0-9]/g, "")}`;
+
+function openBackup() {
+  const acc = S.store?.account;
+  if (!acc) return;
   openPanel(
-    `${panelHead(title)}<div class="pricebox" style="--tint:#E6DDF6">${STAR}${ill("email", "ill lg")}</div>
-    <p class="hint">${intro} <b>${esc(email)}</b>. Il peut mettre une minute à arriver&nbsp;: pense à regarder dans les spams.</p>
-    <form id="cForm" autocomplete="off"><div class="field"><label for="cCode">Code reçu par e-mail</label>
-      <input id="cCode" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></div>
-      <p class="err" id="cErr"></p>
-      <button class="btn wide" type="submit">Valider</button></form>
-    <div class="row spread"><button class="link" id="cBack">Changer d'adresse</button><button class="link" id="cResend">Renvoyer le code</button></div>`,
+    `${panelHead("Sauvegarder mon compte")}
+    <div class="pricebox" style="--tint:#F7EAB4">${STAR}${ill("cle", "ill lg")}<p>Ton compte est lié à ce téléphone. Crée un <b>code de sauvegarde</b>&nbsp;: avec lui (ou avec ton lien personnel), tu retrouves tes listes sur n'importe quel autre appareil. Il marche aussi pour Déclic.</p></div>
+    ${S.acct.hasCode ? `<p class="note">Tu as déjà un code. En créer un nouveau désactive l'ancien et ton ancien lien.</p>` : ""}
+    <p class="err" id="bkErr"></p>
+    <button class="btn wide" id="bkGo">${S.acct.hasCode ? "Créer un nouveau code" : "Créer mon code"}</button>`,
     () => {
-      setTimeout(() => $("#cCode")?.focus(), 50);
-      $("#cBack").onclick = onBack;
-      $("#cResend").onclick = async () => {
+      $("#bkGo").onclick = async () => {
+        $("#bkGo").disabled = true;
         try {
-          await onResend();
-          toast("Nouveau code envoyé");
-        } catch (err) {
-          $("#cErr").textContent = errText(err);
-        }
-      };
-      $("#cForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const code = $("#cCode").value.replace(/\D/g, "");
-        if (code.length < 6) {
-          $("#cErr").textContent = "Le code fait au moins 6 chiffres.";
-          return;
-        }
-        const btn = $("#cForm button[type=submit]");
-        btn.disabled = true;
-        try {
-          await onVerify(code);
-          done();
-        } catch (err) {
-          $("#cErr").textContent = errText(err);
-          btn.disabled = false;
+          const code = await acc.createCode();
+          S.acct.hasCode = true;
+          saveJSON("courses:backupHintOff", true);
+          showCode(code);
+          render();
+        } catch (e) {
+          $("#bkErr").textContent = errText(e);
+          $("#bkGo").disabled = false;
         }
       };
     },
   );
 }
-function emailStep({ title, intro, cta, value, note, onSend }) {
+function showCode(code) {
+  const url = loginUrl(code);
   openPanel(
-    `${panelHead(title)}<div class="pricebox" style="--tint:#DCEAC8">${STAR}${ill("cle", "ill lg")}</div>
-    <p class="hint">${intro}</p>
-    <form id="eForm" autocomplete="off"><div class="field"><label for="eMail">Adresse e-mail</label>
-      <input id="eMail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" value="${esc(value || "")}" placeholder="toi@exemple.fr"></div>
-      ${note ? `<p class="note">${note}</p>` : ""}
-      <p class="err" id="eErr"></p>
-      <button class="btn wide" type="submit">${cta}</button></form>`,
+    `${panelHead("Ton code de sauvegarde")}
+    <div class="bigcode small" aria-label="Code de sauvegarde">${esc(code)}</div>
+    <p class="hint">Note-le, fais une capture d'écran, ou envoie-toi ton lien personnel (dans tes notes, par message…). Sur un autre téléphone, il suffit d'ouvrir le lien, ou de choisir « J'ai déjà un compte » et de taper le code.</p>
+    <p class="note">Garde-les pour toi&nbsp;: avec ce code ou ce lien, n'importe qui peut ouvrir ton compte. Ils ne seront plus affichés.</p>
+    <div class="stack">
+      <button class="btn wide" id="cdShare">M'envoyer mon lien personnel</button>
+      <button class="btn ghost wide" id="cdCopy">Copier le code</button>
+      <button class="link" data-close>C'est noté</button>
+    </div>`,
     () => {
-      setTimeout(() => $("#eMail")?.focus(), 50);
-      $("#eForm").onsubmit = async (e) => {
-        e.preventDefault();
-        const email = $("#eMail").value.trim().toLowerCase();
-        if (!isEmail(email)) {
-          $("#eErr").textContent = "Cette adresse e-mail n'a pas l'air valide.";
-          return;
+      $("#cdCopy").onclick = () => copy(code, "Code copié");
+      $("#cdShare").onclick = async () => {
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: "Mon compte Courses", text: "Mon lien pour ouvrir mon compte Courses (à garder pour moi)", url });
+            return;
+          } catch (e) {
+            if (e && e.name === "AbortError") return;
+          }
         }
-        const btn = $("#eForm button[type=submit]");
-        btn.disabled = true;
-        try {
-          await onSend(email);
-        } catch (err) {
-          $("#eErr").textContent = errText(err);
-          btn.disabled = false;
-        }
+        copy(url, "Lien copié : colle-le dans tes notes");
       };
     },
   );
 }
 
-// Lier une adresse au compte de cet appareil.
-function openEmailLink(change) {
-  const acc = S.store.account;
-  const step2 = (email) =>
-    codeStep({
-      email,
-      title: "Vérifie ton e-mail",
-      intro: "On vient d'envoyer un code à",
-      onVerify: (code) => acc.confirmEmail(email, code),
-      onResend: () => acc.linkEmail(email),
-      onBack: () => openEmailLink(change),
-      done: () => {
-        S.email = { email, pending: "" };
-        $("#panel").close();
-        render();
-        toast("C'est fait : ton compte est protégé");
-      },
-    });
-  // Un code déjà demandé et pas encore confirmé : on reprend là.
-  if (S.email.pending && !change) return step2(S.email.pending);
-  emailStep({
-    title: change ? "Changer d'adresse" : "Protéger mon compte",
-    intro: "Ton compte est lié à ce téléphone. Avec ton e-mail, tu pourras le retrouver sur un autre appareil (et dans Déclic) en recevant un code.",
-    cta: "Recevoir un code",
-    value: change ? "" : S.email.pending,
-    onSend: async (email) => {
-      await acc.linkEmail(email);
-      S.email.pending = email;
-      step2(email);
-    },
-  });
-}
-
-// Se connecter à un compte existant grâce au code envoyé par e-mail.
+// Ouvrir un compte sauvegardé sur cet appareil, avec son code.
 function openRecover() {
   const acc = S.store?.account;
   if (!acc) return;
-  const risky = S.households.length && !S.email.email;
-  const step2 = (email) =>
-    codeStep({
-      email,
-      title: "Entre le code",
-      intro: "On vient d'envoyer un code de connexion à",
-      onVerify: (code) => acc.loginWithCode(email, code),
-      onResend: () => acc.sendLoginCode(email),
-      onBack: openRecover,
-      done: () => {
-        // Nouveau compte sur cet appareil : on repart de zéro (ce qui était gardé appartenait à l'ancien).
-        for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
-        toast("Compte retrouvé !");
-        setTimeout(() => location.reload(), 600);
-      },
-    });
-  emailStep({
-    title: "Retrouver mon compte",
-    intro: "Entre l'adresse e-mail liée à ton compte : on t'envoie un code pour l'ouvrir sur cet appareil.",
-    cta: "Recevoir un code",
-    note: risky ? "Attention : le compte actuel de cet appareil n'a pas d'e-mail. Ses listes resteront accessibles aux autres membres, mais plus à toi." : "",
-    onSend: async (email) => {
-      await acc.sendLoginCode(email);
-      step2(email);
+  const risky = S.households.length && !S.acct.hasCode;
+  openPanel(
+    `<form id="rcForm" autocomplete="off">${panelHead("J'ai déjà un compte", true)}
+    <div class="pricebox" style="--tint:#DCEAC8">${STAR}${ill("cle", "ill lg")}<p>Tape ton code de sauvegarde. Tu peux aussi simplement ouvrir le lien personnel que tu t'es envoyé.</p></div>
+    <div class="field"><label for="rcCode">Code de sauvegarde</label>
+      <input id="rcCode" class="code-in" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX"></div>
+    ${risky ? `<p class="note">Attention : le compte actuel de cet appareil n'est pas sauvegardé. Ses listes resteront aux autres membres, mais plus à toi.</p>` : ""}
+    <p class="err" id="rcErr"></p>
+    <button class="btn wide" type="submit">Ouvrir mon compte</button></form>`,
+    () => {
+      setTimeout(() => $("#rcCode")?.focus(), 60);
+      $("#rcForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = $("#rcForm button.btn[type=submit]");
+        btn.disabled = true;
+        try {
+          await acc.login($("#rcCode").value);
+          forgetLocal();
+          toast("Compte retrouvé !");
+          setTimeout(() => location.reload(), 600);
+        } catch (err) {
+          $("#rcErr").textContent = errText(err);
+          btn.disabled = false;
+        }
+      };
     },
-  });
+  );
 }
-
 
 // ---------- événements ----------
 $("#app").addEventListener("submit", (e) => {
@@ -1571,11 +1519,11 @@ $("#app").addEventListener("click", (e) => {
   else if (t("#uRename")) openRename();
   else if (t("#uLeave")) leaveHousehold();
   else if (t("#uMe") || t("#editMe")) openMe();
-  else if (t("#uEmail")) openEmailLink(!!S.email.email);
+  else if (t("#uBackup")) openBackup();
   else if (t("#uLogin")) openRecover();
-  else if (t("#hintEmail")) openEmailLink(false);
+  else if (t("#hintBackup")) openBackup();
   else if (t("#hintOff")) {
-    saveJSON("courses:emailHintOff", true);
+    saveJSON("courses:backupHintOff", true);
     render();
   }
 });
@@ -1614,10 +1562,10 @@ async function loadItems() {
     if (e.code !== "network") toast(errText(e));
   }
 }
-async function loadEmail() {
+async function loadAccount() {
   if (!S.store?.account) return;
   try {
-    S.email = await S.store.account.email();
+    S.acct = await S.store.account.status();
     render();
   } catch {}
 }
@@ -1690,7 +1638,7 @@ async function afterProfile() {
 }
 
 const forgetLocal = () => {
-  for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
+  for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && !["courses:memo", "courses:join", "courses:login"].includes(k)) localStorage.removeItem(k);
 };
 
 async function connect() {
@@ -1727,7 +1675,22 @@ async function connectOnce() {
   }
   S.uid = S.store.uid;
   saveJSON("courses:uid", S.uid);
-  loadEmail();
+  // Lien personnel ouvert (#compte=…) : on ouvre le compte sauvegardé sur cet appareil.
+  const linkCode = loadJSON("courses:login", null);
+  if (linkCode) {
+    localStorage.removeItem("courses:login");
+    if (!S.me || confirm("Ouvrir ton compte sauvegardé sur cet appareil ? Le compte actuel de cet appareil sera remplacé.")) {
+      try {
+        await S.store.account.login(linkCode);
+        forgetLocal();
+        location.replace(location.pathname + location.search);
+        return;
+      } catch (e) {
+        toast(errText(e));
+      }
+    }
+  }
+  loadAccount();
   try {
     const p = await S.store.getProfile();
     if (!p) {
@@ -1756,6 +1719,11 @@ async function connectOnce() {
   const code = (hash.get("rejoindre") || "").toUpperCase();
   if (/^[A-Z0-9]{6}$/.test(code)) {
     saveJSON("courses:join", code);
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  const acct = (hash.get("compte") || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (acct.length === 16) {
+    saveJSON("courses:login", acct);
     history.replaceState(null, "", location.pathname + location.search);
   }
   setView(S.view);

@@ -49,8 +49,9 @@ et le même hébergement que Déclic.
   les changements partent au retour de la connexion.
 - **Saisie rapide** : « 2 paquets de pâtes » ou « lait x3 » remplissent la quantité, le rayon est deviné (et retenu quand on le corrige),
   les articles déjà achetés sont proposés en suggestion. Tri par rayon (illustré) et priorité, filtre par magasin, « Annuler », envoi de la liste par message.
-- **Compte protégé par e-mail** : on lie son adresse au compte (un code à 6 chiffres arrive par e-mail), et sur un autre téléphone
-  « J'ai déjà un compte » envoie un code de connexion. Le compte est le même que celui de Déclic.
+- **Sauvegarde du compte sans e-mail** : dans *Nous › Sauvegarder mon compte*, on crée un code de sauvegarde
+  (`XXXX-XXXX-XXXX-XXXX`) et un lien personnel à s'envoyer. Sur un autre téléphone, on ouvre le lien ou on tape le code
+  dans « J'ai déjà un compte ». Le compte et le code sont les mêmes que ceux de Déclic.
 
 Les illustrations viennent de [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) (Microsoft, licence MIT), voir `docs/courses/illus/LICENCE.txt`.
 
@@ -58,29 +59,10 @@ Les illustrations viennent de [Fluent Emoji](https://github.com/microsoft/fluent
 
 1. **Base** : dans Supabase › *SQL Editor › New query*, colle tout le contenu de [`supabase/courses.sql`](supabase/courses.sql) et touche *Run*.
    (Après une mise à jour de l'application, relance-le : il ne fait qu'ajouter ce qui manque.)
-2. **Envoi des e-mails** : le service d'e-mails intégré de Supabase n'envoie qu'aux membres de l'équipe du projet, et seulement quelques-uns par heure.
-   Pour que tout le monde reçoive son code, branche un service d'envoi gratuit (par exemple [Resend](https://resend.com) ou [Brevo](https://www.brevo.com)) :
-   crée un compte, récupère ses réglages SMTP et colle-les dans Supabase › *Authentication › Emails › SMTP Settings* (*Enable custom SMTP*).
-3. **Des codes plutôt que des liens** : dans Supabase › *Authentication › Emails › Templates*, remplace le contenu de deux modèles :
-   - *Magic Link* (connexion sur un autre appareil) — sujet « Ton code Courses » :
-     ```html
-     <h2>Ton code de connexion</h2>
-     <p>Entre ce code dans l'application pour retrouver ton compte :</p>
-     <p style="font-size:28px;font-weight:bold;letter-spacing:6px">{{ .Token }}</p>
-     <p>Si tu n'as rien demandé, ignore cet e-mail.</p>
-     ```
-   - *Change Email Address* (lier son adresse) — sujet « Confirme ton adresse » :
-     ```html
-     <h2>Confirme ton adresse</h2>
-     <p>Entre ce code dans l'application pour protéger ton compte avec {{ .NewEmail }} :</p>
-     <p style="font-size:28px;font-weight:bold;letter-spacing:6px">{{ .Token }}</p>
-     ```
-4. **Réglage du changement d'adresse** : dans Supabase › *Authentication › Sign In / Providers › Email*, désactive *Secure email change*
-   (sinon Supabase demande aussi une confirmation à l'ancienne adresse, qui n'existe pas pour un compte créé sans e-mail).
-5. Une fois GitHub Pages actif (voir plus haut), l'application est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/courses/**.
+2. Une fois GitHub Pages actif (voir plus haut), l'application est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/courses/**.
    Ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
 
-Pour l'essayer sans toucher à la base : **…/courses/?demo** (données gardées dans le navigateur, un membre fictif, et le code « reçu par e-mail » est 123456).
+Pour l'essayer sans toucher à la base : **…/courses/?demo** (données gardées dans le navigateur, un membre fictif, code de sauvegarde `DEMO-2345-6789-ABCD`).
 
 ## Version avec serveur (auto-hébergée)
 

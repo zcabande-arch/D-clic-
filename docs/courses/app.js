@@ -1,6 +1,7 @@
-// Courses : la liste de courses partagée du foyer (couple, coloc, famille).
+// Courses : la liste de courses partagée du foyer (famille, coloc, couple, amis) et ce qu'il y a déjà dans la cuisine.
+// Un article est soit sur la liste de courses (done = false), soit acheté et « dans notre cuisine » (done = true).
 // Les changements s'affichent tout de suite et partent dans une file d'attente : sans réseau (au fond du magasin),
-// la liste reste utilisable et se synchronise dès que la connexion revient.
+// tout reste utilisable et se synchronise dès que la connexion revient.
 import { openStore } from "./store.js";
 
 const CATS = [
@@ -10,7 +11,7 @@ const CATS = [
   { id: "epicerie", e: "🍝", l: "Épicerie" },
   { id: "conserves", e: "🥫", l: "Conserves & sauces" },
   { id: "epices", e: "🧂", l: "Épices & condiments" },
-  { id: "pain", e: "🍞", l: "Boulangerie" },
+  { id: "pain", e: "🥖", l: "Boulangerie" },
   { id: "surgeles", e: "🧊", l: "Surgelés" },
   { id: "boissons", e: "🥤", l: "Boissons" },
   { id: "snacks", e: "🍫", l: "Snacks" },
@@ -33,14 +34,22 @@ const SHOPS = [
   { id: "bio", l: "Magasin bio" },
   { id: "pharmacie", l: "Pharmacie" },
 ];
+// « pour » complète « Une liste pour … ».
 const KINDS = [
-  { id: "couple", e: "💑", l: "En couple", ph: "Chez nous" },
-  { id: "coloc", e: "🏠", l: "Coloc", ph: "L'appart" },
-  { id: "famille", e: "👨‍👩‍👧", l: "Famille", ph: "La famille" },
-  { id: "autre", e: "🧺", l: "Autre", ph: "Le chalet" },
+  { id: "famille", l: "Famille", d: "Toute la maisonnée", pour: "la famille", ph: "La famille" },
+  { id: "coloc", l: "Coloc", d: "Entre colocataires", pour: "la coloc", ph: "L'appart" },
+  { id: "couple", l: "Couple", d: "À deux", pour: "vous deux", ph: "Chez nous" },
+  { id: "amis", l: "Amis", d: "Vacances, week-ends, soirées", pour: "la bande", ph: "Le week-end entre potes" },
 ];
+const KIND_OTHER = { id: "autre", l: "Autre", d: "", pour: "vous", ph: "Notre liste", img: "autre" };
+const kindOf = (id) => KINDS.find((k) => k.id === id) || KIND_OTHER;
 const EMOJIS = ["🦊", "🐻", "🐼", "🐨", "🐸", "🐙", "🦄", "🐝", "🐱", "🐶", "🌻", "🍓", "🥑", "🍕", "⭐", "🌙"];
 const PRANK = { urgent: 0, bientot: 1, plustard: 2 };
+
+// Illustrations (Fluent Emoji 3D, licence MIT : voir illus/LICENCE.txt).
+const ill = (name, cls = "ill") => `<img class="${cls}" src="illus/${name}.webp" alt="" aria-hidden="true" draggable="false">`;
+const catIll = (id, cls) => ill(CATS.some((c) => c.id === id) ? id : "autre", cls);
+const kindIll = (id, cls) => ill(KINDS.some((k) => k.id === id) ? id : "autre", cls);
 
 // ---------- rayon deviné à partir du nom ----------
 const GUESS = {
@@ -110,6 +119,7 @@ function saveJSON(k, v) {
 }
 const uuid = () =>
   crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16));
+const nowIso = () => new Date().toISOString();
 function ago(iso) {
   if (!iso) return "";
   const d = new Date(iso),
@@ -121,6 +131,8 @@ function ago(iso) {
   const hm = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   if (d.toDateString() === today) return `aujourd'hui à ${hm}`;
   if (d.toDateString() === yest) return `hier à ${hm}`;
+  const days = Math.round(s / 86400);
+  if (days < 7) return `il y a ${days} jours`;
   return "le " + d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
 }
 let toastTimer;
@@ -142,27 +154,37 @@ function errText(e) {
   if (e.code === "network") return "Pas de connexion. Réessaie quand le réseau revient.";
   if (e.code === "setup") return "La base n'est pas prête : il faut lancer supabase/courses.sql dans Supabase (voir le README).";
   if (e.code === "denied") return "Tu n'as pas accès à cette liste.";
-  if (e.code === "bad_code") return "Ce code ne correspond à aucun compte.";
+  if (e.code === "bad_code") return "Code incorrect ou expiré. Vérifie le dernier e-mail reçu.";
+  if (e.code === "email_taken") return "Cette adresse est déjà liée à un autre compte. Pour l'ouvrir ici, utilise « J'ai déjà un compte ».";
+  if (e.code === "no_account") return "Aucun compte n'est lié à cette adresse.";
+  if (e.code === "rate_limit") return "Trop de demandes d'un coup : attends quelques minutes avant de redemander un code.";
+  if (e.code === "bad_email") return "Cette adresse e-mail n'a pas l'air valide.";
   return "Une erreur est survenue, réessaie.";
 }
+const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 // ---------- état ----------
 const S = {
   store: null,
   uid: loadJSON("courses:uid", null),
   me: loadJSON("courses:me", null),
+  email: { email: "", pending: "" },
   households: loadJSON("courses:households", []),
   hid: loadJSON("courses:hid", null),
   members: [],
   server: new Map(), // articles tels que la base les connaît
   queue: loadJSON("courses:queue", []), // changements pas encore envoyés
-  tab: "todo",
+  view: loadJSON("courses:view", "list"), // « list » : liste de courses ; « kitchen » : dans notre cuisine
   shop: "",
+  kfilter: "all",
   screen: "loading",
-  live: false,
+  onb: { kind: null, mode: null }, // choix faits à la première ouverture
+  live: null,
   flushing: false,
+  connecting: false,
   unsub: null,
   editingId: null,
+  sheetPlace: "list",
   flashId: null,
   bootError: null,
 };
@@ -179,7 +201,7 @@ function restoreHousehold() {
   S.members = c?.members || [];
 }
 
-// La liste affichée = ce que la base connaît + les changements en attente.
+// Ce qui est affiché = ce que la base connaît + les changements en attente.
 function viewItems() {
   const m = new Map([...S.server].map(([k, v]) => [k, { ...v }]));
   for (const op of S.queue) {
@@ -245,25 +267,36 @@ function remember(it) {
   if (keys.length > 300) keys.sort((a, b) => memo[a].at - memo[b].at).slice(0, keys.length - 300).forEach((x) => delete memo[x]);
   saveJSON("courses:memo", memo);
 }
-function addItem(data) {
-  const items = viewItems();
-  const same = items.find((i) => norm(i.name) === norm(data.name));
-  if (same && !same.done) {
-    if (data.qty && data.qty !== same.qty) {
-      enqueue({ t: "patch", id: same.id, patch: { qty: data.qty } });
-      toast(`« ${same.name} » était déjà dans la liste : quantité mise à jour`);
-    } else toast(`« ${same.name} » est déjà dans la liste`);
+const TO_LIST = () => ({ done: false, low: false, done_by: null, done_at: null, added_by: S.uid, created_at: nowIso() });
+const TO_KITCHEN = () => ({ done: true, low: false, done_by: S.uid, done_at: nowIso() });
+
+// place : « list » (à acheter) ou « kitchen » (on l'a déjà).
+function addItem(data, place) {
+  const same = viewItems().find((i) => norm(i.name) === norm(data.name));
+  const extra = {};
+  if (data.qty) extra.qty = data.qty;
+  if (same) {
     S.flashId = same.id;
-    S.tab = "todo";
-    render();
-    return;
-  }
-  if (same && same.done) {
-    // Déjà acheté une fois : on le remet dans la liste au lieu de créer un doublon.
-    enqueue({ t: "patch", id: same.id, patch: { ...data, done: false, done_by: null, done_at: null, added_by: S.uid, created_at: new Date().toISOString() } });
-    remember({ ...same, ...data });
-    S.flashId = same.id;
-    toast(`« ${same.name} » remis dans la liste`);
+    if (place === "list" && !same.done) {
+      if (data.qty && data.qty !== same.qty) {
+        enqueue({ t: "patch", id: same.id, patch: extra });
+        toast(`« ${same.name} » était déjà sur la liste : quantité mise à jour`);
+      } else {
+        toast(`« ${same.name} » est déjà sur la liste`);
+        render();
+      }
+    } else if (place === "list") {
+      // Il était dans la cuisine : on le remet sur la liste au lieu de créer un doublon.
+      enqueue({ t: "patch", id: same.id, patch: { ...extra, ...TO_LIST() } });
+      toast(`« ${same.name} » ajouté à la liste`);
+    } else if (same.done) {
+      if (same.low || data.qty) enqueue({ t: "patch", id: same.id, patch: { ...extra, low: false } });
+      else render();
+      toast(same.low ? `« ${same.name} » : stock refait` : `« ${same.name} » est déjà dans la cuisine`);
+    } else {
+      enqueue({ t: "patch", id: same.id, patch: { ...extra, ...TO_KITCHEN() } });
+      toast(`« ${same.name} » rayé de la liste et rangé dans la cuisine`);
+    }
     return;
   }
   const row = {
@@ -275,21 +308,29 @@ function addItem(data) {
     cat: data.cat || "autre",
     prio: data.prio || "bientot",
     shop: data.shop || "",
-    done: false,
+    done: place === "kitchen",
+    low: false,
     added_by: S.uid,
-    done_by: null,
-    created_at: new Date().toISOString(),
-    done_at: null,
+    done_by: place === "kitchen" ? S.uid : null,
+    created_at: nowIso(),
+    done_at: place === "kitchen" ? nowIso() : null,
   };
   remember(row);
   S.flashId = row.id;
   enqueue({ t: "insert", rows: [row] });
 }
-function toggle(it) {
-  const done = !it.done;
-  enqueue({ t: "patch", id: it.id, patch: done ? { done, done_by: S.uid, done_at: new Date().toISOString() } : { done, done_by: null, done_at: null } });
-  if (done)
-    toast(`« ${it.name} » acheté`, "Annuler", () => enqueue({ t: "patch", id: it.id, patch: { done: false, done_by: null, done_at: null } }));
+const snapshot = (it) => ({ done: it.done, low: !!it.low, done_by: it.done_by, done_at: it.done_at, added_by: it.added_by, created_at: it.created_at, prio: it.prio });
+// Coché sur la liste : il part dans la cuisine.
+function bought(it) {
+  const before = snapshot(it);
+  enqueue({ t: "patch", id: it.id, patch: TO_KITCHEN() });
+  toast(`« ${it.name} » rangé dans la cuisine`, "Annuler", () => enqueue({ t: "patch", id: it.id, patch: before }));
+}
+// Fini dans la cuisine : il repart sur la liste de courses.
+function finished(it) {
+  const before = snapshot(it);
+  enqueue({ t: "patch", id: it.id, patch: { ...TO_LIST(), prio: it.low ? "urgent" : "bientot" } });
+  toast(`« ${it.name} » ajouté à la liste de courses`, "Annuler", () => enqueue({ t: "patch", id: it.id, patch: before }));
 }
 function removeItems(list, msg) {
   if (!list.length) return;
@@ -301,18 +342,51 @@ function removeItems(list, msg) {
 // ---------- affichage ----------
 function render() {
   const app = $("#app");
-  if (S.screen === "loading") app.innerHTML = `<p class="loading">Chargement…</p>`;
+  document.body.classList.toggle("has-nav", S.screen === "main");
+  if (S.screen === "loading") app.innerHTML = `<p class="loading">${ill("autre", "ill xl bob")}</p>`;
   else if (S.screen === "error") renderError(app);
+  else if (S.screen === "welcome") renderWelcome(app);
   else if (S.screen === "profile") renderProfileSetup(app);
   else if (S.screen === "setup") renderHouseholdSetup(app);
-  else renderList(app);
+  else renderMain(app);
 }
 
 function renderError(app) {
-  app.innerHTML = `<div class="intro"><p class="logo">🧺</p><h1>Courses</h1>
+  app.innerHTML = `<div class="intro">${ill("autre", "ill xl")}<h1>Courses</h1>
     <p class="lead">${esc(errText(S.bootError))}</p>
     <button class="btn wide" id="retry">Réessayer</button></div>`;
   $("#retry").onclick = () => location.reload();
+}
+
+// Première ouverture : « C'est pour qui ? »
+function renderWelcome(app) {
+  app.innerHTML = `<div class="intro">
+    ${ill("salut", "ill xl wave")}
+    <h1>Bienvenue&nbsp;!</h1>
+    <p class="lead">La liste de courses partagée de ton foyer&nbsp;: ce qu'il faut acheter, et ce qu'il y a déjà dans la cuisine. Tout le monde voit les changements en direct.</p>
+    <h2 class="q">C'est pour qui&nbsp;?</h2>
+    <div class="kinds">${KINDS.map(
+      (k) => `<button class="kind" data-kind="${k.id}">${ill(k.id, "ill lg")}<b>${esc(k.l)}</b><small>${esc(k.d)}</small></button>`,
+    ).join("")}</div>
+    <div class="stack" style="margin-top:22px">
+      <button class="btn ghost wide" id="wJoin">${ill("invite", "ill sm")} On m'a invité·e sur une liste</button>
+      ${S.store?.account ? `<button class="link" id="wRecover">J'ai déjà un compte</button>` : ""}
+    </div>
+  </div>`;
+  app.querySelectorAll("[data-kind]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        S.onb = { kind: b.dataset.kind, mode: "create" };
+        S.screen = "profile";
+        render();
+      }),
+  );
+  $("#wJoin").onclick = () => {
+    S.onb = { kind: null, mode: "join" };
+    S.screen = "profile";
+    render();
+  };
+  $("#wRecover") && ($("#wRecover").onclick = openRecover);
 }
 
 function emojiPicker(sel) {
@@ -330,27 +404,39 @@ function bindPicker(el) {
 const picked = (el) => el.querySelector('[aria-pressed="true"]')?.dataset.v || "";
 
 async function renderProfileSetup(app) {
-  const joining = loadJSON("courses:join", null);
+  const invited = loadJSON("courses:join", null);
+  const k = S.onb.kind ? kindOf(S.onb.kind) : null;
   const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+  const lead = invited
+    ? "Tu as été invité·e sur une liste de courses partagée. Dis-nous qui tu es pour la rejoindre."
+    : k
+      ? `Une liste pour ${esc(k.pour)}, super&nbsp;! D'abord, qui es-tu&nbsp;? Les autres verront ton prénom à côté de ce que tu ajoutes.`
+      : "D'abord, qui es-tu&nbsp;? Les autres verront ton prénom à côté de ce que tu ajoutes.";
   app.innerHTML = `<div class="intro">
-    <p class="logo">🧺</p><h1>Courses</h1>
-    <p class="lead">${joining ? "Tu as été invité·e sur une liste de courses partagée. Crée ton profil pour la rejoindre." : "La liste de courses partagée avec ta moitié, ta coloc ou ta famille. Tout le monde voit les ajouts en direct."}</p>
+    ${!invited ? `<button class="link back" id="pBack">← Retour</button>` : ""}
+    ${invited ? ill("invite", "ill xl") : k ? kindIll(k.id, "ill xl") : ill("salut", "ill xl")}
+    <h1>Ton profil</h1>
+    <p class="lead">${lead}</p>
     <form class="card" id="pForm" autocomplete="off">
-      <h2>Ton profil</h2>
       <div class="field"><label for="pName">Ton prénom</label><input id="pName" maxlength="30" required placeholder="ex : Camille" autocomplete="given-name"></div>
       <div class="field"><span>Ton emoji</span>${emojiPicker(emoji)}</div>
       <p class="err" id="pErr"></p>
-      <button class="btn wide" type="submit">C'est parti</button>
+      <button class="btn wide" type="submit">Continuer</button>
     </form>
-    ${S.store?.account ? `<p class="or">Tu as déjà un compte (ici ou dans Déclic) ? <button class="link" id="pRecover">Retrouver mon compte</button></p>` : ""}
+    ${invited && S.store?.account ? `<p class="or">Tu as déjà un compte&nbsp;? <button class="link" id="pRecover">Me connecter avec mon e-mail</button></p>` : ""}
   </div>`;
   bindPicker($("#emojiPick"));
+  $("#pBack") &&
+    ($("#pBack").onclick = () => {
+      S.screen = "welcome";
+      render();
+    });
   $("#pRecover") && ($("#pRecover").onclick = openRecover);
   $("#pForm").onsubmit = async (e) => {
     e.preventDefault();
     const name = $("#pName").value.trim();
     if (!name) return;
-    const btn = e.submitter || $("#pForm button[type=submit]");
+    const btn = $("#pForm button[type=submit]");
     btn.disabled = true;
     try {
       const me = { name, emoji: picked($("#emojiPick")) || emoji };
@@ -366,25 +452,29 @@ async function renderProfileSetup(app) {
   // Prénom déjà choisi dans Déclic : on le propose.
   if (S.store) {
     const n = await S.store.suggestedName().catch(() => "");
-    if (n && !$("#pName")?.value) $("#pName").value = n;
+    if (n && $("#pName") && !$("#pName").value) $("#pName").value = n;
   }
 }
 
 function kindChips(sel) {
-  return `<div class="chips" id="kindPick">${KINDS.map((k) => `<button type="button" class="chip" data-v="${k.id}" aria-pressed="${k.id === sel}">${k.e} ${esc(k.l)}</button>`).join("")}</div>`;
+  return `<div class="chips" id="kindPick">${KINDS.map(
+    (k) => `<button type="button" class="chip" data-v="${k.id}" aria-pressed="${k.id === sel}">${kindIll(k.id, "ill xs")} ${esc(k.l)}</button>`,
+  ).join("")}</div>`;
 }
-function householdForms(prefix) {
+function createForm(prefix, kind) {
+  const k = kindOf(kind);
   return `<form class="card" id="${prefix}Create" autocomplete="off">
-      <h2>Créer une liste</h2>
-      <div class="field"><span>Pour qui ?</span>${kindChips("couple")}</div>
-      <div class="field"><label for="${prefix}Name">Nom de la liste</label><input id="${prefix}Name" maxlength="40" placeholder="${esc(KINDS[0].ph)}"></div>
+      <h2>Créer la liste</h2>
+      <div class="field"><span>Pour qui&nbsp;?</span>${kindChips(k.id)}</div>
+      <div class="field"><label for="${prefix}Name">Nom de la liste</label><input id="${prefix}Name" maxlength="40" placeholder="${esc(k.ph)}"></div>
       <p class="err" id="${prefix}CErr"></p>
       <button class="btn wide" type="submit">Créer et inviter</button>
-    </form>
-    <p class="or">ou</p>
-    <form class="card" id="${prefix}Join" autocomplete="off">
+    </form>`;
+}
+function joinForm(prefix) {
+  return `<form class="card" id="${prefix}Join" autocomplete="off">
       <h2>Rejoindre une liste</h2>
-      <p class="hint">Demande le code (ou le lien d'invitation) à la personne qui a créé la liste.</p>
+      <p class="hint">Ouvre le lien d'invitation qu'on t'a envoyé, ou tape le code à 6 caractères.</p>
       <div class="field"><label for="${prefix}Code">Code</label><input id="${prefix}Code" class="code-in" maxlength="6" autocapitalize="characters" spellcheck="false" placeholder="ABC123"></div>
       <p class="err" id="${prefix}JErr"></p>
       <button class="btn ghost wide" type="submit">Rejoindre</button>
@@ -392,41 +482,46 @@ function householdForms(prefix) {
 }
 function bindHouseholdForms(prefix) {
   const kp = $("#kindPick");
-  bindPicker(kp);
-  kp.addEventListener("click", () => {
-    const k = KINDS.find((x) => x.id === picked(kp));
-    if (k) $(`#${prefix}Name`).placeholder = k.ph;
-  });
-  $(`#${prefix}Create`).onsubmit = async (e) => {
-    e.preventDefault();
-    const kind = picked(kp) || "autre";
-    const name = $(`#${prefix}Name`).value.trim() || $(`#${prefix}Name`).placeholder;
-    const btn = e.target.querySelector("button[type=submit]");
-    btn.disabled = true;
-    try {
-      const code = await S.store.createHousehold(name, kind);
-      await refreshHouseholds();
-      await selectHousehold(code);
-      if ($("#panel").open) $("#panel").close();
-      openInvite(true);
-    } catch (err) {
-      $(`#${prefix}CErr`).textContent = errText(err);
+  if (kp) {
+    bindPicker(kp);
+    kp.addEventListener("click", () => {
+      const k = KINDS.find((x) => x.id === picked(kp));
+      if (k) $(`#${prefix}Name`).placeholder = k.ph;
+    });
+  }
+  $(`#${prefix}Create`) &&
+    ($(`#${prefix}Create`).onsubmit = async (e) => {
+      e.preventDefault();
+      const kind = picked(kp) || "autre";
+      const name = $(`#${prefix}Name`).value.trim() || $(`#${prefix}Name`).placeholder;
+      const btn = e.target.querySelector("button[type=submit]");
+      btn.disabled = true;
+      try {
+        const code = await S.store.createHousehold(name, kind);
+        await refreshHouseholds();
+        S.view = "list";
+        await selectHousehold(code);
+        if ($("#panel").open) $("#panel").close();
+        openInvite(true);
+      } catch (err) {
+        $(`#${prefix}CErr`).textContent = errText(err);
+        btn.disabled = false;
+      }
+    });
+  $(`#${prefix}Join`) &&
+    ($(`#${prefix}Join`).onsubmit = async (e) => {
+      e.preventDefault();
+      const code = $(`#${prefix}Code`).value.trim().toUpperCase();
+      if (!/^[A-Z0-9]{6}$/.test(code)) {
+        $(`#${prefix}JErr`).textContent = "Le code fait 6 caractères (lettres et chiffres).";
+        return;
+      }
+      const btn = e.target.querySelector("button[type=submit]");
+      btn.disabled = true;
+      const ok = await joinCode(code, (m) => ($(`#${prefix}JErr`).textContent = m));
       btn.disabled = false;
-    }
-  };
-  $(`#${prefix}Join`).onsubmit = async (e) => {
-    e.preventDefault();
-    const code = $(`#${prefix}Code`).value.trim().toUpperCase();
-    if (!/^[A-Z0-9]{6}$/.test(code)) {
-      $(`#${prefix}JErr`).textContent = "Le code fait 6 caractères (lettres et chiffres).";
-      return;
-    }
-    const btn = e.target.querySelector("button[type=submit]");
-    btn.disabled = true;
-    const ok = await joinCode(code, (m) => ($(`#${prefix}JErr`).textContent = m));
-    btn.disabled = false;
-    if (ok && $("#panel").open) $("#panel").close();
-  };
+      if (ok && $("#panel").open) $("#panel").close();
+    });
 }
 async function joinCode(code, onErr) {
   try {
@@ -446,77 +541,70 @@ async function joinCode(code, onErr) {
 }
 
 function renderHouseholdSetup(app) {
+  const mode = S.onb.mode;
+  let body;
+  if (mode === "join")
+    body = `${joinForm("s")}<p class="or"><button class="link" id="sSwap">Créer une nouvelle liste à la place</button></p>`;
+  else if (mode === "create")
+    body = `${createForm("s", S.onb.kind)}<p class="or"><button class="link" id="sSwap">J'ai plutôt un code d'invitation</button></p>`;
+  else body = `${createForm("s", "famille")}<p class="or">ou</p>${joinForm("s")}`;
   app.innerHTML = `<div class="intro">
-    <p class="logo">${esc(S.me?.emoji || "🧺")}</p><h1>Salut ${esc(S.me?.name || "")} !</h1>
-    <p class="lead">Crée la liste de ton foyer et invite les autres, ou rejoins celle qu'on t'a partagée.</p>
-    ${householdForms("s")}
+    <p class="hello"><span class="av lg">${esc(S.me?.emoji || "🙂")}</span></p>
+    <h1>Salut ${esc(S.me?.name || "")}&nbsp;!</h1>
+    <p class="lead">${mode === "join" ? "Plus qu'une étape pour rejoindre la liste partagée." : "Donne un nom à ta liste, puis invite les autres."}</p>
+    ${body}
     <p class="or"><button class="link" id="editMe">Modifier mon profil</button></p>
   </div>`;
   bindHouseholdForms("s");
+  $("#sSwap") &&
+    ($("#sSwap").onclick = () => {
+      S.onb = mode === "join" ? { kind: "famille", mode: "create" } : { kind: S.onb.kind, mode: "join" };
+      render();
+    });
 }
 
-function renderList(app) {
+// ---------- écran principal : liste de courses / dans notre cuisine ----------
+function renderMain(app) {
   const h = household();
   const items = viewItems();
   const todo = items.filter((i) => !i.done),
-    done = items.filter((i) => i.done);
-  const urgent = todo.filter((i) => i.prio === "urgent").length;
-  const pending = S.queue.filter((o) => o.hid === S.hid).length;
-  // Filtre par magasin : seulement les magasins présents dans la liste à acheter.
-  const shops = SHOPS.filter((s) => s.id && todo.some((i) => i.shop === s.id));
-  if (S.shop && !shops.some((s) => s.id === S.shop)) S.shop = "";
-  const filtered = (S.tab === "todo" ? todo : done).filter((i) => !S.shop || S.tab === "done" || i.shop === S.shop || !i.shop);
+    stock = items.filter((i) => i.done);
   const others = S.members.filter((m) => m.uid !== S.uid);
-  const kind = KINDS.find((k) => k.id === h?.kind);
+  const pending = S.queue.filter((o) => o.hid === S.hid).length;
+  const lowCount = stock.filter((i) => i.low).length;
 
   let status = "";
   if (!S.store || !navigator.onLine) status = `Hors ligne${pending ? ` · ${pending} changement${pending > 1 ? "s" : ""} en attente` : ""} : tout sera envoyé au retour du réseau.`;
   else if (pending) status = `Envoi de ${pending} changement${pending > 1 ? "s" : ""}…`;
 
+  // On garde la saisie en cours quand l'écran se redessine (changement reçu d'un autre membre).
   const prevInput = $("#quickName");
-  const keep = prevInput ? { v: prevInput.value, f: document.activeElement === prevInput } : null;
+  const keep = prevInput ? { v: prevInput.value, f: document.activeElement === prevInput, view: prevInput.dataset.view } : null;
 
-  app.innerHTML = `
+  const top = `
     <div class="top">
-      <button class="switch" id="hhBtn" aria-label="Changer de liste ou gérer le foyer"><span>${kind ? kind.e + " " : ""}${esc(h?.name || "")}</span> ▾</button>
+      <button class="switch" id="hhBtn" aria-label="Changer de liste ou gérer le foyer">${kindIll(h?.kind, "ill xs")}<span>${esc(h?.name || "")}</span> ▾</button>
       <span class="grow"></span>
-      <button class="faces" id="facesBtn" aria-label="${others.length ? "Membres de la liste" : "Inviter quelqu'un"}">${(others.length ? others.slice(0, 4) : [])
+      <button class="faces" id="facesBtn" aria-label="${others.length ? "Membres de la liste" : "Inviter quelqu'un"}">${others
+        .slice(0, 4)
         .map((m) => `<span class="av" title="${esc(m.name)}">${esc(m.emoji || "🙂")}</span>`)
         .join("")}${others.length ? "" : `<span class="av add" aria-hidden="true">+</span>`}</button>
       <button class="meBtn" id="meBtn" aria-label="Mon profil"><span class="av me">${esc(S.me?.emoji || "🙂")}</span></button>
-    </div>
-    <h1>${esc(h?.name || "Courses")}</h1>
-    <p class="count">${
-      todo.length
-        ? `<b>${todo.length}</b> article${todo.length > 1 ? "s" : ""} à acheter${urgent ? ` dont <b>${urgent}</b> urgent${urgent > 1 ? "s" : ""}` : ""}`
-        : "Rien ne manque pour l'instant."
-    }</p>
-    ${status ? `<div class="sync">${esc(status)}</div>` : ""}
-    <form class="add" id="quick" autocomplete="off">
-      <input id="quickName" list="suggest" maxlength="80" placeholder="Il manque quoi ?" aria-label="Article à ajouter" enterkeyhint="done">
-      <button type="button" class="more" id="moreBtn" aria-label="Ajouter avec détails">⋯</button>
-      <button class="btn" type="submit">Ajouter</button>
-    </form>
-    <datalist id="suggest">${suggestions(items).map((n) => `<option value="${esc(n)}">`).join("")}</datalist>
-    <div class="bar" role="group" aria-label="Filtres">
-      <button class="tab" data-tab="todo" aria-pressed="${S.tab === "todo"}">À acheter</button>
-      <button class="tab" data-tab="done" aria-pressed="${S.tab === "done"}">Achetés${done.length ? ` <small>${done.length}</small>` : ""}</button>
-      ${
-        S.tab === "todo" && shops.length
-          ? `<span class="sep"></span><button class="fchip" data-shop="" aria-pressed="${!S.shop}">Partout</button>${shops
-              .map((s) => `<button class="fchip" data-shop="${s.id}" aria-pressed="${S.shop === s.id}">${esc(s.l)}</button>`)
-              .join("")}`
-          : ""
-      }
-    </div>
-    ${
-      !others.length && S.tab === "todo"
-        ? `<button class="invite-hint" id="inviteHint"><span class="av lg" aria-hidden="true">💌</span><span><b>Invite les autres</b><span>Envoie le lien à ta moitié, ta coloc ou ta famille pour partager cette liste.</span></span></button>`
-        : ""
-    }
-    <main id="list">${listHtml(filtered, done.length)}</main>`;
+    </div>`;
 
-  if (keep) {
+  const body = S.view === "kitchen" ? kitchenHtml(stock, todo) : listHtml(todo, stock, others);
+  const nav = `<nav class="nav" aria-label="Pages">
+      <button data-view="list" aria-current="${S.view === "list" ? "page" : "false"}">${ill("liste", "ill nav-ill")}<span>Liste de courses</span>${
+        todo.length ? `<b class="badge">${todo.length}</b>` : ""
+      }</button>
+      <button data-view="kitchen" aria-current="${S.view === "kitchen" ? "page" : "false"}">${ill("cuisine", "ill nav-ill")}<span>Dans notre cuisine</span>${
+        lowCount ? `<b class="badge warn" title="presque finis">${lowCount}</b>` : ""
+      }</button>
+    </nav>`;
+
+  app.innerHTML = top + (status ? `<div class="sync">${esc(status)}</div>` : "") + body + nav;
+
+  if (keep && keep.view === S.view) {
     $("#quickName").value = keep.v;
     if (keep.f) $("#quickName").focus();
   }
@@ -530,8 +618,133 @@ function renderList(app) {
   }
 }
 
-function suggestions(items) {
-  const onList = new Set(items.filter((i) => !i.done).map((i) => norm(i.name)));
+function quickForm(view, placeholder) {
+  return `<form class="add" id="quick" autocomplete="off">
+      <input id="quickName" data-view="${view}" list="suggest" maxlength="80" placeholder="${esc(placeholder)}" aria-label="Article à ajouter" enterkeyhint="done">
+      <button type="button" class="more" id="moreBtn" aria-label="Ajouter avec détails">⋯</button>
+      <button class="btn" type="submit">Ajouter</button>
+    </form>
+    <datalist id="suggest">${suggestions().map((n) => `<option value="${esc(n)}">`).join("")}</datalist>`;
+}
+
+function listHtml(todo, stock, others) {
+  const urgent = todo.filter((i) => i.prio === "urgent").length;
+  // Filtre par magasin : seulement les magasins présents dans la liste.
+  const shops = SHOPS.filter((s) => s.id && todo.some((i) => i.shop === s.id));
+  if (S.shop && !shops.some((s) => s.id === S.shop)) S.shop = "";
+  const shown = todo.filter((i) => !S.shop || i.shop === S.shop || !i.shop);
+  // Presque fini à la maison et pas encore sur la liste : un toucher pour l'ajouter.
+  const low = stock.filter((i) => i.low);
+  let html = `<h1>Liste de courses</h1>
+    <p class="count">${
+      todo.length
+        ? `<b>${todo.length}</b> article${todo.length > 1 ? "s" : ""} à acheter${urgent ? ` dont <b>${urgent}</b> urgent${urgent > 1 ? "s" : ""}` : ""}`
+        : "Rien ne manque pour l'instant."
+    }</p>
+    ${quickForm("list", "Il manque quoi ?")}`;
+  if (shops.length)
+    html += `<div class="bar" role="group" aria-label="Filtrer par magasin"><button class="fchip" data-shop="" aria-pressed="${!S.shop}">Partout</button>${shops
+      .map((s) => `<button class="fchip" data-shop="${s.id}" aria-pressed="${S.shop === s.id}">${esc(s.l)}</button>`)
+      .join("")}</div>`;
+  if (low.length)
+    html += `<section class="lowcard"><h3>${ill("cuisine", "ill sm")} Presque fini à la maison</h3><div class="chips">${low
+      .map((i) => `<button class="chip addlow" data-finish="${esc(i.id)}">+ ${esc(i.name)}</button>`)
+      .join("")}</div></section>`;
+  if (!others.length)
+    html += `<button class="invite-hint" id="inviteHint">${ill("invite", "ill md")}<span><b>Invite les autres</b><span>Envoie le lien à ta famille, ta coloc, ta moitié ou tes amis pour partager cette liste.</span></span></button>`;
+  html += `<main id="list">`;
+  if (!shown.length)
+    html += S.shop
+      ? `<div class="empty">${ill("ok", "ill xl")}<p>Rien de plus à prendre ici.</p></div>`
+      : `<div class="empty">${ill("ok", "ill xl")}<p>Tout est acheté&nbsp;! Ajoute un article dès que quelque chose se termine.</p></div>`;
+  for (const c of CATS) {
+    const group = shown
+      .filter((i) => (CATS.some((x) => x.id === i.cat) ? i.cat : "autre") === c.id)
+      .sort((a, b) => (PRANK[a.prio] ?? 1) - (PRANK[b.prio] ?? 1) || String(a.created_at).localeCompare(String(b.created_at)));
+    if (!group.length) continue;
+    html += aisleHead(c, group.length) + `<ul class="items">${group.map(listItemHtml).join("")}</ul></section>`;
+  }
+  html += `</main>` + emailHint();
+  return html;
+}
+
+function aisleHead(c, n) {
+  return `<section class="aisle"><h2>${catIll(c.id, "ill cat")}<span>${esc(c.l)}</span><small>${n}</small></h2>`;
+}
+
+function listItemHtml(it) {
+  const prio = PRIOS.find((p) => p.id === it.prio);
+  const shop = SHOPS.find((s) => s.id && s.id === it.shop);
+  const who = S.members.length > 1 && it.added_by ? `ajouté par ${esc(memberName(it.added_by))}` : "";
+  return `<li data-id="${esc(it.id)}">
+    <button class="check" data-toggle="${esc(it.id)}" aria-label="Acheté : ${esc(it.name)}">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>
+    </button>
+    <button class="body" data-edit="${esc(it.id)}">
+      <div class="name">${esc(it.name)}${it.qty ? ` <span class="qty">· ${esc(it.qty)}</span>` : ""}</div>
+      ${it.quality ? `<div class="quality">${esc(it.quality)}</div>` : ""}
+      <div class="meta">${prio && it.prio !== "plustard" ? `<span class="pill ${it.prio}">${esc(prio.l)}</span>` : ""}${shop ? `<span class="pill">${esc(shop.l)}</span>` : ""}${
+        who ? `<span>${who}</span>` : ""
+      }${it._pending ? `<span class="pending">en attente d'envoi</span>` : ""}</div>
+    </button>
+  </li>`;
+}
+
+function kitchenHtml(stock, todo) {
+  const low = stock.filter((i) => i.low).length;
+  if (S.kfilter === "low" && !low) S.kfilter = "all";
+  const shown = stock.filter((i) => S.kfilter !== "low" || i.low);
+  let html = `<h1>Dans notre cuisine</h1>
+    <p class="count">${
+      stock.length
+        ? `<b>${stock.length}</b> produit${stock.length > 1 ? "s" : ""} à la maison${low ? ` dont <b>${low}</b> presque fini${low > 1 ? "s" : ""}` : ""}`
+        : "Ce que vous avez déjà à la maison."
+    }</p>
+    ${quickForm("kitchen", "On a quoi ?")}`;
+  if (low)
+    html += `<div class="bar" role="group" aria-label="Filtre"><button class="fchip" data-kf="all" aria-pressed="${S.kfilter === "all"}">Tout</button><button class="fchip" data-kf="low" aria-pressed="${
+      S.kfilter === "low"
+    }">Presque fini · ${low}</button></div>`;
+  html += `<main id="list">`;
+  if (!stock.length)
+    html += `<div class="empty">${ill("cuisine", "ill xl")}<p>La cuisine est vide pour l'instant.</p><p class="hint">Quand tu coches un article sur la liste de courses, il arrive ici. Tu peux aussi ajouter ce que vous avez déjà&nbsp;: quand un produit est fini, un toucher le remet sur la liste.</p></div>`;
+  for (const c of CATS) {
+    const group = shown
+      .filter((i) => (CATS.some((x) => x.id === i.cat) ? i.cat : "autre") === c.id)
+      .sort((a, b) => (b.low ? 1 : 0) - (a.low ? 1 : 0) || a.name.localeCompare(b.name, "fr"));
+    if (!group.length) continue;
+    html += aisleHead(c, group.length) + `<ul class="items">${group.map(kitchenItemHtml).join("")}</ul></section>`;
+  }
+  html += `</main>`;
+  return html;
+}
+
+function kitchenItemHtml(it) {
+  const by = it.done_by ? `${S.members.length > 1 ? `acheté par ${esc(memberName(it.done_by))} ` : "acheté "}${esc(ago(it.done_at))}` : "";
+  return `<li class="krow${it.low ? " low" : ""}" data-id="${esc(it.id)}">
+    <div class="kmain">
+      <button class="body" data-edit="${esc(it.id)}">
+        <div class="name">${esc(it.name)}${it.qty ? ` <span class="qty">· ${esc(it.qty)}</span>` : ""}</div>
+        ${it.quality ? `<div class="quality">${esc(it.quality)}</div>` : ""}
+      </button>
+      <div class="meta">
+        <button class="lowbtn" data-low="${esc(it.id)}" aria-pressed="${!!it.low}">${it.low ? "Presque fini" : "Il en reste"}</button>
+        ${by ? `<span>${by}</span>` : ""}${it._pending ? `<span class="pending">en attente d'envoi</span>` : ""}
+      </div>
+    </div>
+    <button class="finbtn" data-finish="${esc(it.id)}" aria-label="Fini : remettre ${esc(it.name)} sur la liste de courses">Fini<small>→ liste</small></button>
+  </li>`;
+}
+
+function emailHint() {
+  if (!S.store?.account || S.email.email || loadJSON("courses:emailHintOff", false)) return "";
+  return `<section class="card hintcard">${ill("cle", "ill md")}<div><b>Protège ton compte</b>
+    <p>Ajoute ton e-mail&nbsp;: si tu changes de téléphone, tu recevras un code pour retrouver tes listes.</p>
+    <div class="row"><button class="btn small" id="hintEmail">Ajouter mon e-mail</button><button class="link" id="hintOff">Plus tard</button></div></div></section>`;
+}
+
+function suggestions() {
+  const onList = new Set(viewItems().map((i) => norm(i.name)));
   const memo = loadJSON("courses:memo", {});
   return Object.entries(memo)
     .filter(([k]) => !onList.has(k))
@@ -540,57 +753,9 @@ function suggestions(items) {
     .map(([, v]) => v.name);
 }
 
-function listHtml(list, doneCount) {
-  if (!list.length) {
-    if (S.tab === "done") return `<div class="empty"><p>✅</p><p>Les articles cochés apparaîtront ici.</p></div>`;
-    if (S.shop) return `<div class="empty"><p>🛒</p><p>Rien de plus à prendre ici.</p></div>`;
-    return `<div class="empty"><p>🧺</p><p>Le frigo est plein. Ajoute un article dès que quelque chose se termine.</p></div>`;
-  }
-  let html = "";
-  if (S.tab === "done") {
-    // Achetés : du plus récent au plus ancien, sans rayons.
-    const sorted = [...list].sort((a, b) => String(b.done_at || "").localeCompare(String(a.done_at || "")));
-    html += `<ul class="items">${sorted.map(itemHtml).join("")}</ul>`;
-    html += `<button class="clear" id="clearDone">Retirer les ${doneCount} article${doneCount > 1 ? "s" : ""} acheté${doneCount > 1 ? "s" : ""}</button>`;
-    return html;
-  }
-  for (const c of CATS) {
-    const group = list
-      .filter((i) => (CATS.some((x) => x.id === i.cat) ? i.cat : "autre") === c.id)
-      .sort((a, b) => (PRANK[a.prio] ?? 1) - (PRANK[b.prio] ?? 1) || String(a.created_at).localeCompare(String(b.created_at)));
-    if (!group.length) continue;
-    html += `<section class="aisle"><h2><span class="emo" aria-hidden="true">${c.e}</span>${esc(c.l)}<small>${group.length}</small></h2><ul class="items">${group
-      .map(itemHtml)
-      .join("")}</ul></section>`;
-  }
-  return html;
-}
-
-function itemHtml(it) {
-  const prio = PRIOS.find((p) => p.id === it.prio);
-  const shop = SHOPS.find((s) => s.id && s.id === it.shop);
-  const many = S.members.length > 1;
-  let who = "";
-  if (it.done && it.done_by) who = `acheté par ${esc(memberName(it.done_by))} ${esc(ago(it.done_at))}`;
-  else if (it.done) who = `acheté ${esc(ago(it.done_at))}`;
-  else if (many && it.added_by) who = `ajouté par ${esc(memberName(it.added_by))}`;
-  return `<li class="${it.done ? "done" : ""}" data-id="${esc(it.id)}">
-    <button class="check" data-toggle="${esc(it.id)}" aria-label="${it.done ? "Remettre dans la liste" : "Marquer comme acheté"} : ${esc(it.name)}">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--on-basil)"><path d="M3 8.5l3.2 3L13 4.5"/></svg>
-    </button>
-    <button class="body" data-edit="${esc(it.id)}">
-      <div class="name">${esc(it.name)}${it.qty ? ` <span class="qty">· ${esc(it.qty)}</span>` : ""}</div>
-      ${it.quality ? `<div class="quality">${esc(it.quality)}</div>` : ""}
-      <div class="meta">${!it.done && prio && it.prio !== "plustard" ? `<span class="pill ${it.prio}">${esc(prio.l)}</span>` : ""}${
-        shop ? `<span class="pill">${esc(shop.l)}</span>` : ""
-      }${who ? `<span>${who}</span>` : ""}${it._pending ? `<span class="pending">en attente d'envoi</span>` : ""}</div>
-    </button>
-  </li>`;
-}
-
 // ---------- feuille article ----------
-function chips(el, opts, val, labelFn) {
-  el.innerHTML = opts.map((o) => `<button type="button" class="chip" data-v="${o.id}" aria-pressed="${o.id === val}">${esc(labelFn ? labelFn(o) : o.l)}</button>`).join("");
+function chips(el, opts, val, htmlFn) {
+  el.innerHTML = opts.map((o) => `<button type="button" class="chip" data-v="${o.id}" aria-pressed="${o.id === val}">${htmlFn ? htmlFn(o) : esc(o.l)}</button>`).join("");
   el.onclick = (e) => {
     const b = e.target.closest(".chip");
     if (!b) return;
@@ -599,16 +764,21 @@ function chips(el, opts, val, labelFn) {
 }
 function openSheet(it, presetName) {
   S.editingId = it ? it.id : null;
-  $("#sheetTitle").textContent = it ? "Modifier l'article" : "Nouvel article";
+  S.sheetPlace = it ? (it.done ? "kitchen" : "list") : S.view;
+  const kitchen = S.sheetPlace === "kitchen";
+  $("#sheetTitle").textContent = it ? "Modifier l'article" : kitchen ? "Ajouter à la cuisine" : "Nouvel article";
   $("#saveBtn").textContent = it ? "Enregistrer" : "Ajouter";
   $("#delBtn").hidden = !it;
+  $("#delBtn").textContent = kitchen ? "Retirer" : "Supprimer";
+  // Priorité et magasin n'ont de sens que pour ce qu'il reste à acheter.
+  $("#fPrioField").hidden = $("#fShopField").hidden = kitchen;
   const parsed = presetName ? parseQuick(presetName) : { name: "", qty: "" };
   const name = it ? it.name : parsed.name;
   const memo = !it && name ? loadJSON("courses:memo", {})[norm(name)] : null;
   $("#fName").value = name;
   $("#fQty").value = it ? it.qty || "" : parsed.qty;
   $("#fQuality").value = it ? it.quality || "" : memo?.quality || "";
-  chips($("#fCat"), CATS, it?.cat || (name ? guessCat(name) : "autre"), (c) => c.e + " " + c.l);
+  chips($("#fCat"), CATS, it?.cat || (name ? guessCat(name) : "autre"), (c) => `${catIll(c.id, "ill xs")} ${esc(c.l)}`);
   chips($("#fPrio"), PRIOS, it?.prio || "bientot");
   chips($("#fShop"), SHOPS, it ? it.shop || "" : memo?.shop || "");
   const by = $("#fBy");
@@ -632,25 +802,24 @@ $("#form").addEventListener("submit", (e) => {
     qty: $("#fQty").value.trim(),
     quality: $("#fQuality").value.trim(),
     cat: chosen($("#fCat")) || "autre",
-    prio: chosen($("#fPrio")) || "bientot",
-    shop: chosen($("#fShop")),
   };
+  if (S.sheetPlace === "list") Object.assign(data, { prio: chosen($("#fPrio")) || "bientot", shop: chosen($("#fShop")) });
   const id = S.editingId;
   $("#sheet").close();
   if (id) {
     remember(data);
     enqueue({ t: "patch", id, patch: data });
-  } else addItem(data);
+  } else addItem(data, S.sheetPlace);
 });
 $("#cancelBtn").onclick = () => $("#sheet").close();
 $("#delBtn").onclick = () => {
   const it = viewItems().find((i) => i.id === S.editingId);
   $("#sheet").close();
-  if (it) removeItems([it], `« ${it.name} » supprimé`);
+  if (it) removeItems([it], it.done ? `« ${it.name} » retiré de la cuisine` : `« ${it.name} » supprimé`);
 };
 for (const d of ["#sheet", "#panel"]) $(d).addEventListener("click", (e) => e.target === $(d) && $(d).close());
 
-// ---------- panneaux : foyer, invitations, profil ----------
+// ---------- panneaux : foyer, invitations, profil, e-mail ----------
 function openPanel(html, bind) {
   $("#panelBody").innerHTML = html;
   bind && bind();
@@ -664,8 +833,10 @@ function openInvite(fresh) {
   if (!h) return;
   const url = inviteUrl(h.id);
   openPanel(
-    `<h3>${fresh ? "Ta liste est prête ! " : ""}Inviter quelqu'un</h3>
-    <p class="hint">Envoie ce lien à ta moitié, ta coloc ou ta famille. En l'ouvrant, ils créent leur profil et rejoignent « ${esc(h.name)} ». Ils peuvent aussi taper le code dans l'app.</p>
+    `<div class="phead">${ill(fresh ? "fete" : "invite", "ill lg")}<h3>${fresh ? "Ta liste est prête&nbsp;!" : "Inviter quelqu'un"}</h3></div>
+    <p class="hint">Envoie ce lien à ${esc(kindOf(h.kind).pour === "vous deux" ? "ta moitié" : "ceux avec qui tu fais les courses")}. En l'ouvrant, ils créent leur profil et rejoignent « ${esc(
+      h.name,
+    )} ». Ils peuvent aussi taper le code dans l'app.</p>
     <div class="bigcode" aria-label="Code de la liste">${esc(h.id)}</div>
     <div class="stack">
       <button class="btn wide" id="iShare">Envoyer le lien d'invitation</button>
@@ -700,34 +871,36 @@ async function copy(text, msg) {
 
 function openHousehold() {
   const h = household();
-  const items = viewItems().filter((i) => !i.done);
+  const todo = viewItems().filter((i) => !i.done);
   openPanel(
-    `<h3>${esc(h?.name || "")}</h3>
+    `<div class="phead">${kindIll(h?.kind, "ill lg")}<h3>${esc(h?.name || "")}</h3></div>
     <h4>Membres</h4>
     <ul class="people">${S.members
-      .map((m) => `<li><span class="av lg">${esc(m.emoji || "🙂")}</span><span><b>${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</b><br><small>${m.uid === h?.created_by ? "a créé la liste" : "membre"}</small></span></li>`)
+      .map(
+        (m) =>
+          `<li><span class="av lg">${esc(m.emoji || "🙂")}</span><span><b>${esc(m.name || "Sans nom")}${m.uid === S.uid ? " (toi)" : ""}</b><br><small>${
+            m.uid === h?.created_by ? "a créé la liste" : "membre"
+          }</small></span></li>`,
+      )
       .join("")}</ul>
     <div class="stack" style="margin-top:10px">
       <button class="btn wide" id="hInvite">Inviter quelqu'un</button>
-      <button class="btn ghost wide" id="hText" ${items.length ? "" : "disabled"}>Envoyer la liste par message</button>
+      <button class="btn ghost wide" id="hText" ${todo.length ? "" : "disabled"}>Envoyer la liste de courses par message</button>
     </div>
     <h4>Mes listes</h4>
     ${S.households
-      .map((x) => {
-        const k = KINDS.find((y) => y.id === x.kind) || KINDS[3];
-        return `<button class="hh" data-hh="${esc(x.id)}" aria-current="${x.id === S.hid}"><span class="k">${k.e}</span><span><b>${esc(x.name)}</b><small>${esc(k.l)}</small></span></button>`;
-      })
+      .map((x) => `<button class="hh" data-hh="${esc(x.id)}" aria-current="${x.id === S.hid}">${kindIll(x.kind, "ill md")}<span><b>${esc(x.name)}</b><small>${esc(kindOf(x.kind).l)}</small></span></button>`)
       .join("")}
     <button class="btn ghost wide" id="hNew">+ Créer ou rejoindre une autre liste</button>
     <h4>Réglages de la liste</h4>
     <form class="field" id="hRename" autocomplete="off"><label for="hName">Nom</label>
-      <div style="display:flex;gap:8px"><input id="hName" maxlength="40" value="${esc(h?.name || "")}"><button class="btn" type="submit">OK</button></div></form>
+      <div class="inline"><input id="hName" maxlength="40" value="${esc(h?.name || "")}"><button class="btn" type="submit">OK</button></div></form>
     <button class="btn danger wide" id="hLeave">Quitter cette liste</button>
     <p class="hint" style="margin-top:8px">${S.members.length <= 1 ? "Tu es seul·e sur cette liste : en la quittant, elle sera supprimée." : "Les autres membres gardent la liste."}</p>
     <button class="link" data-close>Fermer</button>`,
     () => {
       $("#hInvite").onclick = () => openInvite(false);
-      $("#hText").onclick = () => shareAsText(items);
+      $("#hText").onclick = () => shareAsText(todo);
       $("#panelBody").querySelectorAll("[data-hh]").forEach(
         (b) =>
           (b.onclick = async () => {
@@ -735,7 +908,8 @@ function openHousehold() {
             await selectHousehold(b.dataset.hh);
           }),
       );
-      $("#hNew").onclick = () => openPanel(`<h3>Une autre liste</h3>${householdForms("n")}<button class="link" data-close>Annuler</button>`, () => bindHouseholdForms("n"));
+      $("#hNew").onclick = () =>
+        openPanel(`<h3>Une autre liste</h3>${createForm("n", "famille")}<p class="or">ou</p>${joinForm("n")}<button class="link" data-close>Annuler</button>`, () => bindHouseholdForms("n"));
       $("#hRename").onsubmit = async (e) => {
         e.preventDefault();
         const name = $("#hName").value.trim();
@@ -759,6 +933,7 @@ function openHousehold() {
           saveJSON("courses:queue", S.queue);
           $("#panel").close();
           await refreshHouseholds();
+          S.onb = { kind: null, mode: null };
           await selectHousehold(S.households[0]?.id || null);
           toast("Tu as quitté la liste");
         } catch (err) {
@@ -771,7 +946,7 @@ function openHousehold() {
 
 async function shareAsText(items) {
   const h = household();
-  let text = `🧺 ${h?.name || "Courses"}\n`;
+  let text = `🛒 ${h?.name || "Courses"}\n`;
   for (const c of CATS) {
     const g = items.filter((i) => (i.cat || "autre") === c.id);
     if (!g.length) continue;
@@ -790,6 +965,7 @@ async function shareAsText(items) {
 
 function openMe() {
   const me = S.me || { name: "", emoji: "🙂" };
+  const acc = S.store?.account;
   openPanel(
     `<h3>Mon profil</h3>
     <form id="mForm" autocomplete="off">
@@ -799,14 +975,19 @@ function openMe() {
       <button class="btn wide" type="submit">Enregistrer</button>
     </form>
     ${
-      S.store?.account
-        ? `<h4>Utiliser l'app sur un autre appareil</h4>
-    <p class="hint">Ton compte est lié à ce navigateur. Crée un code de récupération pour le retrouver sur un autre téléphone (le même code marche aussi pour Déclic).</p>
-    <div class="stack"><button class="btn ghost wide" id="mCode">Créer mon code de récupération</button>
-    <button class="btn ghost wide" id="mLogin">J'ai déjà un code</button></div>`
+      acc
+        ? `<h4>Mon e-mail</h4>
+    ${
+      S.email.email
+        ? `<div class="okline">${ill("ok", "ill sm")}<span>Compte protégé par <b>${esc(S.email.email)}</b>. Sur un autre téléphone, choisis « J'ai déjà un compte » et entre cette adresse.</span></div>
+           <button class="link" id="mEmail">Changer d'adresse</button>`
+        : `<p class="hint">Ajoute ton e-mail pour retrouver ton compte et tes listes sur un autre téléphone : on t'y enverra un code.</p>
+           <button class="btn ghost wide" id="mEmail">${ill("email", "ill xs")} Protéger mon compte avec mon e-mail</button>`
+    }
+    <button class="link" id="mLogin">Ouvrir un autre compte sur cet appareil</button>`
         : ""
     }
-    ${S.store?.mode === "demo" ? `<p class="hint">Mode démonstration : les données restent dans ce navigateur.</p>` : ""}
+    ${S.store?.mode === "demo" ? `<p class="hint">Mode démonstration : les données restent dans ce navigateur (le code reçu « par e-mail » est 123456).</p>` : ""}
     <button class="link" data-close>Fermer</button>`,
     () => {
       bindPicker($("#emojiPick"));
@@ -825,53 +1006,151 @@ function openMe() {
           $("#mErr").textContent = errText(err);
         }
       };
-      $("#mCode") &&
-        ($("#mCode").onclick = async () => {
-          if (!confirm("Créer un code ? S'il en existait déjà un, l'ancien ne marchera plus.")) return;
-          try {
-            const code = await S.store.account.createCode();
-            openPanel(
-              `<h3>Ton code de récupération</h3><div class="bigcode" style="font-size:1.3rem">${esc(code)}</div>
-              <p class="hint">Note-le ou fais une capture d'écran, et garde-le pour toi. Il ne sera plus affiché.</p>
-              <div class="stack"><button class="btn ghost wide" id="cCopy">Copier</button><button class="btn wide" data-close>C'est noté</button></div>`,
-              () => ($("#cCopy").onclick = () => copy(code, "Code copié")),
-            );
-          } catch (err) {
-            toast(errText(err));
-          }
-        });
+      $("#mEmail") && ($("#mEmail").onclick = () => openEmailLink(!!S.email.email));
       $("#mLogin") && ($("#mLogin").onclick = openRecover);
     },
   );
 }
 
-function openRecover() {
+// Formulaire en deux temps : l'adresse, puis le code reçu par e-mail.
+function codeStep({ email, title, intro, onVerify, onResend, onBack, done }) {
   openPanel(
-    `<h3>Retrouver mon compte</h3>
-    <p class="hint">Entre le code de récupération créé dans ton profil (Courses ou Déclic) sur ton autre appareil.</p>
-    <form id="rForm" autocomplete="off"><div class="field"><label for="rCode">Code de récupération</label>
-      <input id="rCode" class="code-in" maxlength="24" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></div>
-      <p class="err" id="rErr"></p>
-      <button class="btn wide" type="submit">Retrouver mon compte</button></form>
+    `<div class="phead">${ill("email", "ill lg")}<h3>${title}</h3></div>
+    <p class="hint">${intro} <b>${esc(email)}</b>. Il peut mettre une minute à arriver&nbsp;: pense à regarder dans les spams.</p>
+    <form id="cForm" autocomplete="off"><div class="field"><label for="cCode">Code reçu par e-mail</label>
+      <input id="cCode" class="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></div>
+      <p class="err" id="cErr"></p>
+      <button class="btn wide" type="submit">Valider</button></form>
+    <div class="row spread"><button class="link" id="cBack">Changer d'adresse</button><button class="link" id="cResend">Renvoyer le code</button></div>`,
+    () => {
+      setTimeout(() => $("#cCode")?.focus(), 50);
+      $("#cBack").onclick = onBack;
+      $("#cResend").onclick = async () => {
+        try {
+          await onResend();
+          toast("Nouveau code envoyé");
+        } catch (err) {
+          $("#cErr").textContent = errText(err);
+        }
+      };
+      $("#cForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const code = $("#cCode").value.replace(/\D/g, "");
+        if (code.length < 6) {
+          $("#cErr").textContent = "Le code fait au moins 6 chiffres.";
+          return;
+        }
+        const btn = $("#cForm button[type=submit]");
+        btn.disabled = true;
+        try {
+          await onVerify(code);
+          done();
+        } catch (err) {
+          $("#cErr").textContent = errText(err);
+          btn.disabled = false;
+        }
+      };
+    },
+  );
+}
+function emailStep({ title, intro, cta, value, note, onSend }) {
+  openPanel(
+    `<div class="phead">${ill("cle", "ill lg")}<h3>${title}</h3></div>
+    <p class="hint">${intro}</p>
+    <form id="eForm" autocomplete="off"><div class="field"><label for="eMail">Adresse e-mail</label>
+      <input id="eMail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" value="${esc(value || "")}" placeholder="toi@exemple.fr"></div>
+      ${note ? `<p class="note">${note}</p>` : ""}
+      <p class="err" id="eErr"></p>
+      <button class="btn wide" type="submit">${cta}</button></form>
     <button class="link" data-close>Annuler</button>`,
     () => {
-      $("#rForm").onsubmit = async (e) => {
+      setTimeout(() => $("#eMail")?.focus(), 50);
+      $("#eForm").onsubmit = async (e) => {
         e.preventDefault();
+        const email = $("#eMail").value.trim().toLowerCase();
+        if (!isEmail(email)) {
+          $("#eErr").textContent = "Cette adresse e-mail n'a pas l'air valide.";
+          return;
+        }
+        const btn = $("#eForm button[type=submit]");
+        btn.disabled = true;
         try {
-          await S.store.account.login($("#rCode").value);
-          // Nouveau compte sur cet appareil : on repart de zéro (les changements en attente appartenaient à l'ancien).
-          for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
-          toast("Compte retrouvé !");
-          setTimeout(() => location.reload(), 600);
+          await onSend(email);
         } catch (err) {
-          $("#rErr").textContent = errText(err);
+          $("#eErr").textContent = errText(err);
+          btn.disabled = false;
         }
       };
     },
   );
 }
 
-// ---------- événements de la liste ----------
+// Lier une adresse au compte de cet appareil.
+function openEmailLink(change) {
+  const acc = S.store.account;
+  const step2 = (email) =>
+    codeStep({
+      email,
+      title: "Vérifie ton e-mail",
+      intro: "On vient d'envoyer un code à",
+      onVerify: (code) => acc.confirmEmail(email, code),
+      onResend: () => acc.linkEmail(email),
+      onBack: () => openEmailLink(change),
+      done: () => {
+        S.email = { email, pending: "" };
+        $("#panel").close();
+        render();
+        toast("C'est fait : ton compte est protégé");
+      },
+    });
+  // Un code déjà demandé et pas encore confirmé : on reprend là.
+  if (S.email.pending && !change) return step2(S.email.pending);
+  emailStep({
+    title: change ? "Changer d'adresse" : "Protéger mon compte",
+    intro: "Ton compte est lié à ce téléphone. Avec ton e-mail, tu pourras le retrouver sur un autre appareil (et dans Déclic) en recevant un code.",
+    cta: "Recevoir un code",
+    value: change ? "" : S.email.pending,
+    onSend: async (email) => {
+      await acc.linkEmail(email);
+      S.email.pending = email;
+      step2(email);
+    },
+  });
+}
+
+// Se connecter à un compte existant grâce au code envoyé par e-mail.
+function openRecover() {
+  const acc = S.store?.account;
+  if (!acc) return;
+  const risky = S.households.length && !S.email.email;
+  const step2 = (email) =>
+    codeStep({
+      email,
+      title: "Entre le code",
+      intro: "On vient d'envoyer un code de connexion à",
+      onVerify: (code) => acc.loginWithCode(email, code),
+      onResend: () => acc.sendLoginCode(email),
+      onBack: openRecover,
+      done: () => {
+        // Nouveau compte sur cet appareil : on repart de zéro (ce qui était gardé appartenait à l'ancien).
+        for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
+        toast("Compte retrouvé !");
+        setTimeout(() => location.reload(), 600);
+      },
+    });
+  emailStep({
+    title: "Retrouver mon compte",
+    intro: "Entre l'adresse e-mail liée à ton compte : on t'envoie un code pour l'ouvrir sur cet appareil.",
+    cta: "Recevoir un code",
+    note: risky ? "Attention : le compte actuel de cet appareil n'a pas d'e-mail. Ses listes resteront accessibles aux autres membres, mais plus à toi." : "",
+    onSend: async (email) => {
+      await acc.sendLoginCode(email);
+      step2(email);
+    },
+  });
+}
+
+// ---------- événements ----------
 $("#app").addEventListener("submit", (e) => {
   if (e.target.id !== "quick") return;
   e.preventDefault();
@@ -881,37 +1160,52 @@ $("#app").addEventListener("submit", (e) => {
   input.value = "";
   const { name, qty } = parseQuick(raw);
   const memo = loadJSON("courses:memo", {})[norm(name)];
-  S.tab = "todo";
-  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" });
-  input.focus();
+  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view);
+  $("#quickName")?.focus();
 });
 $("#app").addEventListener("click", (e) => {
   const t = (s) => e.target.closest(s);
+  const byId = (id) => viewItems().find((i) => i.id === id);
   if (t("#moreBtn")) {
     const n = $("#quickName").value.trim();
     $("#quickName").value = "";
     openSheet(null, n);
-  } else if (t("[data-tab]")) {
-    S.tab = t("[data-tab]").dataset.tab;
+  } else if (t("[data-view]")) {
+    const v = t("[data-view]").dataset.view;
+    if (v === S.view) return window.scrollTo({ top: 0, behavior: "smooth" });
+    S.view = v;
+    saveJSON("courses:view", v);
     render();
+    window.scrollTo(0, 0);
   } else if (t("[data-shop]")) {
     S.shop = t("[data-shop]").dataset.shop;
     render();
+  } else if (t("[data-kf]")) {
+    S.kfilter = t("[data-kf]").dataset.kf;
+    render();
   } else if (t("[data-toggle]")) {
-    const it = viewItems().find((i) => i.id === t("[data-toggle]").dataset.toggle);
-    if (it) toggle(it);
+    const it = byId(t("[data-toggle]").dataset.toggle);
+    if (it) bought(it);
+  } else if (t("[data-finish]")) {
+    const it = byId(t("[data-finish]").dataset.finish);
+    if (it) finished(it);
+  } else if (t("[data-low]")) {
+    const it = byId(t("[data-low]").dataset.low);
+    if (it) enqueue({ t: "patch", id: it.id, patch: { low: !it.low } });
   } else if (t("[data-edit]")) {
-    const it = viewItems().find((i) => i.id === t("[data-edit]").dataset.edit);
+    const it = byId(t("[data-edit]").dataset.edit);
     if (it) openSheet(it);
-  } else if (t("#clearDone")) {
-    const done = viewItems().filter((i) => i.done);
-    removeItems(done, `${done.length} article${done.length > 1 ? "s" : ""} retiré${done.length > 1 ? "s" : ""}`);
   } else if (t("#hhBtn")) openHousehold();
   else if (t("#facesBtn") || t("#inviteHint")) S.members.length > 1 ? openHousehold() : openInvite(false);
   else if (t("#meBtn") || t("#editMe")) openMe();
+  else if (t("#hintEmail")) openEmailLink(false);
+  else if (t("#hintOff")) {
+    saveJSON("courses:emailHintOff", true);
+    render();
+  }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "/" && S.screen === "list" && document.activeElement?.tagName !== "INPUT" && !document.querySelector("dialog[open]")) {
+  if (e.key === "/" && S.screen === "main" && document.activeElement?.tagName !== "INPUT" && !document.querySelector("dialog[open]")) {
     e.preventDefault();
     $("#quickName")?.focus();
   }
@@ -944,13 +1238,20 @@ async function loadItems() {
     if (e.code !== "network") toast(errText(e));
   }
 }
+async function loadEmail() {
+  if (!S.store?.account) return;
+  try {
+    S.email = await S.store.account.email();
+    render();
+  } catch {}
+}
 async function selectHousehold(hid) {
   if (S.unsub) S.unsub();
   S.unsub = null;
   S.hid = hid;
   saveJSON("courses:hid", hid);
   S.shop = "";
-  S.tab = "todo";
+  S.kfilter = "all";
   S.live = null;
   if (!hid) {
     S.screen = "setup";
@@ -958,7 +1259,7 @@ async function selectHousehold(hid) {
     return;
   }
   restoreHousehold();
-  S.screen = "list";
+  S.screen = "main";
   render();
   if (!S.store) return;
   S.unsub = S.store.subscribe(hid, {
@@ -980,7 +1281,6 @@ async function selectHousehold(hid) {
     onStatus(ok) {
       // Après une coupure du temps réel, on relit tout pour ne rien rater.
       if (ok && S.live === false) loadItems();
-      if (!ok && S.live) render();
       S.live = ok;
     },
   });
@@ -1006,12 +1306,16 @@ async function afterProfile() {
     }
     S.screen = "loading";
     render();
-    const ok = await joinCode(pending, (m) => toast(m));
-    if (ok) return;
+    if (await joinCode(pending, (m) => toast(m))) return;
+    S.onb = { kind: null, mode: "join" };
   }
   const keep = S.households.find((h) => h.id === S.hid);
   await selectHousehold(keep ? keep.id : S.households[0]?.id || null);
 }
+
+const forgetLocal = () => {
+  for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
+};
 
 async function connect() {
   if (S.connecting) return;
@@ -1029,9 +1333,9 @@ async function connectOnce() {
     // Sans réseau, même le chargement de la bibliothèque Supabase peut échouer.
     if (!e.code && (!navigator.onLine || /fetch|import|network|load/i.test(e.message || ""))) e.code = "network";
     S.bootError = e;
-    // Hors ligne mais déjà installé : on affiche la liste gardée sur l'appareil, et on réessaiera.
+    // Hors ligne mais déjà installé : on affiche ce qui est gardé sur l'appareil, et on réessaiera.
     if (e.code === "network" && S.me && S.hid) {
-      S.screen = "list";
+      S.screen = "main";
       render();
       return;
     }
@@ -1041,15 +1345,17 @@ async function connectOnce() {
   }
   if (S.uid && S.uid !== S.store.uid) {
     // Autre compte que la dernière fois : on oublie ce qui était gardé pour l'ancien.
-    for (const k of Object.keys(localStorage)) if (k.startsWith("courses:") && k !== "courses:memo" && k !== "courses:join") localStorage.removeItem(k);
+    forgetLocal();
     Object.assign(S, { me: null, households: [], hid: null, queue: [], server: new Map(), members: [] });
   }
   S.uid = S.store.uid;
   saveJSON("courses:uid", S.uid);
+  loadEmail();
   try {
     const p = await S.store.getProfile();
     if (!p) {
-      S.screen = "profile";
+      // Première ouverture : « C'est pour qui ? », sauf si on arrive par un lien d'invitation.
+      S.screen = loadJSON("courses:join", null) ? "profile" : "welcome";
       render();
       return;
     }
@@ -1058,7 +1364,7 @@ async function connectOnce() {
     await afterProfile();
   } catch (e) {
     if (e.code === "network" && S.me && S.hid) {
-      S.screen = "list";
+      S.screen = "main";
       render();
       return;
     }
@@ -1075,16 +1381,17 @@ async function connectOnce() {
     saveJSON("courses:join", code);
     history.replaceState(null, "", location.pathname + location.search);
   }
+  if (S.view !== "list" && S.view !== "kitchen") S.view = "list";
   // Affichage immédiat de la dernière liste connue, avant même d'avoir le réseau.
   if (S.me && S.hid && !loadJSON("courses:join", null)) {
     restoreHousehold();
-    S.screen = "list";
+    S.screen = "main";
   }
   render();
   connect();
   const resync = () => {
     if (!S.store) {
-      if (S.screen === "list" || S.screen === "error") connect();
+      if (S.screen === "main" || S.screen === "error") connect();
       return;
     }
     flush();
@@ -1095,7 +1402,6 @@ async function connectOnce() {
   addEventListener("offline", render);
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && resync());
   // Les « il y a 3 min » restent à jour.
-  setInterval(() => S.screen === "list" && !document.querySelector("dialog[open]") && document.activeElement?.id !== "quickName" && render(), 60000);
+  setInterval(() => S.screen === "main" && !document.querySelector("dialog[open]") && document.activeElement?.id !== "quickName" && render(), 60000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
 })();
-

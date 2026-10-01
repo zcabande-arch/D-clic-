@@ -1,7 +1,7 @@
 {
   "name": "Courses",
   "short_name": "Courses",
-  "description": "La liste de courses partagée avec ton ou ta partenaire, ta coloc ou ta famille.",
+  "description": "La liste de courses partagée de ton foyer et ce qu'il y a déjà dans la cuisine.",
   "lang": "fr",
   "id": "./",
   "start_url": "./",

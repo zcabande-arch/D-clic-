@@ -5,7 +5,7 @@
 --   courses_profiles   : un profil par personne (prénom + emoji)
 --   courses_households : une liste partagée (« foyer »), identifiée par un code de 6 caractères
 --   courses_members    : qui fait partie de quel foyer
---   courses_items      : les articles de la liste
+--   courses_items      : les articles, sur la liste de courses (done = false) ou dans la cuisine (done = true)
 
 create table if not exists public.courses_profiles (
   uid        uuid        primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -17,10 +17,15 @@ create table if not exists public.courses_profiles (
 create table if not exists public.courses_households (
   id         text        primary key check (id ~ '^[A-Z0-9]{6}$'),
   name       text        not null check (char_length(name) between 1 and 40),
-  kind       text        not null default 'autre' check (kind in ('couple', 'coloc', 'famille', 'autre')),
+  kind       text        not null default 'autre',
   created_by uuid        references auth.users (id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- Type de liste (relancer le script après une mise à jour suffit à appliquer la nouvelle règle).
+alter table public.courses_households drop constraint if exists courses_households_kind_check;
+alter table public.courses_households add constraint courses_households_kind_check
+  check (kind in ('couple', 'coloc', 'famille', 'amis', 'autre'));
 
 create table if not exists public.courses_members (
   household text        not null references public.courses_households (id) on delete cascade,
@@ -46,6 +51,9 @@ create table if not exists public.courses_items (
   done_at    timestamptz,
   updated_at timestamptz not null default now()
 );
+-- done = false : sur la liste de courses ; done = true : acheté, donc « dans notre cuisine ».
+-- low = presque fini (seulement pour ce qui est dans la cuisine).
+alter table public.courses_items add column if not exists low boolean not null default false;
 create index if not exists courses_items_household_idx on public.courses_items (household);
 
 create or replace function public.courses_touch() returns trigger

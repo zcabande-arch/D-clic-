@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Courses</title>
-<meta name="description" content="La liste de courses partagée avec ton ou ta partenaire, ta coloc ou ta famille.">
+<meta name="description" content="La liste de courses partagée de ton foyer (famille, coloc, couple, amis) et ce qu'il y a déjà dans la cuisine.">
 <meta name="theme-color" content="#F1F5EC" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121A11" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,6 +18,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<link rel="preload" as="image" href="illus/liste.webp">
+<link rel="preload" as="image" href="illus/cuisine.webp">
 <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -33,8 +35,8 @@
       <div class="field"><label for="fQuality">Qualité / marque</label><input id="fQuality" maxlength="80" placeholder="ex : bio, Barilla"></div>
     </div>
     <div class="field"><span>Rayon</span><div class="chips" id="fCat"></div></div>
-    <div class="field"><span>Priorité</span><div class="chips" id="fPrio"></div></div>
-    <div class="field"><span>Où l'acheter</span><div class="chips" id="fShop"></div></div>
+    <div class="field" id="fPrioField"><span>Priorité</span><div class="chips" id="fPrio"></div></div>
+    <div class="field" id="fShopField"><span>Où l'acheter</span><div class="chips" id="fShop"></div></div>
     <p class="by" id="fBy" hidden></p>
     <div class="actions">
       <button type="button" class="del" id="delBtn" hidden>Supprimer</button>

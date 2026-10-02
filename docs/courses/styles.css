@@ -334,3 +334,11 @@ body.has-nav .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .photo-btns{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
 .opt{font-weight:500;color:var(--muted)}
 .bubimg{width:100%;height:100%;object-fit:cover;border-radius:50%}
+
+/* ---------- choisir le rayon à la main ---------- */
+.catgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.catcell{display:flex;align-items:center;gap:10px;text-align:left;background:var(--card);border:2px solid transparent;border-radius:18px;padding:8px 10px;
+  font-weight:700;font-size:.88rem;color:var(--ink);line-height:1.2}
+.catcell .bubble{width:38px;height:38px}
+.catcell[aria-pressed="true"]{border-color:var(--ink);background:var(--surface)}
+.catcell:active{transform:scale(.97)}

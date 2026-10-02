@@ -214,6 +214,7 @@ const S = {
   shop: "",
   kfilter: "all",
   period: "month",
+  catMode: loadJSON("courses:catMode", "auto"), // « auto » : rayon deviné ; « ask » : on le choisit à chaque ajout
   screen: "loading",
   onb: { kind: null, mode: null }, // choix faits à la première ouverture
   live: null,
@@ -365,6 +366,70 @@ function addItem(data, place) {
   remember(row);
   S.flashId = row.id;
   enqueue({ t: "insert", rows: [row] });
+  return row.id;
+}
+
+// Ajout depuis la barre (texte tapé ou proposition) : le rayon est deviné, puis on peut le changer à la main.
+function quickAdd(name, qty) {
+  const memo = loadJSON("courses:memo", {})[norm(name)];
+  const cat = guessCat(name);
+  const id = addItem({ name, qty, quality: memo?.quality || "", cat, prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
+  if (!id) return;
+  if (S.catMode === "ask") openCatPicker(id, true);
+  else toast(`« ${name} » → ${catOf(cat).l}`, [["Changer", () => openCatPicker(id)]]);
+}
+
+function openCatMode() {
+  const opt = (v, title, sub) =>
+    `<li><button class="growrow" data-catmode="${v}"><span class="gmain"><span class="gname">${title}</span><small>${sub}</small></span>${S.catMode === v ? `<b class="tag">choisi</b>` : ""}</button></li>`;
+  openPanel(
+    `${panelHead("Rayon des nouveaux articles")}
+    <ul class="group">
+      ${opt("auto", "Deviné automatiquement", "L'app range l'article ; un bouton « Changer » permet de corriger.")}
+      ${opt("ask", "Je choisis à chaque fois", "Après chaque ajout, la grille des rayons s'ouvre.")}
+    </ul>`,
+    () =>
+      $("#panelBody").querySelectorAll("[data-catmode]").forEach(
+        (b) =>
+          (b.onclick = () => {
+            S.catMode = b.dataset.catmode;
+            saveJSON("courses:catMode", S.catMode);
+            $("#panel").close();
+            render();
+            toast(S.catMode === "ask" ? "Tu choisiras le rayon à chaque ajout" : "Le rayon sera deviné automatiquement");
+          }),
+      ),
+  );
+}
+
+// Choisir le rayon d'un article à la main ; l'app le retient pour la prochaine fois.
+function openCatPicker(id, fresh) {
+  const it = viewItems().find((i) => i.id === id);
+  if (!it) return;
+  const cur = catOf(it.cat).id;
+  openPanel(
+    `${panelHead(fresh ? "Dans quel rayon&nbsp;?" : "Changer de rayon")}
+    <p class="hint center"><b>${esc(it.name)}</b>${it.qty ? ` · ${esc(it.qty)}` : ""}</p>
+    <div class="catgrid">${CATS.map(
+      (c) => `<button type="button" class="catcell" data-pickcat="${c.id}" aria-pressed="${c.id === cur}"><span class="bubble" style="--tint:${c.tint}">${catIll(c.id, "ill sm")}</span><span>${esc(c.l)}</span></button>`,
+    ).join("")}</div>
+    ${fresh ? `<p class="hint center" style="margin-top:12px">Proposé : <b>${esc(catOf(cur).l)}</b>. Ce réglage se change dans Nous.</p>` : ""}`,
+    () => {
+      $("#panelBody").querySelectorAll("[data-pickcat]").forEach(
+        (b) =>
+          (b.onclick = () => {
+            const cat = b.dataset.pickcat;
+            $("#panel").close();
+            if (cat !== cur) {
+              S.flashId = id;
+              enqueue({ t: "patch", id, patch: { cat } });
+            }
+            remember({ ...it, cat });
+            toast(`« ${it.name} » rangé dans ${catOf(cat).l}`);
+          }),
+      );
+    },
+  );
 }
 const snapshot = (it) => ({ done: it.done, low: !!it.low, done_by: it.done_by, done_at: it.done_at, added_by: it.added_by, created_at: it.created_at, prio: it.prio });
 
@@ -1060,6 +1125,10 @@ function usHtml() {
       ${row("uRename", "✎", "#D3E2F6", "Renommer la liste", esc(h?.name || ""))}
       ${row("uLeave", "⎋", "#F6CFCB", "Quitter cette liste", S.members.length <= 1 ? "Tu es seul·e : elle sera supprimée" : "Les autres la gardent", "danger")}
     </ul>
+    <h3 class="sect">Rayons</h3>
+    <ul class="group">
+      ${row("uCatMode", catIll("epicerie", "ill xs"), "#F9DEC6", "Rayon des nouveaux articles", S.catMode === "ask" ? "Je choisis à chaque fois" : "Deviné automatiquement (modifiable)")}
+    </ul>
     <h3 class="sect">Mon compte</h3>
     <ul class="group">
       ${row("uMe", S.me?.avatar ? `<img class="bubimg" src="${esc(S.me.avatar)}" alt="">` : esc(S.me?.emoji || "🙂"), "#F7EAB4", "Modifier mon profil", "Prénom, photo et emoji")}
@@ -1156,8 +1225,7 @@ function pickSuggestion(name) {
     // Produit choisi : on range le clavier (avant de redessiner l'écran, qui sinon redonnerait le focus).
     input.blur();
   }
-  const memo = loadJSON("courses:memo", {})[norm(name)];
-  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
+  quickAdd(name, qty);
   updateSuggest();
 }
 $("#app").addEventListener("input", (e) => e.target.id === "quickName" && updateSuggest());
@@ -1619,8 +1687,7 @@ $("#app").addEventListener("submit", (e) => {
   // Produit ajouté : le clavier se range.
   input.blur();
   const { name, qty } = parseQuick(raw);
-  const memo = loadJSON("courses:memo", {})[norm(name)];
-  addItem({ name, qty, quality: memo?.quality || "", cat: guessCat(name), prio: "bientot", shop: memo?.shop || "" }, S.view === "kitchen" ? "kitchen" : "list");
+  quickAdd(name, qty);
   updateSuggest();
 });
 $("#app").addEventListener("click", (e) => {
@@ -1680,6 +1747,7 @@ $("#app").addEventListener("click", (e) => {
   else if (t("#uMe") || t("#editMe")) openMe();
   else if (t("#uBackup")) openBackup();
   else if (t("#uLogin")) openRecover();
+  else if (t("#uCatMode")) openCatMode();
   else if (t("#hintBackup")) openBackup();
   else if (t("#hintOff")) {
     saveJSON("courses:backupHintOff", true);

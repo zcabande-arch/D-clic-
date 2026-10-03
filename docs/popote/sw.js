@@ -1,6 +1,6 @@
-// Service worker du Semainier : l'app s'ouvre même sans réseau (au magasin).
-const SHELL = "semainier-shell-v1";
-const FONTS = "semainier-fonts-v1";
+// Service worker de Popote : l'app s'ouvre même sans réseau (au magasin).
+const SHELL = "popote-shell-v1";
+const FONTS = "popote-fonts-v1";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -11,7 +11,7 @@ self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("semainier-") && k !== SHELL && k !== FONTS).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("popote-") && k !== SHELL && k !== FONTS).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

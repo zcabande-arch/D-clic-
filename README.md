@@ -64,9 +64,9 @@ Les illustrations au trait de Take Out sont décrites dans `docs/courses/illus/L
 
 Pour l'essayer sans toucher à la base : **…/courses/?demo** (données gardées dans le navigateur, un membre fictif, code de sauvegarde `DEMO-2345-6789-ABCD`).
 
-## Semainier : les repas de la semaine au budget
+## Popote : les repas de la semaine au budget
 
-Le dossier `docs/semainier/` contient une troisième application, **Semainier** : on fixe un budget, la période,
+Le dossier `docs/popote/` contient une troisième application, **Popote** : on fixe un budget, la période,
 le nombre de personnes et ses goûts, et l'app compose les repas (midi et/ou soir) qui tiennent dans le budget, avec la liste de courses.
 
 - **Semaine** : réglages (budget, période sur le calendrier, personnes, régime, temps en cuisine, équipement, ce qu'on n'aime pas, magasin),
@@ -76,7 +76,7 @@ le nombre de personnes et ses goûts, et l'app compose les repas (midi et/ou soi
 - **Aliments** : les prix et conditionnements, modifiables pour coller à son magasin.
 
 Tout est gardé sur le téléphone (aucun compte, aucune base à configurer) et l'app marche sans réseau.
-Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/semainier/** : ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
+Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/popote/** : ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
 
 ## Version avec serveur (auto-hébergée)
 

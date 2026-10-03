@@ -1,5 +1,5 @@
 // Service worker de Popote : l'app s'ouvre même sans réseau (au magasin).
-const SHELL = "popote-shell-v2";
+const SHELL = "popote-shell-v3";
 const FONTS = "popote-fonts-v1";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./foyer.js", "../config.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png"];
 

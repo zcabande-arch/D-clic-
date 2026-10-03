@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Semainier</title>
+<meta name="description" content="Les repas de la semaine qui tiennent dans ton budget, avec la liste de courses.">
+<meta name="theme-color" content="#EFEBE6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161412" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Semainier">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero-top">
+    <header class="top">
+      <div><p class="hello" id="hello">Bonjour</p><h1>Ta semaine</h1></div>
+      <button class="themebtn" id="themeBtn" aria-label="Changer de mode"></button>
+    </header>
+    <div class="strip" id="strip" aria-label="Jours de la période"></div>
+    <div id="pastnote"></div>
+  </div>
+
+  <!-- SEMAINE -->
+  <section id="v-semaine">
+    <details class="setbox" id="setBox">
+    <summary><span class="sumic" aria-hidden="true">⚙️</span><span class="sumtxt"><b>Mes réglages</b><small id="sumLine"></small></span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <div class="settings">
+      <div>
+        <label class="f" for="budget">Budget courses pour la période</label>
+        <div class="budgetline">
+          <input type="range" id="budget" min="15" max="200" step="1">
+          <output id="budgetOut"></output>
+        </div>
+      </div>
+      <div>
+        <span class="f">Période</span>
+        <div class="chips quick">
+          <button class="chip" data-quick="7">7 prochains jours</button>
+          <button class="chip" data-quick="week">Jusqu'à dimanche</button>
+          <button class="chip" data-quick="next">Semaine pro</button>
+          <button class="chip" data-quick="we">Week-end</button>
+          <button class="chip" data-quick="last">Semaine dernière</button>
+        </div>
+        <div class="cal" id="cal"></div>
+      </div>
+      <div>
+        <span class="f">Personnes</span>
+        <div class="stepper"><button data-step="pers:-1" aria-label="Moins de personnes">−</button><span id="persOut"></span><button data-step="pers:1" aria-label="Plus de personnes">+</button></div>
+      </div>
+      <div class="row">
+        <div>
+          <span class="f">Repas à prévoir</span>
+          <div class="chips" id="mealsChips">
+            <button class="chip" data-meal="midi">Midi</button>
+            <button class="chip" data-meal="soir">Soir</button>
+          </div>
+        </div>
+        <div>
+          <span class="f">Régime</span>
+          <div class="chips" id="dietChips">
+            <button class="chip" data-diet="tout">Tout</button>
+            <button class="chip" data-diet="veg">Végétarien</button>
+            <button class="chip" data-diet="flexi">Peu de viande</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <span class="f">Temps en cuisine max</span>
+        <div class="chips" id="timeChips">
+          <button class="chip" data-tmax="0">Peu importe</button>
+          <button class="chip" data-tmax="25">25 min</button>
+          <button class="chip" data-tmax="40">40 min</button>
+        </div>
+      </div>
+      <div>
+        <span class="f">Mon équipement</span>
+        <div class="chips" id="equipChips"></div>
+        <p class="hint" id="eligCount"></p>
+      </div>
+      <div>
+        <span class="f">Ce qu'on n'aime pas</span>
+        <div class="chips" id="dislikeChips"></div>
+      </div>
+      <div>
+        <span class="f">Mon magasin</span>
+        <div class="chips" id="storeChips"></div>
+        <p class="hint">Les prix s'ajustent à l'enseigne choisie. Pour comparer, va dans l'onglet Courses.</p>
+      </div>
+      <div>
+        <span class="f">Apparence</span>
+        <div class="chips" id="themeChips">
+          <button class="chip" data-theme-set="light"><span class="sil">☀️</span> Clair</button>
+          <button class="chip" data-theme-set="dark"><span class="sil">🌙</span> Sombre</button>
+          <button class="chip" data-theme-set="auto"><span class="sil">📱</span> Comme mon téléphone</button>
+        </div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="placard"> <span>Compter aussi les basiques du placard (huile, beurre, épices, sauce soja, bouillon). Décoché, on suppose que tu les as déjà.</span></label>
+      <button class="go" id="generate">Composer ma semaine</button>
+    </div>
+    </details>
+
+    <div id="gauge"></div>
+    <div id="week"></div>
+  </section>
+
+  <!-- COURSES -->
+  <section id="v-courses" class="hidden">
+    <h2>Courses</h2>
+    <p class="sub" style="margin-bottom:6px">Quantités arrondies aux conditionnements du magasin. Coche au fur et à mesure dans les rayons.</p>
+    <div id="ticket"></div>
+  </section>
+
+  <!-- RECETTES -->
+  <section id="v-recettes" class="hidden">
+    <h2>Recettes</h2>
+    <p class="sub"><span id="rcount"></span> recettes. Coût par portion calculé avec tes prix d'ingrédients.</p>
+    <p class="hint" id="rhidden" style="margin:-8px 0 14px"></p>
+    <input class="search" id="rsearch" type="search" placeholder="Chercher une recette ou un ingrédient…" aria-label="Chercher une recette ou un ingrédient">
+    <div class="rlist" id="rlist"></div>
+  </section>
+
+  <!-- INGREDIENTS -->
+  <section id="v-ingredients" class="hidden">
+    <h2>Aliments</h2>
+    <p class="sub"><span id="icount"></span> aliments référencés, prix moyens de supermarché. Ajuste le conditionnement et le prix à ceux de ton magasin : tout se recalcule.</p>
+    <input class="search" id="isearch" type="search" placeholder="Chercher un ingrédient…" aria-label="Chercher un ingrédient">
+    <div class="tablewrap"><table><thead><tr><th>Ingrédient</th><th>Conditionnement</th><th>Prix</th><th>Prix au kilo / unité</th></tr></thead><tbody id="itable"></tbody></table></div>
+    <div class="btnrow"><button class="ghost" id="resetPrices">Revenir aux prix par défaut</button></div>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="in" role="tablist">
+    <button role="tab" data-tab="semaine" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Semaine</button>
+    <button role="tab" data-tab="recettes" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5h10a4 4 0 0 1 4 4V20H9a4 4 0 0 1-4-4z"/><path d="M9 9h6M9 13h4"/></svg>Recettes</button>
+    <button class="fab" id="fab" aria-label="Composer ma semaine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke-width="2.2"/></svg></button>
+    <button role="tab" data-tab="courses" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>Courses</button>
+    <button role="tab" data-tab="ingredients" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7.5c-3-2-7.5 0-7.5 5 0 4 3 8 5 8 1 0 1.5-.5 2.5-.5s1.5.5 2.5.5c2 0 5-4 5-8 0-5-4.5-7-7.5-5z"/><path d="M12 7.5c0-2 1-3.5 3-4"/></svg>Aliments</button>
+  </div>
+</nav>
+
+<dialog id="dlg"><div class="mod" id="dlgBody"></div></dialog>
+
+</body>
+</html>

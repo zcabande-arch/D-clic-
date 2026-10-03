@@ -1,7 +1,7 @@
 // Service worker de Popote : l'app s'ouvre même sans réseau (au magasin).
-const SHELL = "popote-shell-v1";
+const SHELL = "popote-shell-v2";
 const FONTS = "popote-fonts-v1";
-const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png"];
+const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./foyer.js", "../config.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
@@ -19,8 +19,8 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
-  // Police Outfit : le cache d'abord.
-  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
+  // Police Outfit et bibliothèque Supabase (adresse versionnée) : le cache d'abord.
+  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com" || url.hostname === "cdn.jsdelivr.net") {
     e.respondWith(
       caches.match(e.request).then(
         (hit) =>

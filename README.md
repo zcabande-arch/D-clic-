@@ -74,9 +74,28 @@ le nombre de personnes et ses goûts, et l'app compose les repas (midi et/ou soi
 - **Recettes** : toutes les recettes avec leur coût par portion.
 - **Courses** : la liste par rayon, arrondie aux conditionnements, à cocher dans le magasin ; comparaison du total entre enseignes ; envoi de la liste par message.
 - **Aliments** : les prix et conditionnements, modifiables pour coller à son magasin.
+- **À plusieurs** (bouton 👥 en haut) : chacun a son profil (prénom + emoji), on crée « notre Popote » et on invite les autres
+  par lien ou par code à 6 caractères. Tout le monde voit et modifie le même semainier en direct : réglages, repas, cases cochées, prix.
+  Les foyers sont ceux de Take Out (même code, mêmes personnes, la liste de courses Take Out va avec). Le code de sauvegarde du compte est commun aux trois applications.
+- **Recette en photo** (onglet Recettes) : on prend en photo une recette (livre, fiche, carnet, capture d'écran, jusqu'à 4 photos),
+  Popote la lit, ramène les quantités à une personne, relie les ingrédients aux aliments connus (et ajoute les nouveaux avec un prix estimé).
+  On vérifie, on corrige si besoin, et elle rejoint les recettes du foyer.
 
-Tout est gardé sur le téléphone (aucun compte, aucune base à configurer) et l'app marche sans réseau.
+Seul (sans foyer), tout reste sur le téléphone et l'app marche sans réseau. À plusieurs, les changements faits sans réseau partent au retour de la connexion.
 Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/popote/** : ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
+
+### Mise en route du partage et des photos (une seule fois)
+
+1. **Base** : Take Out doit être installé (`supabase/courses.sql`). Puis dans Supabase › *SQL Editor › New query*, colle tout le contenu de
+   [`supabase/popote.sql`](supabase/popote.sql) et touche *Run*.
+2. **Clé Claude** (pour lire les photos) : crée une clé sur <https://console.anthropic.com> (*API Keys*), puis dans Supabase ›
+   *Edge Functions › Secrets*, ajoute le secret `ANTHROPIC_API_KEY` avec cette clé.
+3. **Fonction de lecture** : dans Supabase › *Edge Functions › Deploy a new function › Via Editor*, nomme-la exactement `popote-recette`,
+   colle le contenu de [`supabase/functions/popote-recette/index.ts`](supabase/functions/popote-recette/index.ts) et déploie.
+   Dans ses réglages, désactive *Verify JWT* (la fonction vérifie elle-même qui l'appelle).
+
+Chaque lecture de photo est facturée par Anthropic sur ce compte (quelques centimes). Pour éviter les abus, chaque personne a droit à 25 lectures par jour
+et tout le projet à 400 (réglable en haut de la fonction).
 
 ## Version avec serveur (auto-hébergée)
 

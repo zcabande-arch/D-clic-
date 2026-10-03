@@ -218,6 +218,46 @@ const eqIcons=r=>r.eq.map(g=>(g.find(x=>st.settings.equip.includes(x))&&EQUIP[g.
 const dislikedIn=r=>Object.keys(r.i).filter(k=>st.settings.dislikes.includes(k));
 const liked=r=>!st.settings.banned.includes(r.id)&&!dislikedIn(r).length;
 const RBYID=Object.fromEntries(RECIPES.map(r=>[r.id,r]));
+
+/* ---------- Recettes ajoutées (photo d'une recette) ----------
+   Gardées dans ce navigateur, et dans la base quand on partage Popote à plusieurs (foyer.js).
+   Les nouveaux ingrédients qu'elles apportent sont ajoutés au référentiel (marqués x). */
+const MINE_KEY='popote-recettes';
+const UNITS=['g','ml','pièce','gousse','tranche','cube'];
+const clean=(v,max)=>String(v==null?'':v).replace(/[<>"`\\]/g,'').replace(/\s+/g,' ').trim().slice(0,max||200);
+const posNum=(v,max)=>{const n=Number(v);return isFinite(n)&&n>0&&n<=max?n:0};
+/* Vérifie une recette venue de la base ou de la lecture d'une photo ; renvoie une recette utilisable ou null. */
+function checkRecipe(raw){
+  if(!raw||typeof raw!=='object'||!/^u[a-z0-9-]{3,40}$/.test(raw.id||''))return null;
+  const ing={};
+  for(const k in (raw.ing||{})){const g=raw.ing[k];
+    if(!/^x_[a-z0-9_]{1,40}$/.test(k)||!g||ING_DEFAULT[k]&&!ING_DEFAULT[k].x)continue;
+    const n=clean(g.n,60),q=posNum(g.q,100000),p=Number(g.p);
+    if(!n||!q||!AISLES.includes(g.a)||!UNITS.includes(g.u)||!(p>=0&&p<1000))continue;
+    ing[k]={n,a:g.a,q,u:g.u,p:Math.round(p*100)/100,x:1};if(g.pl)ing[k].pl=1;}
+  const i={};
+  for(const k in (raw.i||{})){const q=posNum(raw.i[k],5000);if(q&&(ING_DEFAULT[k]&&!ING_DEFAULT[k].x||ing[k]))i[k]=Math.round(q*100)/100;}
+  if(!Object.keys(i).length)return null;
+  const eq=Array.isArray(raw.eq)?raw.eq.map(g=>Array.isArray(g)?g.filter(x=>EQUIP[x]):[]).filter(g=>g.length).slice(0,4):[];
+  const list=(a,n,max)=>Array.isArray(a)?a.map(x=>clean(x,max)).filter(Boolean).slice(0,n):[];
+  const s=list(raw.s,25,600);
+  return {id:raw.id,n:clean(raw.n,80)||'Recette maison',e:clean(raw.e,8)||'🍽️',t:Math.round(Math.min(600,Math.max(5,Number(raw.t)||30))),
+    m:['g','p','v'].includes(raw.m)?raw.m:'v',i,ing,eq,us:list(raw.us,8,60),s:s.length?s:['Suivre la recette d\'origine.'],
+    mine:1,by:clean(raw.by,60),from:clean(raw.from,120)};
+}
+/* Remplace toutes les recettes ajoutées par cette liste (et met la liste de côté pour la prochaine ouverture). */
+function setCustomRecipes(list){
+  for(let j=RECIPES.length-1;j>=0;j--)if(RECIPES[j].mine){delete RBYID[RECIPES[j].id];RECIPES.splice(j,1);}
+  for(const k in ING_DEFAULT)if(ING_DEFAULT[k].x)delete ING_DEFAULT[k];
+  const ok=[];
+  (list||[]).forEach(raw=>{const r=checkRecipe(raw);if(!r||RBYID[r.id])return;
+    for(const k in r.ing)if(!ING_DEFAULT[k])ING_DEFAULT[k]=r.ing[k];
+    RECIPES.push(r);RBYID[r.id]=r;ok.push(raw);});
+  try{localStorage.setItem(MINE_KEY,JSON.stringify(ok));}catch(e){}
+  return ok;
+}
+function customRecipes(){try{return JSON.parse(localStorage.getItem(MINE_KEY)||'[]')}catch(e){return []}}
+setCustomRecipes(customRecipes());
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const MEAL_LBL={midi:'Midi',soir:'Soir'};
 
@@ -271,7 +311,7 @@ function renderCal(){
 }
 function setRange(a,b){st.settings.start=a;st.settings.end=b;syncDays();calMonth=pd(a);calMonth.setDate(1);calPending=false;}
 if(!Array.isArray(st.settings.banned))st.settings.banned=[];
-function save(){try{writeBack();}catch(e){}try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+function save(){try{writeBack();}catch(e){}try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}if(window.popoteSync)window.popoteSync();}
 
 /* ---------- Magasins ----------
    Coefficients estimés à partir des écarts moyens publiés en 2026 (UFC-Que Choisir et relevés de prix) :
@@ -451,7 +491,7 @@ function renderStrip(){
     h+=`<button class="${k===TODAY?'today':''}" data-goto="${d}" aria-label="${dayLabel(d)}"><span class="wd">${wd}</span><span class="n">${dt.getDate()}</span></button>`;
   }
   $('#strip').innerHTML=h;
-  const hr=new Date().getHours();$('#hello').textContent=hr<5||hr>=18?'Bonsoir 👋':'Bonjour 👋';
+  const hr=new Date().getHours();$('#hello').textContent=(hr<5||hr>=18?'Bonsoir':'Bonjour')+(window.popoteName?' '+window.popoteName:'')+' 👋';
 }
 function renderWeek(){
   const s=st.settings;
@@ -608,7 +648,7 @@ const dlg=$('#dlg');
 function openRecipe(id,slot){
   const r=RBYID[id],p=st.settings.pers;
   let h=`<div class="hero k-${r.m}"><button class="close" data-close aria-label="Fermer">✕</button><div class="bigem" aria-hidden="true">${r.e}</div><h2>${r.n}</h2>
-    <div class="meta">${r.t} min · ${p} pers. · ${eur(portionCost(r)*p)} au total</div></div>
+    <div class="meta">${r.t} min · ${p} pers. · ${eur(portionCost(r)*p)} au total</div>${r.mine?`<div class="meta" style="margin-top:4px">📸 Recette ajoutée${r.by?' par '+r.by:''}</div>`:''}</div>
     <h3 style="margin-top:18px;margin-bottom:0">Équipement</h3>
     <div class="eqline">${r.eq.length?r.eq.map(g=>`<span>${g.map(x=>EQUIP[x].e+' '+EQUIP[x].n).join(' ou ')}</span>`).join(''):'<span>Aucun appareil</span>'}</div>
     <div class="eqline">${r.us.map(u=>`<span>${u}</span>`).join('')}</div>
@@ -618,6 +658,7 @@ function openRecipe(id,slot){
   const banned=st.settings.banned.includes(r.id);
   h+=`</ul><h3>Préparation</h3><ol>${r.s.map(x=>`<li>${x}</li>`).join('')}</ol>
     <button class="banbtn ${banned?'on':''}" data-ban="${r.id}" data-slot="${slot==null?'':slot}">${banned?'👎 Recette exclue — la réintégrer':(slot!=null?'👎 Je n\'aime pas — ne plus la proposer et la remplacer':'👎 Je n\'aime pas — ne plus la proposer')}</button>`;
+  if(r.mine)h+=`<button class="banbtn" data-fy="delrecipe" data-arg="${r.id}" style="background:var(--field);color:var(--ink)">Supprimer cette recette</button>`;
   if(slot!=null){
     h=h.replace('<h3 style="margin-top:18px;margin-bottom:0">Équipement</h3>',`<div class="slotacts"><button class="go" data-pick="${slot}">Changer de plat</button><button class="ghost" data-remove="${slot}">Retirer</button></div><h3 style="margin-top:18px;margin-bottom:0">Équipement</h3>`);
   }else{
@@ -789,6 +830,39 @@ renderAll();
 $('#setBox').open=false;
 if(!st.settings.storeAsked)setTimeout(openStoreAsk,350);
 document.body.insertAdjacentHTML('beforeend','<div class="toast" id="toast" role="status"></div>');
+
+/* ---------- État partagé (utilisé par foyer.js) ----------
+   Tout est partagé, sauf l'apparence et la question du magasin, propres à chaque téléphone. */
+function fixState(){
+  const s=st.settings;
+  if(!Array.isArray(s.equip))s.equip=['plaques','four','mixeur','microondes'];
+  if(!Array.isArray(s.dislikes))s.dislikes=[];
+  s.dislikes=s.dislikes.filter(k=>ING_DEFAULT[k]);
+  if(!Array.isArray(s.banned))s.banned=[];
+  if(!Array.isArray(s.meals)||!s.meals.length)s.meals=['midi','soir'];
+  if(!s.theme)s.theme='auto';
+  if(!s.start||!s.end){s.start=TODAY;s.end=iso(addD(new Date(),6));}
+  syncDays();
+  if(!s.store||!STORES[s.store])s.store='moy';
+  if(!Array.isArray(s.stores))s.stores=SKEYS.slice();
+  for(const k in st.over)if(!ING_DEFAULT[k])delete st.over[k];
+  if(!st.checked||typeof st.checked!=='object')st.checked={};
+  // Un plat dont la recette a été supprimée libère sa case.
+  if(Array.isArray(st.plan))st.plan.forEach(x=>{if(x&&x.r&&!RBYID[x.r]){x.r=null;x.l=false;}});
+}
+function sharedState(){const c=JSON.parse(JSON.stringify(st));delete c.settings.theme;delete c.settings.storeAsked;return c}
+function applyShared(data){
+  if(!data||!data.settings)return;
+  const keep={theme:st.settings.theme,storeAsked:st.settings.storeAsked};
+  st=Object.assign({plan:null,planMeta:null,byDate:{},over:{},checked:{}},data);
+  st.settings=Object.assign({},data.settings,keep);
+  fixState();
+  calMonth=pd(st.settings.start);calMonth.setDate(1);calPending=false;
+  window.popoteApplying=true;
+  try{renderAll();if($('#v-ingredients')&&!$('#v-ingredients').classList.contains('hidden'))renderIngredients();}
+  finally{window.popoteApplying=false;}
+  try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}
+}
 
 /* ---------- Application installée ---------- */
 // Ouverte sans réseau grâce au service worker.

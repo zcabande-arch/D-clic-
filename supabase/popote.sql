@@ -6,8 +6,7 @@
 -- un foyer Popote est aussi une liste Take Out, avec les mêmes personnes et le même code d'invitation.
 --
 --   popote_state   : le semainier du foyer (réglages, repas prévus, cases cochées, prix modifiés), en un seul document
---   popote_recipes : les recettes ajoutées par le foyer (lues sur une photo)
---   popote_scans   : chaque lecture de photo, pour limiter le nombre de lectures par jour (lu seulement par la fonction Edge)
+--   popote_recipes : les recettes ajoutées par le foyer (lues sur une photo ou collées)
 
 create table if not exists public.popote_state (
   household  text        primary key references public.courses_households (id) on delete cascade,
@@ -26,19 +25,10 @@ create table if not exists public.popote_recipes (
 );
 create index if not exists popote_recipes_household_idx on public.popote_recipes (household);
 
-create table if not exists public.popote_scans (
-  id  bigserial   primary key,
-  uid uuid        not null references auth.users (id) on delete cascade,
-  at  timestamptz not null default now()
-);
-create index if not exists popote_scans_uid_idx on public.popote_scans (uid, at);
-create index if not exists popote_scans_at_idx on public.popote_scans (at);
-
 -- ---------- règles d'accès : seuls les membres du foyer lisent et écrivent ----------
 
 alter table public.popote_state   enable row level security;
 alter table public.popote_recipes enable row level security;
-alter table public.popote_scans   enable row level security;
 
 drop policy if exists popote_state_select on public.popote_state;
 create policy popote_state_select on public.popote_state for select to authenticated
@@ -63,11 +53,8 @@ drop policy if exists popote_recipes_delete on public.popote_recipes;
 create policy popote_recipes_delete on public.popote_recipes for delete to authenticated
   using (courses_is_member(household));
 
--- popote_scans : aucune règle, donc aucun accès depuis l'application ; seule la fonction Edge (clé service) y écrit.
 grant select, insert, update on public.popote_state to authenticated;
 grant select, insert, update, delete on public.popote_recipes to authenticated;
-grant select, insert, delete on public.popote_scans to service_role;
-grant usage, select on sequence public.popote_scans_id_seq to service_role;
 
 -- ---------- temps réel ----------
 

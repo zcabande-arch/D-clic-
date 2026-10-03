@@ -4,5 +4,3 @@ export const SUPABASE_URL = "https://alxensbjhfpktfnobvix.supabase.co";
 export const SUPABASE_ANON_KEY = "sb_publishable_9nKf0FeovnRuD1gbrEnMZw_PTsRivaF";
 // Adresse de la fonction Edge qui envoie les notifications (supabase/functions/notify).
 export const NOTIFY_URL = "https://alxensbjhfpktfnobvix.supabase.co/functions/v1/super-responder";
-// Adresse de la fonction Edge qui lit les recettes en photo pour Popote (supabase/functions/popote-recette).
-export const RECETTE_URL = "https://alxensbjhfpktfnobvix.supabase.co/functions/v1/popote-recette";

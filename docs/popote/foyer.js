@@ -2,7 +2,8 @@
 // Les foyers et les profils sont ceux de Take Out (supabase/courses.sql) : un foyer Popote est aussi une liste Take Out.
 // Sans foyer ou sans réseau, Popote marche seul dans ce navigateur, comme avant.
 // Ce module s'appuie sur app.js (st, save, renderAll, applyShared, setCustomRecipes…), chargé avant lui.
-import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL, RECETTE_URL } from "../config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "../config.js";
+import { lireImages, lireTexte, toItem } from "./lecture.js";
 
 const FOYER_KEY = "popote-foyer"; // code du foyer utilisé sur ce téléphone
 const SOLO_KEY = "popote-solo"; // le semainier d'avant le foyer, rendu si on le quitte
@@ -40,7 +41,7 @@ let dirty = lsGet(DIRTY_KEY, "") === hid && !!hid;
 let pushTimer = null;
 let recipesTimer = null;
 let live = false;
-let draft = null; // recette lue sur une photo, en attente de validation
+let draft = null; // recette lue (photo ou texte collé), en attente de validation
 
 // ---------- erreurs ----------
 
@@ -349,7 +350,7 @@ function viewStart(code) {
     }
     ${
       others.length
-        ? `<h3>Ou reprendre un foyer</h3><p class="hint" style="margin:-4px 0 10px">Les mêmes foyers que tes listes Take Out.</p><div class="srows">${others
+        ? `<h3>Ou reprendre un foyer</h3><p class="hint" style="margin-top:-4px;margin-bottom:10px">Les mêmes foyers que tes listes Take Out.</p><div class="srows">${others
             .map((h) => `<button class="srow" data-fy="use" data-arg="${esc(h.id)}"><span class="av">🏠</span><span class="sn">${esc(h.name)}<small>Code ${esc(h.id)}</small></span><span></span></button>`)
             .join("")}</div>`
         : ""
@@ -371,7 +372,7 @@ function viewFoyer() {
     <h3>Mon profil</h3>${profileFields()}
     <button class="soft-btn" data-fy="saveprofile" style="background:var(--card)">Enregistrer mon profil</button>
     <h3>Garder mon compte</h3>
-    <p class="hint" style="margin:-4px 0 10px">Un code de sauvegarde te permet de retrouver ce compte sur un autre téléphone. C'est le même que dans Take Out et Déclic.</p>
+    <p class="hint" style="margin-top:-4px;margin-bottom:10px">Un code de sauvegarde te permet de retrouver ce compte sur un autre téléphone. C'est le même que dans Take Out et Déclic.</p>
     <div id="fyBackup"><button class="soft-btn" data-fy="backup" style="background:var(--card);margin-top:0">Créer mon code de sauvegarde</button></div>
     ${
       others.length
@@ -504,23 +505,62 @@ const actions = {
     dlg.close();
     toast("Tu as quitté le foyer");
   },
-  async scan() {
+  scan() {
     document.getElementById("scanIn").click();
   },
+  paste() {
+    show(`<div class="hd plain" style="margin:0"><div><h2>Coller une recette</h2>
+        <div style="color:var(--soft)">Le texte d'un site, d'un message… Sur iPhone, tu peux aussi copier le texte d'une photo : ouvre-la dans Photos, appuie longuement sur le texte, « Tout sélectionner », « Copier ».</div></div>${close}</div>
+      <textarea class="field" id="rvText" rows="12" style="margin-top:14px" placeholder="Nom de la recette&#10;Pour 4 personnes&#10;Ingrédients&#10;200 g de …&#10;Préparation&#10;1. …"></textarea>
+      <p class="err" id="fyErr"></p>
+      <button class="go" data-fy="readtext" style="margin-top:12px">Lire la recette</button>`);
+    setTimeout(() => document.getElementById("rvText")?.focus(), 50);
+  },
+  readtext() {
+    const text = document.getElementById("rvText").value;
+    if (text.trim().length < 10) return setErr("Colle d'abord le texte de la recette.");
+    startDraft(text);
+  },
   rvkind(arg) {
+    readDraft();
     draft.m = arg;
     document.querySelectorAll('[data-fy="rvkind"]').forEach((b) => b.setAttribute("aria-pressed", b.dataset.arg === arg));
   },
   rvdel(arg) {
-    delete draft.i[arg];
+    readDraft();
+    draft.items.splice(+arg, 1);
+    viewDraft();
+  },
+  rvnew(arg) {
+    readDraft();
+    const it = draft.items[+arg];
+    const fresh = toItem(it.raw, []);
+    if (fresh) draft.items[+arg] = { ...fresh, qty: fresh.u === it.u ? it.qty : fresh.qty };
+    viewDraft();
+  },
+  rvadd() {
+    readDraft();
+    const v = document.getElementById("rvAdd").value.trim();
+    if (!v) return;
+    const it = toItem(v, catalog());
+    if (!it) return setErr("Je ne reconnais pas cet ingrédient. Écris par exemple « 200 g de champignons ».");
+    draft.items.push(it);
     viewDraft();
   },
   async rvsave() {
     readDraft();
-    const data = { ...draft, id: "u" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6), by: me.name || "" };
-    delete data.servings;
+    const pers = draft.servings || 4;
+    const i = {};
+    const ing = {};
+    for (const it of draft.items) {
+      if (!(it.qty > 0)) continue;
+      if (it.isNew) ing[it.id] = it.ing;
+      else if (ING_DEFAULT[it.id] && ING_DEFAULT[it.id].x) ing[it.id] = { ...ING_DEFAULT[it.id] }; // aliment apporté par une autre recette
+      i[it.id] = Math.max(0.01, Math.round(((i[it.id] || 0) + it.qty / pers) * 100) / 100);
+    }
+    const data = { id: "u" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6), n: draft.n, e: draft.e, t: draft.t, m: draft.m, i, ing, eq: draft.eq, us: draft.us, s: draft.s, by: me.name || "" };
     const r = checkRecipe(data);
-    if (!r) return setErr("Il faut au moins un ingrédient.");
+    if (!r) return setErr("Il faut au moins un ingrédient avec une quantité.");
     if (hid) {
       await connect();
       must(await sb.from("popote_recipes").insert({ id: data.id, household: hid, data, created_by: uid }));
@@ -561,7 +601,9 @@ document.addEventListener("click", async (e) => {
   if (!fn) return;
   e.stopPropagation();
   setErr("");
-  const needsServer = !["emoji", "scan", "rvkind", "rvdel", "login", "invite"].includes(t.dataset.fy);
+  // Ces actions marchent sans réseau ; rvsave et delrecipe ne se connectent que pour un foyer.
+  const local = ["emoji", "scan", "paste", "readtext", "rvkind", "rvdel", "rvnew", "rvadd", "login", "invite"].includes(t.dataset.fy);
+  const needsServer = !local;
   try {
     if (needsServer && t.dataset.fy !== "rvsave" && t.dataset.fy !== "delrecipe") await connect();
     if (needsServer && !t.dataset.sure) busy(t, true);
@@ -575,120 +617,111 @@ document.addEventListener("click", async (e) => {
 });
 document.getElementById("foyerBtn").addEventListener("click", () => openFoyer());
 
-// ---------- recette en photo ----------
+// ---------- recette en photo ou en texte (lecture gratuite, sur le téléphone : lecture.js) ----------
 
-// Photo réduite (1600 px au plus), en JPEG, sans l'en-tête « data: ».
-function shrink(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.naturalWidth * k);
-      c.height = Math.round(img.naturalHeight * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL("image/jpeg", 0.85).split(",")[1]);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(fail("image"));
-    };
-    img.src = url;
-  });
-}
-const SCAN_ERRORS = {
-  network: "Il faut du réseau pour lire une photo.",
-  image: "Cette photo ne s'ouvre pas. Essaie une capture d'écran ou une photo JPEG.",
-  limit: "Tu as déjà lu beaucoup de recettes aujourd'hui. Réessaie demain !",
-  limit_all: "Trop de recettes lues aujourd'hui sur Popote. Réessaie demain !",
-  busy: "Le service de lecture est occupé. Réessaie dans une minute.",
-  setup: "La lecture des photos n'est pas encore installée (fonction popote-recette, voir le README).",
-  too_long: "Cette recette est trop longue à lire d'un coup. Essaie avec moins de photos.",
-  unreadable: "Je n'arrive pas à lire cette recette. Essaie une photo plus nette, bien droite et éclairée.",
-};
+// Aliments connus, y compris ceux apportés par les recettes déjà ajoutées.
+const catalog = () => Object.keys(ING_DEFAULT).map((k) => ({ id: k, ...ING_DEFAULT[k] }));
 
 async function scan(files) {
   const list = [...files].slice(0, 4);
   if (!list.length) return;
   show(`<div class="hd plain" style="margin:0"><div><h2>Lecture de la recette…</h2>
-      <div style="color:var(--soft)">${list.length > 1 ? list.length + " photos" : "Une photo"} · ça prend souvent 20 à 40 secondes.</div></div>${close}</div>
-    <div class="spin" aria-hidden="true"></div><p class="hint" style="text-align:center">Je repère les ingrédients, les quantités et les étapes.</p>`);
-  const fin = (msg) =>
+      <div style="color:var(--soft)">${list.length > 1 ? list.length + " photos" : "Une photo"}, lue directement sur ton téléphone.</div></div>${close}</div>
+    <div class="spin" aria-hidden="true"></div><p class="hint" id="ocrMsg" style="text-align:center">Préparation…</p>
+    <div class="pbar" style="max-width:260px"><i id="ocrBar" style="width:0%"></i></div>`);
+  const msg = (t, f) => {
+    const m = document.getElementById("ocrMsg");
+    const b = document.getElementById("ocrBar");
+    if (m) m.textContent = t;
+    if (b) b.style.width = Math.round(Math.min(1, f) * 100) + "%";
+  };
+  const fin = (text) =>
     show(`<div class="hd plain" style="margin:0"><div><h2>Pas de recette lue</h2></div>${close}</div>
-      <p class="hint bad" style="margin:16px 6px">${esc(msg)}</p><button class="go" data-fy="scan" style="margin-top:8px">Essayer une autre photo</button>`);
-  let res, j;
+      <p class="hint bad" style="margin:16px 6px">${esc(text)}</p>
+      <div class="slotacts"><button class="go" data-fy="scan">Autre photo</button><button class="ghost" data-fy="paste">Coller le texte</button></div>`);
+  let text;
   try {
-    const images = await Promise.all(list.map(shrink));
-    await connect();
-    const { data } = await sb.auth.getSession();
-    const catalog = Object.keys(ING_DEFAULT)
-      .filter((k) => !ING_DEFAULT[k].x)
-      .map((k) => [k, ING_DEFAULT[k].n, ING_DEFAULT[k].u]);
-    res = await fetch(RECETTE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + (data?.session?.access_token || "") },
-      body: JSON.stringify({ images, catalog }),
-    });
-    j = await res.json().catch(() => ({}));
+    text = await lireImages(list, (step, f) =>
+      step === "load" ? msg("Préparation de la lecture (la première fois seulement)…", f) : msg("Lecture du texte… " + Math.round(f * 100) + " %", f),
+    );
   } catch (e) {
-    const m = mapError(e);
-    return fin(SCAN_ERRORS[m.code] || SCAN_ERRORS[e.code] || SCAN_ERRORS.network);
+    return fin(
+      e.code === "image"
+        ? "Cette photo ne s'ouvre pas. Essaie une capture d'écran ou une photo JPEG."
+        : navigator.onLine
+          ? "La lecture n'a pas pu démarrer. Réessaie dans un instant."
+          : "La première lecture a besoin de réseau (pour télécharger l'outil de lecture). Ensuite, ça marche aussi sans réseau.",
+    );
   }
   if (!dlg.open) return; // fermé pendant la lecture
-  if (res.status === 404) return fin(SCAN_ERRORS.setup);
-  if (!res.ok || !j.recipe) return fin(j.error === "not_recipe" ? j.detail || "Je ne vois pas de recette sur cette photo." : SCAN_ERRORS[j.error] || SCAN_ERRORS.unreadable);
-  draft = j.recipe;
-  if (!["g", "p", "v"].includes(draft.m)) draft.m = "v";
-  viewDraft();
+  if (text.replace(/\s/g, "").length < 20)
+    return fin("Je ne trouve presque pas de texte sur cette photo. Prends-la bien droite, de près et avec de la lumière (le texte manuscrit se lit mal).");
+  startDraft(text);
 }
 document.getElementById("scanIn").addEventListener("change", (e) => {
-  const files = e.target.files;
-  scan(files).finally(() => (e.target.value = ""));
+  scan(e.target.files).finally(() => (e.target.value = ""));
 });
 
-const ingOf = (k) => (draft.ing && draft.ing[k]) || ING_DEFAULT[k];
+function startDraft(text) {
+  draft = lireTexte(text, catalog());
+  draft.text = text;
+  draft.found = !!draft.servings;
+  if (!draft.servings) draft.servings = 4;
+  viewDraft();
+}
 function readDraft() {
-  const v = (id) => (document.getElementById(id) || {}).value;
-  if (v("rvName") != null) draft.n = v("rvName").trim() || draft.n;
-  if (v("rvTime") != null) draft.t = Math.max(5, Math.min(600, Math.round(+v("rvTime") || draft.t)));
+  if (!draft || !document.getElementById("rvName")) return;
+  const v = (id) => document.getElementById(id).value;
+  draft.n = v("rvName").trim() || draft.n;
+  draft.t = Math.max(5, Math.min(600, Math.round(+v("rvTime") || draft.t)));
+  draft.servings = Math.max(1, Math.min(20, Math.round(+v("rvServ") || draft.servings)));
   document.querySelectorAll("[data-rvq]").forEach((inp) => {
     const q = parseFloat(String(inp.value).replace(",", "."));
-    if (q > 0) draft.i[inp.dataset.rvq] = q;
+    const it = draft.items[+inp.dataset.rvq];
+    if (it) it.qty = q > 0 ? q : 0;
   });
+  draft.s = v("rvSteps")
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 function viewDraft() {
-  if (document.getElementById("rvName")) readDraft();
-  const ks = Object.keys(draft.i).filter((k) => ingOf(k));
   const kinds = [
     ["g", "Végétarien"],
     ["p", "Poisson"],
     ["v", "Viande"],
   ];
-  show(`<div class="hero k-${draft.m}"><button class="close" data-close aria-label="Fermer">✕</button><div class="bigem" aria-hidden="true">${esc(draft.e || "🍽️")}</div>
-      <h2>Nouvelle recette</h2><div class="meta">Vérifie ce que j'ai lu avant de l'ajouter.</div></div>
+  show(`<div class="hero k-${draft.m}"><button class="close" data-close aria-label="Fermer">✕</button><div class="bigem" aria-hidden="true">${esc(draft.e)}</div>
+      <h2>Nouvelle recette</h2><div class="meta">Vérifie ce que j'ai lu et corrige si besoin.</div></div>
     <div class="section"><label class="f" for="rvName">Nom</label><input class="field" id="rvName" maxlength="80" value="${esc(draft.n)}"></div>
-    <div class="row" style="margin-top:16px"><div><label class="f" for="rvTime">Temps total (min)</label><input class="field" id="rvTime" type="number" min="5" max="600" inputmode="numeric" value="${esc(draft.t)}"></div>
-      <div><span class="f">Type de plat</span><div class="chips">${kinds
-        .map(([k, l]) => `<button class="chip" data-fy="rvkind" data-arg="${k}" aria-pressed="${draft.m === k}">${l}</button>`)
-        .join("")}</div></div></div>
-    <h3>Ingrédients pour 1 personne</h3>
-    <p class="hint" style="margin:-4px 0 10px">${draft.servings > 1 ? `La recette d'origine était pour ${esc(draft.servings)} personnes : j'ai divisé les quantités. ` : ""}Popote les multiplie par le nombre de personnes de ta semaine.</p>
-    <ul>${ks
-      .map((k) => {
-        const g = ingOf(k);
-        return `<li class="rvli"><span>${esc(g.n)}${draft.ing && draft.ing[k] ? ' <span class="tag">nouveau</span>' : ""}</span>
-          <span class="rvq"><input type="number" min="0" step="any" inputmode="decimal" data-rvq="${esc(k)}" value="${esc(draft.i[k])}" aria-label="Quantité de ${esc(g.n)}"> ${esc(g.u)}
-          <button class="ib" data-fy="rvdel" data-arg="${esc(k)}" aria-label="Retirer ${esc(g.n)}">✕</button></span></li>`;
-      })
-      .join("")}</ul>
+    <div class="row" style="margin-top:16px">
+      <div><label class="f" for="rvServ">Pour combien de personnes ?</label><input class="field" id="rvServ" type="number" min="1" max="20" inputmode="numeric" value="${esc(draft.servings)}">
+        ${draft.found ? "" : '<p class="hint" style="margin-top:6px">Non indiqué sur la recette : vérifie.</p>'}</div>
+      <div><label class="f" for="rvTime">Temps total (min)</label><input class="field" id="rvTime" type="number" min="5" max="600" inputmode="numeric" value="${esc(draft.t)}"></div>
+    </div>
+    <div class="section"><span class="f">Type de plat</span><div class="chips">${kinds
+      .map(([k, l]) => `<button class="chip" data-fy="rvkind" data-arg="${k}" aria-pressed="${draft.m === k}">${l}</button>`)
+      .join("")}</div></div>
+    <h3>Ingrédients pour toute la recette</h3>
+    <p class="hint" style="margin-top:-4px;margin-bottom:10px">Popote les ramène à une personne, puis les multiplie par le nombre de personnes de ta semaine.</p>
     ${
-      Object.keys(draft.ing || {}).some((k) => draft.i[k])
-        ? '<p class="hint">Les ingrédients « nouveau » rejoignent la liste des aliments avec un prix estimé, que tu peux corriger dans l\'onglet Aliments.</p>'
-        : ""
+      draft.items.length
+        ? `<ul>${draft.items
+            .map(
+              (it, j) => `<li class="rvli"><span class="rvn">${esc(it.n)}${it.isNew ? ' <span class="tag">nouveau</span>' : ""}
+              <small>lu : ${esc(it.raw)}${it.isNew ? "" : ` · <button class="linkbtn mini" data-fy="rvnew" data-arg="${j}">pas le bon aliment ?</button>`}</small></span>
+              <span class="rvq"><input type="number" min="0" step="any" inputmode="decimal" data-rvq="${j}" value="${esc(it.qty)}" aria-label="Quantité de ${esc(it.n)}"> ${esc(it.u)}
+              <button class="ib" data-fy="rvdel" data-arg="${j}" aria-label="Retirer ${esc(it.n)}">✕</button></span></li>`,
+            )
+            .join("")}</ul>`
+        : '<p class="hint bad">Aucun ingrédient reconnu : ajoute-les ci-dessous.</p>'
     }
-    <h3>Préparation</h3><ol>${(draft.s || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
+    <div class="joinrow" style="margin-top:10px"><input class="field" id="rvAdd" style="text-transform:none;letter-spacing:normal" autocomplete="off" placeholder="Ajouter : 200 g de champignons"><button class="ghost" data-fy="rvadd">Ajouter</button></div>
+    ${draft.items.some((it) => it.isNew) ? `<p class="hint">Les aliments « nouveau » rejoignent l'onglet Aliments avec un prix estimé, à corriger si besoin.</p>` : ""}
+    <h3>Préparation</h3>
+    <p class="hint" style="margin-top:-4px;margin-bottom:10px">Une étape par ligne.</p>
+    <textarea class="field" id="rvSteps" rows="8">${esc(draft.s.join("\n"))}</textarea>
+    <details class="rvtext"><summary>Voir le texte lu</summary><pre>${esc(draft.text)}</pre></details>
     <p class="err" id="fyErr"></p>
     <div class="slotacts"><button class="go" data-fy="rvsave">${hid ? "Ajouter à nos recettes" : "Ajouter à mes recettes"}</button><button class="ghost" data-close>Annuler</button></div>`);
 }

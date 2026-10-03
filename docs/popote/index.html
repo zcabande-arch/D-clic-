@@ -128,7 +128,8 @@
     <h2>Recettes</h2>
     <p class="sub"><span id="rcount"></span> recettes. Coût par portion calculé avec tes prix d'ingrédients.</p>
     <p class="hint" id="rhidden" style="margin:-8px 0 14px"></p>
-    <button class="scanbtn" data-fy="scan"><span class="scanic" aria-hidden="true">📸</span><span><b>Ajouter une recette en photo</b><small>Un livre, une fiche, un carnet ou une capture d'écran : Popote la lit et l'ajoute aux recettes.</small></span></button>
+    <div class="scancard"><span class="scanic" aria-hidden="true">📸</span><span><b>Ajouter une recette</b><small>Prends en photo un livre, une fiche ou une capture d'écran, ou colle le texte : Popote la lit et l'ajoute aux recettes.</small></span>
+      <div class="scanacts"><button class="go" data-fy="scan">Photo</button><button class="ghost" data-fy="paste">Coller le texte</button></div></div>
     <input type="file" id="scanIn" accept="image/*" multiple hidden>
     <input class="search" id="rsearch" type="search" placeholder="Chercher une recette ou un ingrédient…" aria-label="Chercher une recette ou un ingrédient">
     <div class="rlist" id="rlist"></div>

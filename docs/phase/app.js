@@ -89,13 +89,60 @@ const SCIENCE = {
     ]}
 };
 const SCIENCE_HORMONAL = {
-  hormones:"Avec une contraception hormonale (pilule, implant, anneau, stérilet hormonal…), il n'y a en général pas d'ovulation : les hormones restent à peu près stables tout le mois.",
+  hormones:"Avec une contraception hormonale qui bloque l'ovulation (pilule, implant, anneau, patch, injection…), les hormones restent à peu près stables tout le mois.",
   items:[
     {t:"Moins de hauts et de bas", d:"Les variations naturelles des œstrogènes et de la progestérone sont aplaties. Les phases décrites ici ne s'appliquent donc pas vraiment."},
-    {t:"Pendant la pause", d:"Les saignements de la pause sont dus à l'arrêt des hormones de synthèse. Certaines retrouvent un petit coup de fatigue ou de mauvaise humeur à ce moment-là."},
     {t:"Ton ressenti d'abord", d:"C'est pour ça que l'app se base surtout sur tes réponses du jour. Si ton humeur a changé depuis que tu as commencé une contraception, parles-en à ton médecin ou ta sage-femme."}
   ]
 };
+/* Modes de contraception. h : 1 = hormones de synthèse qui aplatissent le cycle, 0 = cycle naturel,
+   "?" = stérilet hormonal (agit surtout dans l'utérus : selon les femmes, l'ovulation continue ou non). */
+const CONTRA = {
+  aucune:{t:"Aucune", d:"Cycle naturel", h:0},
+  barriere:{t:"Préservatif ou méthode barrière", d:"Préservatif, diaphragme, cape…", h:0},
+  naturelle:{t:"Méthode naturelle", d:"Symptothermie, suivi des signes du cycle…", h:0},
+  cuivre:{t:"Stérilet au cuivre", d:"Sans hormones", h:0},
+  pilule:{t:"Pilule combinée", d:"Œstrogène + progestatif (avec ou sans pause)", h:1},
+  micro:{t:"Pilule progestative", d:"Progestatif seul, en continu (ex. désogestrel)", h:1},
+  anneau:{t:"Anneau ou patch", d:"Œstrogène + progestatif", h:1},
+  implant:{t:"Implant", d:"Progestatif, dans le bras", h:1},
+  diu:{t:"Stérilet hormonal", d:"Progestatif, dans l'utérus", h:"?"},
+  injection:{t:"Injection", d:"Progestatif tous les 3 mois", h:1},
+  autre:{t:"Autre méthode hormonale", d:"Ou je ne sais pas exactement", h:1}
+};
+function isHormonal(contra, diuCycle){ const c = CONTRA[contra]; if (!c) return false; return c.h==="?" ? !diuCycle : !!c.h; }
+function contraOf(p){ return p.contra && CONTRA[p.contra] ? p.contra : (p.hormonal ? "autre" : "aucune"); }
+/* Ce que change chaque méthode, affiché dans l'onglet Cycle. */
+const CONTRA_INFO = {
+  pilule:[{t:"Pas d'ovulation", d:"Les hormones de synthèse bloquent l'ovulation : pas de pic d'œstrogènes ni de vraie phase lutéale. La forme est en général assez stable tout le mois."},
+    {t:"La semaine de pause", d:"Si tu fais une pause, les saignements viennent de l'arrêt des hormones (ce ne sont pas de « vraies » règles). Fatigue, maux de tête ou petite baisse de moral sont possibles ces jours-là : tu peux le dire dans le questionnaire du jour."}],
+  anneau:[{t:"Comme la pilule combinée", d:"Mêmes hormones, diffusées en continu par la peau ou le vagin : l'ovulation est bloquée et les hormones restent stables."},
+    {t:"La semaine sans", d:"Pendant la semaine sans anneau ou sans patch, les saignements viennent de l'arrêt des hormones. Un petit coup de fatigue est possible."}],
+  micro:[{t:"Progestatif seul", d:"Selon la pilule, l'ovulation est bloquée (c'est le cas le plus souvent avec le désogestrel) ou pas à chaque fois."},
+    {t:"Saignements imprévisibles", d:"Des saignements irréguliers, rares ou absents sont fréquents et ne sont pas un signe de problème. Le calendrier des phases ne s'applique donc pas."}],
+  implant:[{t:"Ovulation bloquée", d:"L'implant libère un progestatif en continu : il n'y a plus de cycle hormonal classique."},
+    {t:"Saignements variables", d:"Absents, rares, ou au contraire prolongés : c'est très variable d'une femme à l'autre. Si l'humeur, la peau ou les saignements te pèsent, parles-en à ton médecin ou ta sage-femme."}],
+  injection:[{t:"Ovulation bloquée", d:"L'injection libère un progestatif pendant 3 mois : plus de cycle hormonal classique, souvent plus de règles du tout."},
+    {t:"Les os aiment la muscu", d:"En usage long, cette méthode peut baisser un peu la densité des os. Les exercices avec charge sont justement parmi les meilleurs pour les garder solides."}],
+  diu:[{t:"Il agit surtout dans l'utérus", d:"Le stérilet hormonal libère un progestatif à petite dose, surtout sur place. Selon le modèle et l'ancienneté, l'ovulation est bloquée ou continue : beaucoup de femmes gardent un cycle, surtout après la première année."},
+    {t:"Tu as encore des règles ?", d:"Si oui (même légères), ton cycle tourne sans doute encore : l'app suit tes phases. Si tu n'as plus de règles, elle se base sur ton ressenti du jour. Tu peux changer ce choix dans ton profil."}],
+  cuivre:[{t:"Aucune hormone", d:"Ton cycle reste entièrement naturel : les phases et les explications s'appliquent."},
+    {t:"Règles plus fortes", d:"Le stérilet au cuivre rend souvent les règles plus abondantes et plus douloureuses, surtout les premiers mois. Pense au fer (la fatigue peut venir de là) et n'hésite pas à choisir une séance plus douce ces jours-là."}],
+  naturelle:[{t:"Un calendrier indicatif", d:"Les phases de l'app sont calculées sur une durée moyenne de cycle. Elles ne remplacent pas ta méthode et ne doivent jamais servir à savoir si tu es fertile."}],
+  autre:[{t:"Ton ressenti d'abord", d:"Avec des hormones de synthèse, les phases du cycle naturel ne s'appliquent pas vraiment : l'app se base surtout sur ton questionnaire du jour."}]
+};
+function contraInfoCard(p){
+  const k = contraOf(p), info = CONTRA_INFO[k]; if (!info) return "";
+  return `<div class="card"><div class="row between"><span class="label">Ta contraception</span><button class="linkbtn" data-act="go-profile">Changer</button></div><h3>${esc(CONTRA[k].t)}</h3><ul class="sci">${info.map(x=>`<li><b>${x.t}</b><span>${x.d}</span></li>`).join("")}</ul></div>`;
+}
+/* Liste des méthodes, partagée par les questions de profil (act "onb") et la page Profil (act "pf"). */
+function contraField(d, act){
+  const k = contraOf(d), set = d.contra!=null;
+  let h = `<div class="opts">${Object.entries(CONTRA).map(([c,v])=>`<button class="opt" data-act="${act}" data-k="contra" data-v="${c}" ${c==="diu"?'data-stay="1"':""} aria-pressed="${set && k===c}"><b>${v.t}</b><span>${v.d}</span></button>`).join("")}</div>`;
+  if (set && k==="diu") h += `<span class="label">Tu as encore des règles, même légères ?</span><div class="chips">${[["1","Oui, à peu près chaque mois"],["0","Non, ou presque jamais"]].map(([v,t])=>`<button class="chip" data-act="${act}" data-k="diuCycle" data-bool="1" data-v="${v}" aria-pressed="${d.diuCycle!=null && !!d.diuCycle===(v==="1")}">${t}</button>`).join("")}</div>`;
+  return h;
+}
+
 /* Explication courte de l'humeur choisie dans le questionnaire du jour, selon la phase. */
 const MOOD_GROUP = {top:"pos", bien:"pos", bof:"bof", plat:"plat", irritable:"irritable", triste:"triste"};
 const MOOD_WHY = {
@@ -478,7 +525,7 @@ function buildPlan(st, date, override){
   const ci = cycleInfo(st.cycle, date);
   const why = [];
   let base = 3.6;
-  if (p.hormonal) why.push("Contraception hormonale : on se fie surtout à ton ressenti du jour.");
+  if (p.hormonal) why.push(CONTRA[contraOf(p)].t+" : on se fie surtout à ton ressenti du jour.");
   else if (ci) { base = ci.key==="mens" ? (ci.day<=2?2.6:3.3) : ci.key==="foll" ? 4.3 : ci.key==="ovu" ? 4.6 : (ci.late?2.9:3.6); why.push("J"+ci.day+" de ton cycle, phase "+PHASES[ci.key].name.toLowerCase()+(ci.late?" (fin de cycle)":"")+"."); }
   let s = base;
   const e = a.energy||3; s += (e-3)*0.6; why.push("Énergie "+e+"/5.");
@@ -765,9 +812,9 @@ function renderDrawer(){
 
 /* ---------- accueil + questions de profil ---------- */
 function onbDefaults(p){
-  const base = {name:"", goal:null, level:null, persona:null, perWeek:3, duration:45, focus:[], gym:{chain:"basicfit", pref:"mix"}, hormonal:null, lastStart:"", cycleLen:28, periodLen:5, bw:"", injuries:""};
+  const base = {name:"", goal:null, level:null, persona:null, perWeek:3, duration:45, focus:[], gym:{chain:"basicfit", pref:"mix"}, hormonal:null, contra:null, diuCycle:null, lastStart:"", cycleLen:28, periodLen:5, bw:"", injuries:""};
   if (!p) return base;
-  return Object.assign(base, JSON.parse(JSON.stringify(p)), {lastStart:S.cycle.lastStart||"", cycleLen:S.cycle.length||28, periodLen:S.cycle.periodLen||5, bw:p.bw||""});
+  return Object.assign(base, JSON.parse(JSON.stringify(p)), {contra:contraOf(p), lastStart:S.cycle.lastStart||"", cycleLen:S.cycle.length||28, periodLen:S.cycle.periodLen||5, bw:p.bw||""});
 }
 const OSTEPS = [
   {k:"name", q:"Comment tu t'appelles ?", sub:"Juste ton prénom, pour que le coach te parle."},
@@ -779,12 +826,12 @@ const OSTEPS = [
   {k:"focus", q:"Des zones à travailler en priorité ?", sub:"Plusieurs réponses possibles, ou aucune."},
   {k:"gym", q:"Tu t'entraînes où ?"},
   {k:"equip", q:"Qu'est-ce qu'il y a dans ta salle ?", sub:"Pré-rempli avec l'équipement habituel. Ça varie d'un club à l'autre : coche ce qu'il y a vraiment. Une machine que tu n'aimes pas ? Décoche-la."},
-  {k:"hormonal", q:"Tu as une contraception hormonale ?", sub:"Pilule, implant, stérilet hormonal, anneau, patch… Ça change la façon dont ton cycle est pris en compte."},
+  {k:"contra", q:"Quelle contraception tu utilises ?", sub:"Les hormones de synthèse changent la façon dont ton cycle est pris en compte. Ça reste sur ton téléphone."},
   {k:"cycle", q:"Parle-moi de ton cycle", sub:"Pour savoir dans quelle phase tu es chaque jour. Une date approximative suffit."},
   {k:"body", q:"Deux dernières infos", sub:"Facultatif, mais ça aide à viser juste dès la première séance."},
   {k:"look", q:"Choisis ton ambiance", sub:"Tu pourras changer à tout moment dans les réglages, en haut à gauche."}
 ];
-function onbSteps(){ const d = ui.onb.d; return OSTEPS.filter(s=>!(s.k==="cycle" && d.hormonal===true)); }
+function onbSteps(){ const d = ui.onb.d; return OSTEPS.filter(s=>!(s.k==="cycle" && d.contra && isHormonal(d.contra, d.diuCycle))); }
 function viewWelcome(){
   const redo = !!S.profile;
   return `<div class="welcome"><div class="card glow g-pink">
@@ -798,7 +845,7 @@ function viewWelcome(){
 }
 function viewOnboarding(){
   const steps = onbSteps(), i = clamp(ui.onb.step, 0, steps.length-1), step = steps[i], d = ui.onb.d, n = steps.length;
-  const cur = k => k==="hormonal" ? (d.hormonal==null ? null : d.hormonal ? "1" : "0") : d[k];
+  const cur = k => d[k];
   const opts = (k, list, num) => `<div class="opts">${list.map(([v,t,s])=>`<button class="opt" data-act="onb" data-k="${k}" data-v="${v}" ${num?'data-num="1"':""} aria-pressed="${cur(k)!=null && String(cur(k))===String(v)}"><b>${t}</b>${s?`<span>${s}</span>`:""}</button>`).join("")}</div>`;
   const gym = gymOf(d);
   let body = "", ok = true;
@@ -816,8 +863,7 @@ function viewOnboarding(){
     case "equip": body = `<div class="chips">${Object.entries(EQUIP).map(([k,v])=>`<button class="chip" data-act="onb-equip" data-v="${k}" aria-pressed="${!!gym.equip[k]}">${v}</button>`).join("")}</div>
       <div class="field"><label class="label" for="o-max">Haltère le plus lourd (kg)</label><input id="o-max" type="number" inputmode="numeric" min="5" max="80" value="${gym.max}" data-onb-gmax></div>
       <p class="hint">Plus tard, tu pourras aussi retirer un exercice précis : bouton « Je n'aime pas » pendant la séance, ou dans ton profil.</p>`; break;
-    case "hormonal": body = opts("hormonal", [["0","Non","Mon cycle est naturel"],["1","Oui","Pilule, implant, stérilet hormonal…"]])
-      + `<p class="hint">Stérilet au cuivre, préservatif ou rien : réponds « Non », ton cycle reste naturel.</p>`; ok = d.hormonal!=null; break;
+    case "contra": body = contraField(d, "onb"); ok = !!d.contra && (d.contra!=="diu" || d.diuCycle!=null); break;
     case "cycle": body = `<div class="field"><label class="label" for="o-start">Premier jour de tes dernières règles</label><input id="o-start" type="date" max="${todayISO()}" min="${addDays(todayISO(),-120)}" value="${esc(d.lastStart||"")}" data-onb="lastStart"></div>
       <div class="grid2"><div class="field"><label class="label" for="o-len">Durée du cycle (jours)</label><input id="o-len" type="number" inputmode="numeric" min="20" max="45" value="${esc(d.cycleLen)}" data-onb="cycleLen"></div>
       <div class="field"><label class="label" for="o-per">Durée des règles (jours)</label><input id="o-per" type="number" inputmode="numeric" min="2" max="10" value="${esc(d.periodLen)}" data-onb="periodLen"></div></div>
@@ -836,7 +882,7 @@ function viewOnboarding(){
 function finishOnboarding(){
   const d = ui.onb.d, g = gymOf(d), wasDemo = demo, had = !!S.profile;
   if (wasDemo || !had) { S = blank(); demo = false; }
-  S.profile = {name:d.name.trim(), level:d.level||"debutante", goal:d.goal||"tonus", persona:d.persona||"methodique", perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], banned:d.banned||[], injuries:(d.injuries||"").trim(), hormonal:!!d.hormonal, bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
+  S.profile = {name:d.name.trim(), level:d.level||"debutante", goal:d.goal||"tonus", persona:d.persona||"methodique", perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], banned:d.banned||[], injuries:(d.injuries||"").trim(), contra:contraOf(d), diuCycle:contraOf(d)==="diu" ? !!d.diuCycle : null, hormonal:isHormonal(contraOf(d), d.diuCycle), bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
   if (d.lastStart) { S.cycle.lastStart = d.lastStart; S.cycle.starts = (S.cycle.starts||[]).filter(x=>x!==d.lastStart).concat([d.lastStart]).sort(); }
   if (+d.cycleLen>=20 && +d.cycleLen<=45) S.cycle.length = +d.cycleLen;
   if (+d.periodLen>=2 && +d.periodLen<=10) S.cycle.periodLen = +d.periodLen;
@@ -846,7 +892,7 @@ function finishOnboarding(){
   toast(had && !wasDemo ? "Profil mis à jour" : "Profil créé. À toi de jouer, "+S.profile.name+" !");
 }
 function phaseChip(ci, hormonal){
-  if (hormonal) return `<span class="phase-chip"><span class="dot" style="--c:var(--muted)"></span>Contraception hormonale</span>`;
+  if (hormonal) return `<span class="phase-chip"><span class="dot" style="--c:var(--muted)"></span>${esc(CONTRA[contraOf(S.profile)].t)}</span>`;
   if (!ci) return `<span class="phase-chip"><span class="dot" style="--c:var(--muted)"></span>Cycle non renseigné</span>`;
   return `<span class="phase-chip"><span class="dot" style="--c:var(${PHASES[ci.key].c})"></span>J${ci.day} · ${PHASES[ci.key].name}</span>`;
 }
@@ -996,8 +1042,8 @@ function viewWizard(){
 function viewCycle(){
   const t = todayISO(), p = S.profile, c = S.cycle, ci = cycleInfo(c, t);
   let h = `<h1>Ton cycle</h1>`;
-  if (p.hormonal) h += `<div class="card"><p>Tu as indiqué une contraception hormonale. Tes hormones restent plutôt stables, donc tes séances se basent surtout sur ton questionnaire du jour. Tu peux quand même noter tes saignements ici.</p></div>`;
-  if (ci) {
+  if (p.hormonal) h += `<div class="card"><p>Avec ta contraception (${esc(CONTRA[contraOf(p)].t.toLowerCase())}), tes hormones restent plutôt stables : tes séances se basent surtout sur ton questionnaire du jour. Tu peux quand même noter tes saignements ici.</p></div>`;
+  if (ci && !p.hormonal) {
     const L = ci.L, cx=140, cy=140, r=104, parts=[];
     for (let d=1; d<=L; d++){
       const k = cycleInfo({lastStart:"2000-01-01",length:L,periodLen:ci.P}, addDays("2000-01-01", d-1)).key;
@@ -1026,7 +1072,8 @@ function viewCycle(){
         <ul class="sci">${sc.items.map(x=>`<li><b>${x.t}</b><span>${x.d}</span></li>`).join("")}</ul>
         <p class="small"><b>À la salle :</b> ${PHASES[ci.key].train}</p></div>`;
     }
-  } else h += `<div class="card"><p>Indique la date de tes dernières règles pour que les séances suivent ton cycle.</p></div>`;
+  } else if (!p.hormonal) h += `<div class="card"><p>Indique la date de tes dernières règles pour que les séances suivent ton cycle.</p></div>`;
+  h += contraInfoCard(p);
   if (p.hormonal) h += `<div class="card"><span class="label">Pourquoi tu ressens ça</span><p class="small hormone-line">${SCIENCE_HORMONAL.hormones}</p><ul class="sci">${SCIENCE_HORMONAL.items.map(x=>`<li><b>${x.t}</b><span>${x.d}</span></li>`).join("")}</ul></div>`;
   h += `<div class="card"><h3>Mes règles</h3><button class="pill block" data-act="period-today"><span>Mes règles ont commencé aujourd'hui</span><span class="plus">${PLUS}</span></button>
     <div class="field"><label class="label" for="c-start">Début des dernières règles</label><input id="c-start" type="date" value="${esc(c.lastStart||"")}" max="${t}"></div>
@@ -1124,7 +1171,7 @@ function viewStats(){
 }
 
 function viewProfile(){
-  const base = {name:"", level:"debutante", goal:"tonus", persona:"methodique", perWeek:3, duration:45, focus:[], banned:[], injuries:"", hormonal:false, bw:"", gym:{chain:"basicfit", pref:"mix"}};
+  const base = {name:"", level:"debutante", goal:"tonus", persona:"methodique", perWeek:3, duration:45, focus:[], banned:[], injuries:"", hormonal:false, contra:"aucune", diuCycle:null, bw:"", gym:{chain:"basicfit", pref:"mix"}};
   if (demo) return `<h1>Ton profil</h1><div class="card glow g-mauve"><h2>Ici, c'est le profil d'Inès</h2><p class="small">Réponds à quelques questions (2 minutes) pour créer le tien. Les données de l'exemple disparaîtront.</p><button class="pill block" data-act="start"><span>Créer mon profil</span><span class="plus">${ARROW_R}</span></button></div>`;
   if (!ui.draft) ui.draft = JSON.parse(JSON.stringify(Object.assign({}, base, S.profile)));
   const p = ui.draft; p.gym = p.gym||{chain:"basicfit",pref:"mix"};
@@ -1150,8 +1197,7 @@ function viewProfile(){
   <div class="grid2"><div class="field"><label class="label" for="p-week">Séances / semaine</label><select id="p-week" data-pf="perWeek">${[1,2,3,4,5,6].map(n=>`<option ${+p.perWeek===n?"selected":""}>${n}</option>`).join("")}</select></div>
   <div class="field"><label class="label" for="p-dur">Durée habituelle</label><select id="p-dur" data-pf="duration">${[[30,"30 min"],[45,"45 min"],[60,"1 h"],[75,"1 h 15"]].map(([n,l])=>`<option value="${n}" ${+p.duration===n?"selected":""}>${l}</option>`).join("")}</select></div></div>
   <div class="field"><label class="label" for="p-inj">Blessure ou gêne à prendre en compte</label><input id="p-inj" value="${esc(p.injuries)}" placeholder="Ex : genou droit sensible" data-pf="injuries"></div></div>
-  <div class="card"><span class="label">Contraception hormonale</span><p class="small muted">Pilule, implant, stérilet hormonal, anneau… Ça change la façon dont le cycle est pris en compte.</p><div class="chips"><button class="chip" data-act="pf" data-k="hormonal" data-v="0" aria-pressed="${!p.hormonal}">Non</button><button class="chip" data-act="pf" data-k="hormonal" data-v="1" aria-pressed="${!!p.hormonal}">Oui</button></div>
-</div>
+  <div class="card"><span class="label">Contraception</span><p class="small muted">Les hormones de synthèse changent la façon dont le cycle est pris en compte.</p>${contraField(Object.assign({}, p, {contra:contraOf(p)}), "pf")}</div>
   <button class="pill block" data-act="save-profile"><span>Enregistrer</span><span class="plus">${CHECK}</span></button>
   <p class="note">Tes données restent sur ce téléphone. Thème, sauvegarde et remise à zéro : menu en haut à gauche.</p>`;
   return h;
@@ -1182,7 +1228,8 @@ document.addEventListener("click", e=>{
       if (ui.onb.step >= steps.length-1) { finishOnboarding(); break; }
       ui.onb.step++; window.scrollTo(0,0); break; }
     case "onb": {
-      const k = b.dataset.k; ui.onb.d[k] = k==="hormonal" ? v==="1" : b.dataset.num ? +v : v;
+      const k = b.dataset.k; ui.onb.d[k] = b.dataset.bool ? v==="1" : b.dataset.num ? +v : v;
+      if (k==="contra" && v!=="diu") ui.onb.d.diuCycle = null;
       if (!b.dataset.stay) { render(); setTimeout(()=>{ if (ui.onb) { ui.onb.step++; render(); window.scrollTo(0,0); } }, 200); return; }
       break; }
     case "onb-zone": { const f = ui.onb.d.focus = ui.onb.d.focus||[]; const i = f.indexOf(v); i>=0 ? f.splice(i,1) : f.push(v); break; }
@@ -1249,7 +1296,7 @@ document.addEventListener("click", e=>{
       if (st) { c.lastStart = st; c.starts = (c.starts||[]).filter(x=>x!==st); c.starts.push(st); c.starts.sort(); }
       if (L>=20 && L<=45) c.length = L; if (P>=2 && P<=10) c.periodLen = P;
       save(); toast("Cycle enregistré"); break; }
-    case "pf": { const k=b.dataset.k; ui.draft[k] = k==="hormonal" ? v==="1" : v; break; }
+    case "pf": { const k=b.dataset.k; ui.draft[k] = b.dataset.bool ? v==="1" : v; if (k==="contra" && v==="diu" && ui.draft.diuCycle==null) ui.draft.diuCycle = true; break; }
     case "pban": { const bn = ui.draft.banned = ui.draft.banned||[]; const i = bn.indexOf(v); i>=0 ? bn.splice(i,1) : bn.push(v); break; }
     case "pban-clear": ui.draft.banned = []; break;
     case "pban-open": ui.banOpen = !ui.banOpen; break;
@@ -1271,7 +1318,7 @@ document.addEventListener("click", e=>{
       const d = ui.draft;
       if (!d.name || !d.name.trim()) { toast("Indique ton prénom"); $("#p-name")?.focus(); return; }
       const g = gymOf(d);
-      const prof = {name:d.name.trim(), level:d.level, goal:d.goal, persona:d.persona, perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], banned:d.banned||[], injuries:(d.injuries||"").trim(), hormonal:!!d.hormonal, bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
+      const prof = {name:d.name.trim(), level:d.level, goal:d.goal, persona:d.persona, perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], banned:d.banned||[], injuries:(d.injuries||"").trim(), contra:contraOf(d), diuCycle:contraOf(d)==="diu" ? !!d.diuCycle : null, hormonal:isHormonal(contraOf(d), d.diuCycle), bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
       { S.profile = prof; if (S.today && !S.today.finished && S.checkins[t]) { S.today.plan = buildPlan(S,t,ui.override); S.today.log = {}; } toast("Profil enregistré"); }
       ui.draft = null; save(); window.scrollTo(0,0); break; }
     case "reset": ui.confirmReset = true; break;

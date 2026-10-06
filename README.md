@@ -98,7 +98,10 @@ Le dossier `docs/phase/` contient une quatrième application, **Phase Gym** : de
 selon le cycle, l'énergie et la forme du jour.
 
 - **À la première ouverture**, une série de questions crée le profil : prénom, objectif, niveau, caractère à la salle,
-  séances par semaine, durée, zones à travailler, salle et équipement, contraception, cycle, poids, ambiance (thème).
+  séances par semaine, durée, zones à travailler, salle et équipement, mode de contraception (aucune, préservatif,
+  méthode naturelle, stérilet au cuivre ou hormonal, pilule combinée ou progestative, anneau, patch, implant, injection),
+  cycle, poids, ambiance (thème). Avec une méthode qui bloque l'ovulation, l'app se base sur le ressenti du jour plutôt que sur les phases,
+  et l'onglet Cycle explique ce que change la méthode choisie (modifiable dans Profil).
   « Voir un exemple d'abord » ouvre un profil fictif (aussi via **…/phase/?demo**).
 - **Séance** : 10 petites questions (heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas),
   puis la séance avec les charges, le minuteur de repos et la progression automatique. Une carte explique pourquoi on

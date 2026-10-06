@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr" data-theme="dark" data-accent="lime">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Phase Gym</title>
+<meta name="description" content="Des séances de salle qui suivent ton cycle, ton énergie et ta forme du jour.">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Phase Gym">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<script>
+/* Thème appliqué avant l'affichage, pour éviter un flash de la mauvaise couleur. */
+(function(){
+  var t = "auto", a = "lime";
+  try { var s = JSON.parse(localStorage.getItem("phase-gym-look") || "{}"); t = s.theme || t; a = s.accent || a; } catch (e) {}
+  var dark = t === "dark" || (t === "auto" && !(window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches));
+  var r = document.documentElement;
+  r.dataset.theme = dark ? "dark" : "light"; r.dataset.accent = a;
+  var m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = dark ? "#000000" : "#F2F0EB";
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Doto:wght@700;900&family=Geist:wght@300..600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<pattern id="ht" width="3.2" height="3.2" patternUnits="userSpaceOnUse"><rect width="3.2" height="3.2" fill="#fff"/><circle cx="1.6" cy="1.6" r=".85" fill="#111"/></pattern>
+</defs></svg>
+<div class="app" id="app"><p class="muted">Chargement…</p></div>
+<nav class="tabs" id="nav" aria-label="Navigation" hidden><div class="in" id="tabs"></div></nav>
+<div class="float" id="float" aria-live="polite"></div>
+<div class="scrim" id="scrim" data-act="menu-close"></div>
+<aside class="drawer" id="drawer" aria-label="Réglages" aria-hidden="true"></aside>
+<input type="file" id="import-file" accept="application/json,.json" class="visually-hidden" tabindex="-1">
+<script src="app.js"></script>
+<script>
+if ("serviceWorker" in navigator) addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+</script>
+</body>
+</html>

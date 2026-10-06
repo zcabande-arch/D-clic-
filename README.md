@@ -92,6 +92,26 @@ Take Out doit être installé (`supabase/courses.sql`). Puis dans Supabase › *
 [`supabase/popote.sql`](supabase/popote.sql) et touche *Run*. C'est tout : le partage tient dans l'offre gratuite de Supabase,
 et la lecture des recettes ne coûte rien.
 
+## Phase Gym : la muscu qui suit le cycle
+
+Le dossier `docs/phase/` contient une quatrième application, **Phase Gym** : des séances de salle construites chaque jour
+selon le cycle, l'énergie et la forme du jour.
+
+- **À la première ouverture**, une série de questions crée le profil : prénom, objectif, niveau, caractère à la salle,
+  séances par semaine, durée, zones à travailler, salle et équipement, contraception, cycle, poids, ambiance (thème).
+  « Voir un exemple d'abord » ouvre un profil fictif (aussi via **…/phase/?demo**).
+- **Séance** : 10 petites questions (heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas),
+  puis la séance avec les charges, le minuteur de repos et la progression automatique. Une carte explique pourquoi on
+  ressent cette humeur, selon la phase du jour.
+- **Cycle** : cadran du cycle, courbe des hormones (œstrogènes, progestérone), « pourquoi tu ressens ça » phase par phase
+  (sérotonine, dopamine, alloprégnanolone, prostaglandines, température…), tes humeurs selon tes phases, et les sources.
+- **Bilan** : séances, effort, kilos gagnés, progression par exercice, énergie selon la phase, historique.
+- **Réglages** (bouton en haut à gauche) : thème Auto / Sombre / Clair, couleur d'accent, refaire les questions de profil,
+  sauvegarde dans un fichier et restauration, tout effacer.
+
+Tout reste sur le téléphone (aucun compte, aucune base à installer) et l'app marche sans réseau.
+Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/phase/** : ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
+
 ## Version avec serveur (auto-hébergée)
 
 Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.

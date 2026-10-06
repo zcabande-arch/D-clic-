@@ -277,3 +277,5 @@ nav.tabs button[aria-current="page"]{background:var(--sel-bg);color:var(--sel-fg
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (max-width:380px){.ex-head{grid-template-columns:88px minmax(0,1fr)}.ill{width:88px}h1{font-size:1.7rem}.tile .dotnum{font-size:2rem}.set{gap:6px}.moodrow{grid-template-columns:96px minmax(0,1fr)}}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+.chip.ban[aria-pressed="true"]{background:transparent;color:var(--muted);border-style:dashed;border-color:var(--line2);text-decoration:line-through}
+.ban-btn{font-size:.8rem;color:var(--muted);align-self:flex-start;margin-top:2px}

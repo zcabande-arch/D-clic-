@@ -103,6 +103,8 @@ selon le cycle, l'énergie et la forme du jour.
 - **Séance** : 10 petites questions (heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas),
   puis la séance avec les charges, le minuteur de repos et la progression automatique. Une carte explique pourquoi on
   ressent cette humeur, selon la phase du jour.
+- **Exercices et machines qu'on n'aime pas** : bouton « Je n'aime pas cet exercice » pendant la séance (il est remplacé
+  tout de suite par une autre version, les séries déjà notées restent), ou liste à cocher dans *Profil*. Ils ne sont plus jamais proposés.
 - **Cycle** : cadran du cycle, courbe des hormones (œstrogènes, progestérone), « pourquoi tu ressens ça » phase par phase
   (sérotonine, dopamine, alloprégnanolone, prostaglandines, température…), tes humeurs selon tes phases, et les sources.
 - **Bilan** : séances, effort, kilos gagnés, progression par exercice, énergie selon la phase, historique.

@@ -194,6 +194,9 @@ const LIB = {
   sideplank:{z:["abdos"], timed:1, v:[V("libre","Gainage latéral","pdc",null,null,["sideplank",""])]},
   pallof:{z:["abdos"], v:[V("machine","Pallof press à la poulie","poulie","poulie",[.08,.12,.15],["pallof","cable"],1), V("libre","Pallof press à l'élastique","pdc",null,null,["pallof","band"])]}
 };
+/* Toutes les versions d'exercices, rangées par matériel, pour pouvoir exclure celles qu'on n'aime pas. */
+const BAN_GROUPS = [["Machines guidées", v=>["machine","presse","smith"].includes(v.eq)],["Poulies", v=>v.eq==="poulie"],["Barre", v=>v.eq==="barre"],["Haltères", v=>v.eq==="halt"||v.eq==="halt1"],["Poids du corps et élastique", v=>v.eq==="pdc"]];
+function allVariants(){ const seen = new Set(), out = []; Object.values(LIB).forEach(L=>L.v.forEach(v=>{ if (!seen.has(v.n)) { seen.add(v.n); out.push(v); } })); return out; }
 const TIMED_DETAIL = {planche:"3 × 30–40 s", deadbug:"3 × 8 par côté, lentement", sideplank:"2 × 25–30 s par côté"};
 const SPLITS = {
   bas:{main:["hip","squat","rdl"], acc:["bulg","presse","abd","legcurl","kick"], core:["deadbug","sideplank"]},
@@ -248,7 +251,7 @@ function gymOf(p){
 }
 function chooseVariant(id, ctx, useAlt){
   const L = LIB[id], eqp = ctx.gym.equip;
-  const avail = L.v.map((v,i)=>({v,i})).filter(o=>!o.v.need || eqp[o.v.need]);
+  const avail = L.v.map((v,i)=>({v,i})).filter(o=>(!o.v.need || eqp[o.v.need]) && !(ctx.banned && ctx.banned.has(o.v.n)));
   if (!avail.length) return null;
   const score = o => {
     let s = o.i*0.01;
@@ -505,7 +508,7 @@ function buildPlan(st, date, override){
   const persona = p.persona||"methodique";
   const dur = +a.duration || 45, slot = slotOf(a.time);
   const seed = hash(date + focus);
-  const ctx = {gym, deb, lvl, crowded:a.crowd==="bondee", bw:+p.bw||60, tier, allowUp: tier>=3 && !(lut && ci.late) && a.pain!=="fortes" && a.sleep!=="mal"};
+  const ctx = {gym, banned:new Set(p.banned||[]), deb, lvl, crowded:a.crowd==="bondee", bw:+p.bw||60, tier, allowUp: tier>=3 && !(lut && ci.late) && a.pain!=="fortes" && a.sleep!=="mal"};
   const sections = [];
   let title, challenge = null;
 
@@ -548,7 +551,9 @@ function buildPlan(st, date, override){
   } else {
     const sp = SPLITS[focus], z = p.focus||[];
     const pri = id => LIB[id].z.some(t=>z.includes(t)) ? 1 : 0;
-    const mains = sp.main.slice().sort((x,y)=>pri(y)-pri(x)), accs = sp.acc.slice().sort((x,y)=>pri(y)-pri(x));
+    /* Exercices dont il reste au moins une version faisable (équipement de la salle, et pas exclue). */
+    const okId = id => !!chooseVariant(id, ctx);
+    const mains = sp.main.filter(okId).sort((x,y)=>pri(y)-pri(x)), accs = sp.acc.filter(okId).sort((x,y)=>pri(y)-pri(x));
     const nMain = tier>=3 ? Math.min(nEx>=4?2:1, mains.length) : 1;
     const ids = mains.slice(0,nMain).concat(accs).slice(0, Math.max(1,nEx-1));
     let mainS, accS, rpe;
@@ -691,13 +696,14 @@ function renderFloat(msg){
   if (timer) { const left = Math.max(0, Math.ceil((timer.end - Date.now())/1000)); el.innerHTML = `<div class="timer"><span class="small">Repos</span><span class="dotnum" id="tleft">${pad(Math.floor(left/60))}:${pad(left%60)}</span><button class="ob" data-act="timer-stop">Passer</button></div>`; }
   else el.innerHTML = "";
 }
-function toast(msg){ renderFloat(msg); clearTimeout(tt); tt = setTimeout(()=>renderFloat(), 2200); }
+let toastOn = false;
+function toast(msg){ toastOn = true; renderFloat(msg); clearTimeout(tt); tt = setTimeout(()=>{ toastOn = false; renderFloat(); }, 2400); }
 function startTimer(sec){
   timer = {end: Date.now()+sec*1000}; renderFloat(); clearInterval(tInt);
   tInt = setInterval(()=>{
     const left = Math.ceil((timer.end - Date.now())/1000);
     if (left <= 0) { clearInterval(tInt); timer = null; toast("Repos terminé, série suivante !"); try { navigator.vibrate && navigator.vibrate(200); } catch(e){} return; }
-    const el = $("#tleft"); if (el) el.textContent = pad(Math.floor(left/60))+":"+pad(left%60); else renderFloat();
+    const el = $("#tleft"); if (el) el.textContent = pad(Math.floor(left/60))+":"+pad(left%60); else if (!toastOn) renderFloat();
   }, 500);
 }
 
@@ -725,7 +731,7 @@ function render(){
   const top = ui.wiz ? "" : `<div class="top"><button class="iconbtn" data-act="menu" aria-label="Réglages" aria-expanded="${!!ui.menu}">${MENU_ICON}</button>${demo?`<span class="label">Mode exemple</span>`:""}</div>`;
   const banner = demo && !ui.wiz ? `<div class="banner"><p><b>Exemple</b> : profil d'Inès, données inventées. Crée ton profil pour que tout soit à toi.</p><button class="ob" data-act="start">Créer mon profil</button></div>` : "";
   $("#app").innerHTML = `<div class="stack">${top}${banner}${v}</div>`;
-  renderFloat();
+  if (!toastOn) renderFloat();
   renderDrawer();
 }
 
@@ -772,7 +778,7 @@ const OSTEPS = [
   {k:"duration", q:"Une séance dure combien de temps, d'habitude ?"},
   {k:"focus", q:"Des zones à travailler en priorité ?", sub:"Plusieurs réponses possibles, ou aucune."},
   {k:"gym", q:"Tu t'entraînes où ?"},
-  {k:"equip", q:"Qu'est-ce qu'il y a dans ta salle ?", sub:"Pré-rempli avec l'équipement habituel. Ça varie d'un club à l'autre : coche ce qu'il y a vraiment."},
+  {k:"equip", q:"Qu'est-ce qu'il y a dans ta salle ?", sub:"Pré-rempli avec l'équipement habituel. Ça varie d'un club à l'autre : coche ce qu'il y a vraiment. Une machine que tu n'aimes pas ? Décoche-la."},
   {k:"hormonal", q:"Tu as une contraception hormonale ?", sub:"Pilule, implant, stérilet hormonal, anneau, patch… Ça change la façon dont ton cycle est pris en compte."},
   {k:"cycle", q:"Parle-moi de ton cycle", sub:"Pour savoir dans quelle phase tu es chaque jour. Une date approximative suffit."},
   {k:"body", q:"Deux dernières infos", sub:"Facultatif, mais ça aide à viser juste dès la première séance."},
@@ -808,7 +814,8 @@ function viewOnboarding(){
     case "gym": body = `<div class="chips">${Object.entries(GYMS).map(([k,v])=>`<button class="chip" data-act="onb-gym" data-v="${k}" aria-pressed="${gym.chain===k}">${v.t}</button>`).join("")}</div>
       <span class="label">Tu préfères</span><div class="opts">${Object.entries(PREFS).map(([k,v])=>`<button class="opt" data-act="onb-pref" data-v="${k}" aria-pressed="${gym.pref===k}"><b>${v.t}</b><span>${v.d}</span></button>`).join("")}</div>`; break;
     case "equip": body = `<div class="chips">${Object.entries(EQUIP).map(([k,v])=>`<button class="chip" data-act="onb-equip" data-v="${k}" aria-pressed="${!!gym.equip[k]}">${v}</button>`).join("")}</div>
-      <div class="field"><label class="label" for="o-max">Haltère le plus lourd (kg)</label><input id="o-max" type="number" inputmode="numeric" min="5" max="80" value="${gym.max}" data-onb-gmax></div>`; break;
+      <div class="field"><label class="label" for="o-max">Haltère le plus lourd (kg)</label><input id="o-max" type="number" inputmode="numeric" min="5" max="80" value="${gym.max}" data-onb-gmax></div>
+      <p class="hint">Plus tard, tu pourras aussi retirer un exercice précis : bouton « Je n'aime pas » pendant la séance, ou dans ton profil.</p>`; break;
     case "hormonal": body = opts("hormonal", [["0","Non","Mon cycle est naturel"],["1","Oui","Pilule, implant, stérilet hormonal…"]])
       + `<p class="hint">Stérilet au cuivre, préservatif ou rien : réponds « Non », ton cycle reste naturel.</p>`; ok = d.hormonal!=null; break;
     case "cycle": body = `<div class="field"><label class="label" for="o-start">Premier jour de tes dernières règles</label><input id="o-start" type="date" max="${todayISO()}" min="${addDays(todayISO(),-120)}" value="${esc(d.lastStart||"")}" data-onb="lastStart"></div>
@@ -829,7 +836,7 @@ function viewOnboarding(){
 function finishOnboarding(){
   const d = ui.onb.d, g = gymOf(d), wasDemo = demo, had = !!S.profile;
   if (wasDemo || !had) { S = blank(); demo = false; }
-  S.profile = {name:d.name.trim(), level:d.level||"debutante", goal:d.goal||"tonus", persona:d.persona||"methodique", perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], injuries:(d.injuries||"").trim(), hormonal:!!d.hormonal, bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
+  S.profile = {name:d.name.trim(), level:d.level||"debutante", goal:d.goal||"tonus", persona:d.persona||"methodique", perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], banned:d.banned||[], injuries:(d.injuries||"").trim(), hormonal:!!d.hormonal, bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
   if (d.lastStart) { S.cycle.lastStart = d.lastStart; S.cycle.starts = (S.cycle.starts||[]).filter(x=>x!==d.lastStart).concat([d.lastStart]).sort(); }
   if (+d.cycleLen>=20 && +d.cycleLen<=45) S.cycle.length = +d.cycleLen;
   if (+d.periodLen>=2 && +d.periodLen<=10) S.cycle.periodLen = +d.periodLen;
@@ -923,19 +930,24 @@ function exDone(k, it){
   if (it.sets && !it.timed) { const ss = lg.sets||[]; let n=0; for (let i=0;i<it.sets;i++) if (ss[i]?.ok) n++; return n===it.sets; }
   return !!lg.done;
 }
+function banBtn(k, it){
+  if (!it.id || demo) return "";
+  return `<button class="linkbtn ban-btn" data-act="ban" data-v="${k}">Je n'aime pas cet exercice</button>`;
+}
 function exItem(k, it){
   const lg = S.today.log[k]||{}, done = exDone(k, it), img = illustration(it.ill);
   const name = (it.prefix?`<span class="muted">${it.prefix} · </span>`:"")+esc(it.name)+(it.tagNew?'<span class="tag">Nouveau</span>':"")+(it.up?'<span class="tag">Charge en hausse</span>':"");
   let h = `<div class="ex ${done?"done":""}">`;
   const detail = it.sets && !it.timed ? `${it.sets} séries × ${it.lo}–${it.hi} reps${it.rest?` · repos ${fmtRest(it.rest)}`:""}${it.rpe?` · RPE ${it.rpe}`:""}` : esc(it.detail||"");
   if (!(it.sets && !it.timed)) {
-    const inner = `<div class="simple"><div style="min-width:0"><div class="name">${name}</div><div class="detail">${detail}</div></div><button class="chk" data-act="done" data-v="${k}" aria-pressed="${!!lg.done}" aria-label="Marquer comme fait">${CHECK}</button></div>`;
+    const inner = `<div class="simple"><div style="min-width:0"><div class="name">${name}</div><div class="detail">${detail}</div>${banBtn(k, it)}</div><button class="chk" data-act="done" data-v="${k}" aria-pressed="${!!lg.done}" aria-label="Marquer comme fait">${CHECK}</button></div>`;
     return h + (img ? `<div class="ex-head"><div class="ill">${img}</div>${inner}</div>` : inner) + `</div>`;
   }
   h += `<div class="ex-head ${img?"":"noimg"}">${img?`<div class="ill">${img}</div>`:""}<div class="stack" style="gap:6px;min-width:0"><div class="name">${name}</div><div class="detail">${detail}</div>`;
   if (it.w) h += `<div class="load"><span class="dotnum">${fr(it.kg)}</span><span class="u">kg ${loadLabel(it.eq)}</span></div>`;
   h += `</div></div>`;
   if (it.reason) h += `<p class="reason ${it.up?"up":""}">${esc(it.reason)}</p>`;
+  h += banBtn(k, it);
   if (it.note) h += `<p class="reason">${esc(it.note)}</p>`;
   const ss = lg.sets||[];
   h += `<div class="sets">`;
@@ -1112,7 +1124,7 @@ function viewStats(){
 }
 
 function viewProfile(){
-  const base = {name:"", level:"debutante", goal:"tonus", persona:"methodique", perWeek:3, duration:45, focus:[], injuries:"", hormonal:false, bw:"", gym:{chain:"basicfit", pref:"mix"}};
+  const base = {name:"", level:"debutante", goal:"tonus", persona:"methodique", perWeek:3, duration:45, focus:[], banned:[], injuries:"", hormonal:false, bw:"", gym:{chain:"basicfit", pref:"mix"}};
   if (demo) return `<h1>Ton profil</h1><div class="card glow g-mauve"><h2>Ici, c'est le profil d'Inès</h2><p class="small">Réponds à quelques questions (2 minutes) pour créer le tien. Les données de l'exemple disparaîtront.</p><button class="pill block" data-act="start"><span>Créer mon profil</span><span class="plus">${ARROW_R}</span></button></div>`;
   if (!ui.draft) ui.draft = JSON.parse(JSON.stringify(Object.assign({}, base, S.profile)));
   const p = ui.draft; p.gym = p.gym||{chain:"basicfit",pref:"mix"};
@@ -1129,6 +1141,11 @@ function viewProfile(){
   <span class="label">Ce qu'il y a dans ta salle</span><p class="note">Pré-rempli avec l'équipement habituel ${gym.chain==="indep"?"d'une salle indépendante":"de ce type de salle"}. Ça varie d'un club à l'autre : coche ce qu'il y a vraiment dans le tien.</p>
   <div class="chips">${Object.entries(EQUIP).map(([k,v])=>`<button class="chip" data-act="equip" data-v="${k}" aria-pressed="${!!gym.equip[k]}">${v}</button>`).join("")}</div>
   <div class="field"><label class="label" for="p-max">Haltère le plus lourd (kg)</label><input id="p-max" type="number" min="5" max="80" value="${gym.max}" data-gmax></div></div>
+  <div class="card"><span class="label">Exercices et machines que tu n'aimes pas</span>
+  ${(p.banned||[]).length ? `<p class="note">Jamais proposés : une autre version les remplace. Touche pour les remettre.</p><div class="chips">${p.banned.map(n=>`<button class="chip ban" data-act="pban" data-v="${esc(n)}" aria-pressed="true">${esc(n)}</button>`).join("")}</div>` : `<p class="note">Aucun pour l'instant. Tu peux aussi en retirer un pendant la séance avec « Je n'aime pas cet exercice ».</p>`}
+  <button class="ob" style="align-self:flex-start" data-act="pban-open" aria-expanded="${!!ui.banOpen}">${ui.banOpen?"Fermer la liste":"Choisir dans la liste"}</button>
+  ${ui.banOpen ? BAN_GROUPS.map(([g,f])=>{ const vs = allVariants().filter(f); return vs.length ? `<span class="label">${g}</span><div class="chips">${vs.map(v=>`<button class="chip ban" data-act="pban" data-v="${esc(v.n)}" aria-pressed="${(p.banned||[]).includes(v.n)}">${esc(v.n)}</button>`).join("")}</div>` : ""; }).join("") : ""}
+  ${(p.banned||[]).length>1?`<button class="linkbtn" style="align-self:flex-start" data-act="pban-clear">Tout remettre</button>`:""}</div>
   <div class="card"><span class="label">Zones à travailler en priorité</span><div class="chips">${Object.entries(ZONES).map(([k,v])=>`<button class="chip" data-act="pzone" data-v="${k}" aria-pressed="${(p.focus||[]).includes(k)}">${v}</button>`).join("")}</div>
   <div class="grid2"><div class="field"><label class="label" for="p-week">Séances / semaine</label><select id="p-week" data-pf="perWeek">${[1,2,3,4,5,6].map(n=>`<option ${+p.perWeek===n?"selected":""}>${n}</option>`).join("")}</select></div>
   <div class="field"><label class="label" for="p-dur">Durée habituelle</label><select id="p-dur" data-pf="duration">${[[30,"30 min"],[45,"45 min"],[60,"1 h"],[75,"1 h 15"]].map(([n,l])=>`<option value="${n}" ${+p.duration===n?"selected":""}>${l}</option>`).join("")}</select></div></div>
@@ -1233,6 +1250,19 @@ document.addEventListener("click", e=>{
       if (L>=20 && L<=45) c.length = L; if (P>=2 && P<=10) c.periodLen = P;
       save(); toast("Cycle enregistré"); break; }
     case "pf": { const k=b.dataset.k; ui.draft[k] = k==="hormonal" ? v==="1" : v; break; }
+    case "pban": { const bn = ui.draft.banned = ui.draft.banned||[]; const i = bn.indexOf(v); i>=0 ? bn.splice(i,1) : bn.push(v); break; }
+    case "pban-clear": ui.draft.banned = []; break;
+    case "pban-open": ui.banOpen = !ui.banOpen; break;
+    case "ban": {
+      const it = itemByKey(v); if (!it) break;
+      const bn = S.profile.banned = S.profile.banned||[]; if (!bn.includes(it.name)) bn.push(it.name);
+      /* On refait la séance sans cet exercice, en gardant ce qui est déjà noté sur les autres. */
+      const old = S.today.plan, oldLog = S.today.log, byName = {};
+      allItems(old).forEach(([k2,x])=>{ if (oldLog[k2] && x.name!==it.name) byName[x.name] = oldLog[k2]; });
+      S.today.plan = buildPlan(S, t, ui.override); S.today.log = {};
+      allItems(S.today.plan).forEach(([k2,x])=>{ if (byName[x.name]) S.today.log[k2] = byName[x.name]; });
+      const repl = allItems(S.today.plan).map(([,x])=>x).find(x=>x.id===it.id);
+      save(); toast(repl ? "Remplacé par : "+repl.name : "« "+it.name+" » retiré"); break; }
     case "pzone": { const f = ui.draft.focus = ui.draft.focus||[]; const i=f.indexOf(v); i>=0?f.splice(i,1):f.push(v); break; }
     case "gym": ui.draft.gym = {chain:v, pref:(ui.draft.gym||{}).pref||"mix"}; break;
     case "pref": ui.draft.gym = Object.assign({}, ui.draft.gym, {pref:v}); break;
@@ -1241,7 +1271,7 @@ document.addEventListener("click", e=>{
       const d = ui.draft;
       if (!d.name || !d.name.trim()) { toast("Indique ton prénom"); $("#p-name")?.focus(); return; }
       const g = gymOf(d);
-      const prof = {name:d.name.trim(), level:d.level, goal:d.goal, persona:d.persona, perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], injuries:(d.injuries||"").trim(), hormonal:!!d.hormonal, bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
+      const prof = {name:d.name.trim(), level:d.level, goal:d.goal, persona:d.persona, perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], banned:d.banned||[], injuries:(d.injuries||"").trim(), hormonal:!!d.hormonal, bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
       { S.profile = prof; if (S.today && !S.today.finished && S.checkins[t]) { S.today.plan = buildPlan(S,t,ui.override); S.today.log = {}; } toast("Profil enregistré"); }
       ui.draft = null; save(); window.scrollTo(0,0); break; }
     case "reset": ui.confirmReset = true; break;

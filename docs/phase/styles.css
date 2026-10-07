@@ -279,3 +279,16 @@ nav.tabs button[aria-current="page"]{background:var(--sel-bg);color:var(--sel-fg
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 .chip.ban[aria-pressed="true"]{background:transparent;color:var(--muted);border-style:dashed;border-color:var(--line2);text-decoration:line-through}
 .ban-btn{font-size:.8rem;color:var(--muted);align-self:flex-start;margin-top:2px}
+/* noter sa séance */
+.hscroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-inline:-16px;padding-inline:16px;scrollbar-width:none}
+.hscroll::-webkit-scrollbar{display:none}
+.pickrow{display:grid;grid-template-columns:56px minmax(0,1fr) 34px;gap:12px;align-items:center;width:100%;border:0;border-top:1px solid var(--line);background:transparent;padding:10px 0;text-align:left;color:var(--fg)}
+.pickrow:first-child{border-top:0}
+.pickrow .pk{display:flex;flex-direction:column;gap:1px;min-width:0}
+.pickrow .pk b{font-weight:500;font-size:.95rem}
+.pickrow .pk span{font-size:.8rem;color:var(--muted)}
+.pickrow .plusc{width:34px;height:34px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center}
+.pickrow .plusc svg{width:13px;height:13px}
+.pickrow[aria-pressed="true"] .plusc{background:var(--sel-bg);color:var(--sel-fg);border-color:var(--sel-bg)}
+.ill.sm{width:56px;border-radius:12px;display:grid;place-items:center;color:var(--ink);font-size:1.2rem}
+.ill.noimg{background:var(--surface2);color:var(--muted);border:1px solid var(--line)}

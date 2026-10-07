@@ -106,6 +106,11 @@ selon le cycle, l'énergie et la forme du jour.
 - **Séance** : 10 petites questions (heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas),
   puis la séance avec les charges, le minuteur de repos et la progression automatique. Une carte explique pourquoi on
   ressent cette humeur, selon la phase du jour.
+- **Noter sa propre séance** (« Tu as fait ta propre séance ? » sur l'accueil, « J'ai fait autrement » pendant une séance
+  proposée, ou « + Noter une séance » dans *Bilan*) : on choisit ses exercices dans la liste (recherche, filtres par zone,
+  « Mes exos »), on en crée avec son propre nom, on ajoute du cardio en minutes, puis on note les séries (kg × reps).
+  Le jour peut être changé pour une séance oubliée. Le brouillon est gardé si on quitte l'app. À l'enregistrement, la séance
+  rejoint l'historique et le bilan, et les charges servent de point de départ aux prochaines séances.
 - **Exercices et machines qu'on n'aime pas** : bouton « Je n'aime pas cet exercice » pendant la séance (il est remplacé
   tout de suite par une autre version, les séries déjà notées restent), ou liste à cocher dans *Profil*. Ils ne sont plus jamais proposés.
 - **Cycle** : cadran du cycle, courbe des hormones (œstrogènes, progestérone), « pourquoi tu ressens ça » phase par phase

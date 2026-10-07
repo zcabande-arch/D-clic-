@@ -774,9 +774,10 @@ function render(){
   }
   $("#nav").hidden = false;
   renderTabs();
-  const v = ui.tab==="today" ? (ui.wiz ? viewWizard() : viewToday()) : ui.tab==="cycle" ? viewCycle() : ui.tab==="stats" ? viewStats() : viewProfile();
-  const top = ui.wiz ? "" : `<div class="top"><button class="iconbtn" data-act="menu" aria-label="Réglages" aria-expanded="${!!ui.menu}">${MENU_ICON}</button>${demo?`<span class="label">Mode exemple</span>`:""}</div>`;
-  const banner = demo && !ui.wiz ? `<div class="banner"><p><b>Exemple</b> : profil d'Inès, données inventées. Crée ton profil pour que tout soit à toi.</p><button class="ob" data-act="start">Créer mon profil</button></div>` : "";
+  if (ui.logging && !S.logDraft) ui.logging = false;
+  const v = ui.tab==="today" ? (ui.logging ? viewLog() : ui.wiz ? viewWizard() : viewToday()) : ui.tab==="cycle" ? viewCycle() : ui.tab==="stats" ? viewStats() : viewProfile();
+  const top = ui.wiz || (ui.logging && ui.tab==="today") ? "" : `<div class="top"><button class="iconbtn" data-act="menu" aria-label="Réglages" aria-expanded="${!!ui.menu}">${MENU_ICON}</button>${demo?`<span class="label">Mode exemple</span>`:""}</div>`;
+  const banner = demo && !ui.wiz && !ui.logging ? `<div class="banner"><p><b>Exemple</b> : profil d'Inès, données inventées. Crée ton profil pour que tout soit à toi.</p><button class="ob" data-act="start">Créer mon profil</button></div>` : "";
   $("#app").innerHTML = `<div class="stack">${top}${banner}${v}</div>`;
   if (!toastOn) renderFloat();
   renderDrawer();
@@ -911,20 +912,21 @@ function viewToday(){
   const hour = new Date().getHours();
   let h = `<div class="stack" style="gap:8px"><span class="label">${esc(fmtLong(t))}</span><h1>${hour<5||hour>=18?"Bonsoir":"Salut"} ${esc(p.name)}</h1><div class="row">${phaseChip(ci,p.hormonal)}</div></div>`;
   if (S.today && S.today.date!==t) S.today = null;
-  const ans = S.checkins[t];
-  if (!ans || !S.today) {
+  const ans = S.checkins[t], doneToday = S.today && S.today.date===t && S.today.finished;
+  if ((!ans || !S.today) && !doneToday) {
     h += `<div class="card glow g-pink" style="min-height:330px;justify-content:space-between"><div><span class="label">Avant ta séance</span><h2 style="margin-top:4px">On construit ta séance du jour</h2></div>
       <div class="bignum"><span class="dotnum">10</span><span>questions</span></div>
       <p class="small" style="color:rgba(255,255,255,.85)">Heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas. Ta séance s'adapte aux réponses et à ton cycle.</p>
       <button class="pill block" data-act="wiz"><span>Commencer</span><span class="plus">${PLUS}</span></button></div>`;
+    h += logCard();
     h += weekCard();
     if (ci && !p.hormonal) h += `<div class="card glow ${PHASES[ci.key].g}"><span class="label">Ta phase en ce moment</span><h3>${PHASES[ci.key].name}${ci.late?" (fin de cycle)":""}</h3><p class="small">${PHASES[ci.key].feel}</p><button class="ob" style="align-self:flex-start" data-act="go-cycle">Pourquoi je me sens comme ça ?</button></div>`;
     return h;
   }
   const plan = S.today.plan;
   if (S.today.finished) {
-    h += `<div class="card glow g-sage" style="min-height:260px;justify-content:space-between"><span class="label">Séance terminée</span><div class="bignum"><span class="dotnum">${S.today.rpe}</span><span>effort ressenti /10</span></div><p>${esc(plan.title)} · ${S.today.doneCount} exercices faits. Tes charges sont enregistrées pour la prochaine fois.</p><button class="pill block" data-act="redo"><span>Refaire le questionnaire</span><span class="plus">${ARROW_R}</span></button></div>`;
-    return h + weekCard();
+    h += `<div class="card glow g-sage" style="min-height:260px;justify-content:space-between"><span class="label">Séance terminée</span><div class="bignum"><span class="dotnum">${S.today.rpe}</span><span>effort ressenti /10</span></div><p>${esc(plan.title)} · ${S.today.doneCount} exercice${S.today.doneCount>1?"s":""}. Tes charges sont enregistrées pour la prochaine fois.</p>${S.today.manual?"":`<button class="pill block" data-act="redo"><span>Refaire le questionnaire</span><span class="plus">${ARROW_R}</span></button>`}</div>`;
+    return h + logCard(true) + weekCard();
   }
   const g = plan.phase ? PHASES[plan.phase].g : "g-mauve";
   h += `<div class="card glow ${g}"><div class="row between"><span class="label">Ta séance${plan.time?" de "+esc(plan.time.replace(":","h")):""}</span><span class="label">Intensité</span></div>
@@ -948,13 +950,155 @@ function viewToday(){
     <li>Fatigue, mauvaise nuit ou fin de cycle : on garde la charge au lieu de monter.</li>
     <li>Toutes les 6 à 8 semaines, fais une semaine plus légère (environ −30 %) pour continuer à progresser.</li></ul></details>`;
   if (plan.tips.length) h += `<div class="card"><span class="label">Conseils pour aujourd'hui</span><ul class="why">${plan.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
-  if (!ui.finishing) h += `<button class="pill block" data-act="finish"><span>Terminer la séance</span><span class="plus">${CHECK}</span></button>`;
+  if (!ui.finishing) h += `<button class="pill block" data-act="finish"><span>Terminer la séance</span><span class="plus">${CHECK}</span></button>
+    <button class="ob" style="align-self:center" data-act="log-start" data-v="plan">${S.logDraft?"Reprendre ma séance notée":"J'ai fait autrement : noter ma séance"}</button>`;
   else h += `<div class="card glow g-mauve"><h3>C'était comment ?</h3><span class="label">Effort ressenti, de 1 (facile) à 10 (à fond)</span>
     <div class="chips">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" data-act="rpe" data-v="${n}" aria-pressed="${ui.rpe===n}">${n}</button>`).join("")}</div>
     <div class="field"><label for="note" class="label">Une note pour la prochaine fois ?</label><textarea id="note" placeholder="Ex : hip thrust facile, monter à 75 kg">${esc(ui.noteDraft||"")}</textarea></div>
     <button class="pill block" data-act="save-session" ${ui.rpe?"":"disabled"}><span>Enregistrer la séance</span><span class="plus">${CHECK}</span></button></div>`;
   return h;
 }
+/* ---------- noter sa séance soi-même ----------
+   On choisit ses exercices (bibliothèque, exos déjà faits, ou un nom libre), on note les séries, et la séance
+   rejoint l'historique et la progression des charges, comme une séance proposée par l'app. Le brouillon est
+   gardé dans S.logDraft : on peut quitter l'app au milieu et reprendre. */
+const CARDIO = ["Tapis de course","Tapis incliné (marche)","Vélo","Rameur","Elliptique","StairMaster","Corde à sauter","Cours collectif"];
+const ZONE_FILTERS = [["all","Tout"],["mine","Mes exos"],["fessiers","Fessiers"],["jambes","Jambes"],["dos","Dos"],["epaules","Épaules"],["bras","Bras"],["abdos","Abdos"],["cardio","Cardio"]];
+function variantInfo(name){
+  for (const [id,L] of Object.entries(LIB)) { const v = L.v.find(x=>x.n===name); if (v) return {id, v, z:L.z, timed:!!L.timed}; }
+  return null;
+}
+function newLogItem(name, kind){
+  if (kind==="cardio") return {name, cardio:true, min:"", note:""};
+  const inf = variantInfo(name), last = getLift(name);
+  const w = inf ? inf.v.eq!=="pdc" : !(last===null && kind==="pdc");
+  const timed = !!inf?.timed;
+  const n = last?.sets?.length || 3, reps = last?.sets?.[0]?.reps ?? "";
+  const kg = last ? last.kg : (inf && w && inf.v.r ? recommend({name, eq:inf.v.eq, r:inf.v.r[LVL[S.profile.level]??1], lo:8, hi:10}, {bw:+S.profile.bw||60, lvl:LVL[S.profile.level]??1, tier:3}).kg : "");
+  return {name, eq:inf ? inf.v.eq : (last?.eq||"libre"), ill:inf?.v.ill||null, w, timed, sets:Array.from({length:Math.min(n,6)}, ()=>({kg:w?kg:"", reps:timed?"":reps}))};
+}
+function startLog(fromPlan){
+  if (!S.logDraft) {
+    const d = {date:todayISO(), title:"", items:[], rpe:null, note:""};
+    if (fromPlan && S.today?.plan) {
+      allItems(S.today.plan).forEach(([k,it])=>{
+        if (!it.id && !it.sets) return;
+        const lg = S.today.log[k]||{}, item = newLogItem(it.name);
+        if (it.sets && !it.timed) item.sets = Array.from({length:it.sets}, (_,i)=>({kg: it.w ? (lg.sets?.[i]?.kg ?? it.kg) : "", reps: lg.sets?.[i]?.reps ?? ""}));
+        d.items.push(item);
+      });
+      d.title = S.today.plan.title;
+    }
+    S.logDraft = d;
+  }
+  ui.logging = true; ui.logPick = false; ui.wiz = null; ui.tab = "today"; save(); window.scrollTo(0,0);
+}
+function logFocus(items){
+  const zs = new Set(); let cardio = 0, any = 0;
+  items.forEach(it=>{ if (it.cardio) { cardio++; return; } any++; (variantInfo(it.name)?.z||[]).forEach(z=>zs.add(z)); });
+  const low = ["fessiers","jambes"].some(z=>zs.has(z)), up = ["dos","epaules","bras"].some(z=>zs.has(z));
+  if (!any && cardio) return "cardio";
+  if (low && up) return "full"; if (low) return "bas"; if (up) return "haut";
+  if (zs.has("abdos") && zs.size===1) return "mobilite";
+  return "libre";
+}
+const FOCUS_TITLES = {bas:"Bas du corps", haut:"Haut du corps", full:"Full body", cardio:"Cardio", mobilite:"Gainage & mobilité", libre:"Séance libre"};
+function viewLog(){
+  const d = S.logDraft, t = todayISO();
+  if (ui.logPick) return viewLogPicker();
+  const ci = cycleInfo(S.cycle, d.date), auto = FOCUS_TITLES[logFocus(d.items)];
+  let h = `<div class="row between"><button class="circ plain" data-act="log-close" aria-label="Retour">${ARROW_L}</button><span class="label">Brouillon gardé automatiquement</span></div>
+    <h1>Noter ma séance</h1>
+    <div class="card"><div class="grid2"><div class="field"><label class="label" for="lg-date">Jour</label><input id="lg-date" type="date" max="${t}" value="${esc(d.date)}" data-lgf="date"></div>
+    <div class="field"><label class="label" for="lg-title">Nom (facultatif)</label><input id="lg-title" value="${esc(d.title)}" placeholder="${esc(auto)}" data-lgf="title" maxlength="60"></div></div>
+    ${ci && !S.profile.hormonal ? `<div class="row">${phaseChip(ci,false)}</div>` : ""}</div>`;
+  if (!d.items.length) h += `<div class="card"><p class="muted small">Ajoute les exercices que tu as faits : dans la liste de l'app, parmi ceux que tu fais d'habitude, ou avec un nom à toi. Pour chacun, note tes séries (charge et répétitions).</p></div>`;
+  d.items.forEach((it,i)=>{
+    const img = it.ill ? illustration(it.ill) : "";
+    h += `<div class="card" style="gap:12px"><div class="ex-head ${img?"":"noimg"}" style="${img?"":"grid-template-columns:minmax(0,1fr)"}">${img?`<div class="ill">${img}</div>`:""}<div class="stack" style="gap:4px;min-width:0"><div class="name" style="font-weight:500">${esc(it.name)}</div>
+      <div class="detail note">${it.cardio?"Cardio":it.timed?"Gainage : durée en secondes":it.w?"kg "+esc(loadLabel(it.eq)||"de charge"):"Poids du corps"}</div>
+      <div class="row" style="gap:6px">${i>0?`<button class="linkbtn" data-act="log-up" data-v="${i}">Monter</button>`:""}<button class="linkbtn" data-act="log-del" data-v="${i}" style="color:#E5484D">Retirer</button></div></div></div>`;
+    if (it.cardio) {
+      h += `<div class="grid2"><div class="field"><label class="label" for="lc-${i}">Durée (min)</label><input id="lc-${i}" type="number" inputmode="numeric" min="1" max="300" value="${esc(it.min)}" data-lg="${i}|min"></div>
+        <div class="field"><label class="label" for="ln-${i}">Détail (facultatif)</label><input id="ln-${i}" value="${esc(it.note)}" placeholder="Ex : 5 km, 10 % de pente" data-lg="${i}|note"></div></div>`;
+    } else {
+      h += `<div class="sets">${it.sets.map((st,j)=>`<div class="set ${it.w?"":"noload"}"><span class="n">${j+1}</span>
+        ${it.w?`<input type="number" inputmode="decimal" step="0.5" min="0" value="${esc(st.kg)}" placeholder="kg" data-lg="${i}|${j}|kg" aria-label="Charge série ${j+1}"><span class="x">kg ×</span>`:""}
+        <input type="number" inputmode="numeric" min="0" value="${esc(st.reps)}" placeholder="${it.timed?"s":"reps"}" data-lg="${i}|${j}|reps" aria-label="${it.timed?"Secondes":"Reps"} série ${j+1}">
+        <button class="chk" data-act="log-delset" data-v="${i}|${j}" aria-label="Supprimer la série ${j+1}" style="color:var(--muted)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="opacity:1"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>`).join("")}</div>
+        <div class="row"><button class="ob" data-act="log-addset" data-v="${i}">+ Série</button>${!it.timed?`<button class="linkbtn" data-act="log-togglew" data-v="${i}">${it.w?"Sans charge (poids du corps)":"Avec une charge"}</button>`:""}</div>`;
+    }
+    h += `</div>`;
+  });
+  h += `<button class="pill block" data-act="log-pick"><span>Ajouter un exercice</span><span class="plus">${PLUS}</span></button>`;
+  if (d.items.length) h += `<div class="card glow g-mauve"><h3>C'était comment ?</h3><span class="label">Effort ressenti, de 1 (facile) à 10 (à fond)</span>
+    <div class="chips">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="chip" data-act="log-rpe" data-v="${n}" aria-pressed="${d.rpe===n}">${n}</button>`).join("")}</div>
+    <div class="field"><label for="lg-note" class="label">Une note pour la prochaine fois ?</label><textarea id="lg-note" data-lgf="note" placeholder="Ex : épaule un peu raide, garder 30 kg">${esc(d.note)}</textarea></div>
+    <button class="pill block" data-act="log-save"><span>Enregistrer la séance</span><span class="plus">${CHECK}</span></button></div>`;
+  h += `<button class="ob danger" style="align-self:center" data-act="log-discard">${ui.confirmDiscard?"Sûre ? Touche encore pour tout jeter":"Jeter ce brouillon"}</button>`;
+  return h;
+}
+function viewLogPicker(){
+  const f = ui.logFilter||"all";
+  return `<div class="row between"><button class="circ plain" data-act="log-pick-close" aria-label="Retour">${ARROW_L}</button><span class="label">${S.logDraft.items.length} exercice${S.logDraft.items.length>1?"s":""} dans ta séance</span></div>
+    <h1>Ajouter un exercice</h1>
+    <div class="field"><label class="visually-hidden" for="lg-q">Chercher</label><input id="lg-q" type="search" value="${esc(ui.logQ||"")}" placeholder="Chercher, ou taper le nom d'un exo à toi" data-logq autocomplete="off" enterkeyhint="search"></div>
+    <div class="chips hscroll">${ZONE_FILTERS.map(([k,t])=>`<button class="chip" style="flex:none" data-act="log-filter" data-v="${k}" aria-pressed="${f===k}">${t}</button>`).join("")}</div>
+    <div class="stack" id="lg-res">${pickerResults()}</div>`;
+}
+function pickerResults(){
+  const q = (ui.logQ||"").trim().toLowerCase(), f = q ? "all" : (ui.logFilter||"all"), banned = new Set(S.profile.banned||[]);
+  const norm = x => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const nq = norm(q), inDraft = new Set(S.logDraft.items.map(x=>x.name));
+  let list = [];
+  if (f==="cardio") list = CARDIO.map(n=>({n, kind:"cardio"}));
+  else if (f==="mine") list = Object.keys(S.lifts).map(n=>({n, inf:variantInfo(n)}));
+  else {
+    list = allVariants().filter(v=>!banned.has(v.n)).map(v=>({n:v.n, inf:variantInfo(v.n)})).filter(o=>f==="all" || o.inf.z.includes(f));
+    if (f==="all") Object.keys(S.lifts).forEach(n=>{ if (!variantInfo(n)) list.unshift({n, inf:null}); });
+    if (f==="all") list = list.concat(CARDIO.map(n=>({n, kind:"cardio"})));
+  }
+  if (nq) list = list.filter(o=>norm(o.n).includes(nq));
+  const zl = o => o.kind==="cardio" ? "Cardio" : o.inf ? o.inf.z.map(z=>ZONES[z]).join(", ") : "Ton exercice";
+  let h = "";
+  if (q) h += `<button class="pill block" data-act="log-add-custom"><span>Ajouter « ${esc(ui.logQ.trim())} »</span><span class="plus">${PLUS}</span></button>`;
+  h += `<div class="card" style="padding:6px 20px">`;
+  h += list.length ? list.map(o=>{ const img = o.inf ? illustration(o.inf.v.ill) : "", has = inDraft.has(o.n);
+      return `<button class="pickrow" data-act="log-add" data-v="${esc(o.n)}" data-kind="${o.kind||""}" ${has?'aria-pressed="true"':""}>${img?`<span class="ill sm">${img}</span>`:`<span class="ill sm noimg">${o.kind==="cardio"?"♥":"+"}</span>`}<span class="pk"><b>${esc(o.n)}</b><span>${esc(zl(o))}${has?" · déjà ajouté":""}</span></span><span class="plusc">${has?CHECK:PLUS}</span></button>`; }).join("")
+    : `<p class="muted small" style="padding:14px 0">${f==="mine"?"Tu n'as pas encore d'exercice enregistré.":"Rien ne correspond."}</p>`;
+  h += `</div>`;
+  if (q) h += `<p class="note">Un exercice qui n'est pas dans la liste ? Ajoute-le avec ton nom : il sera gardé dans « Mes exos » avec ta progression.</p>`;
+  return h;
+}
+function saveLog(){
+  const d = S.logDraft, items = [];
+  d.items.forEach(it=>{
+    if (it.cardio) { if (+it.min>0) items.push({name:it.name, cardio:true, min:+it.min, note:(it.note||"").trim()}); return; }
+    const sets = it.sets.filter(x=>+x.reps>0).map(x=>({kg:it.w ? (+String(x.kg).replace(",",".")||0) : 0, reps:+x.reps}));
+    if (sets.length) items.push({name:it.name, eq:it.eq, w:it.w, timed:it.timed, sets});
+  });
+  if (!items.length) { toast("Note au moins une série (ou une durée de cardio)"); return false; }
+  if (!d.rpe) { toast("Choisis ton effort ressenti, de 1 à 10"); return false; }
+  const date = d.date && d.date<=todayISO() ? d.date : todayISO(), ci = cycleInfo(S.cycle, date), focus = logFocus(items);
+  /* Charges : même règle que les séances proposées. La plus lourde série devient la référence, la fourchette de reps est déduite. */
+  items.filter(x=>x.w && !x.timed && x.sets.some(s=>s.kg>0)).forEach(x=>{
+    const prev = getLift(x.name);
+    if (prev && prev.date && prev.date > date) return; // une séance plus récente fait déjà foi
+    const kg = Math.max(...x.sets.map(s=>s.kg)), top = x.sets.filter(s=>s.kg===kg), reps = top.map(s=>s.reps);
+    const lo = prev?.lo || clamp(Math.min(...reps), 3, 20), hi = prev?.hi || Math.max(lo+2, Math.max(...reps));
+    S.lifts[x.name] = {kg, eq:x.eq, lo, hi, sets:top, date, hist:((prev&&prev.hist)||[]).filter(h=>h.d!==date).concat([{d:date, kg}]).sort((a,b)=>a.d<b.d?-1:1).slice(-20)};
+  });
+  const sess = {id:Date.now().toString(36), date, title:(d.title||"").trim()||FOCUS_TITLES[focus], focus, phase:(!S.profile.hormonal && ci)?ci.key:null, cycleDay:ci?.day||null, rpe:d.rpe, note:(d.note||"").trim(), done:items.length, total:items.length, manual:true, ex:items};
+  S.sessions.push(sess); S.sessions.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  if (date===todayISO()) {
+    if (S.today && !S.today.finished) S.today = null; // la séance proposée n'a pas été faite, c'est celle-ci qui compte
+    S.today = S.today || {date, override:0, plan:{title:sess.title, focus, sections:[], tips:[], why:[]}, log:{}, finished:true, rpe:d.rpe, doneCount:items.length, manual:true};
+  }
+  S.logDraft = null; ui.logging = false; ui.logPick = false; ui.confirmDiscard = false;
+  save(); window.scrollTo(0,0); toast("Séance enregistrée");
+  return true;
+}
+
 /* « Pourquoi je me sens comme ça » : l'humeur du questionnaire, expliquée par la phase du jour. */
 function moodCard(a, phase, hormonal){
   const m = MOODS.find(x=>x.k===a?.mood); if (!m) return "";
@@ -970,6 +1114,11 @@ function moodCard(a, phase, hormonal){
     <h3>${esc(m.t)} : pourquoi ?</h3><p class="small hormone-line">${esc(txt)}</p>
     ${extra.length?`<p class="note">Et ${extra.join(", ").replace(/, ([^,]*)$/," et $1")} jouent sans doute autant que les hormones.</p>`:""}
     ${phase&&!hormonal?`<button class="linkbtn" style="align-self:flex-start" data-act="go-cycle">Tout comprendre sur ta phase</button>`:""}</div>`;
+}
+function logCard(after){
+  if (S.logDraft) return `<div class="banner"><p><b>Séance en cours de saisie</b> : ${S.logDraft.items.length} exercice${S.logDraft.items.length>1?"s":""} noté${S.logDraft.items.length>1?"s":""}.</p><button class="ob" data-act="log-start">Reprendre</button></div>`;
+  return `<div class="card"><div class="row between" style="flex-wrap:nowrap"><div style="min-width:0"><h3>${after?"Une autre séance ?":"Tu as fait ta propre séance ?"}</h3><p class="small muted">Choisis tes exos, note tes séries : tout rejoint ton bilan et ta progression.</p></div>
+    <button class="circ plain" data-act="log-start" aria-label="Noter ma séance">${PLUS}</button></div></div>`;
 }
 function exDone(k, it){
   const lg = S.today.log[k]||{};
@@ -1166,7 +1315,7 @@ function viewStats(){
     } else h += `<p class="muted small">Remplis le questionnaire avant tes séances : ce graphique montrera comment ton énergie varie avec ton cycle.</p>`;
     h += `</div>`;
   }
-  h += `<div class="card"><span class="label">Historique</span>${ss.length?`<div class="hist">${ss.slice(0,30).map(x=>`<div class="item"><span class="dot" style="--c:var(${x.phase?PHASES[x.phase].c:"--muted"})"></span><div style="min-width:0"><div>${esc(x.title)}</div><p class="note">${esc(fmtLong(x.date))}${x.cycleDay?" · J"+x.cycleDay:""}${x.note?" · "+esc(x.note):""}</p></div><span class="dotnum" style="font-size:1.1rem">${x.rpe||""}</span></div>`).join("")}</div>`:`<p class="muted small">Aucune séance enregistrée. Termine ta première séance pour la voir ici.</p>`}</div>`;
+  h += `<div class="card"><div class="row between"><span class="label">Historique</span><button class="ob" data-act="log-start">+ Noter une séance</button></div>${ss.length?`<div class="hist">${ss.slice(0,30).map(x=>`<div class="item"><span class="dot" style="--c:var(${x.phase?PHASES[x.phase].c:"--muted"})"></span><div style="min-width:0"><div>${esc(x.title)}</div><p class="note">${esc(fmtLong(x.date))}${x.cycleDay?" · J"+x.cycleDay:""}${x.note?" · "+esc(x.note):""}</p>${x.ex?`<p class="note">${x.ex.map(e=>esc(e.name)+(e.cardio?" "+e.min+" min":e.w&&e.sets.length?" "+fr(Math.max(...e.sets.map(s=>s.kg)))+" kg":"")).join(" · ")}</p>`:""}</div><span class="dotnum" style="font-size:1.1rem">${x.rpe||""}</span></div>`).join("")}</div>`:`<p class="muted small">Aucune séance enregistrée. Termine ta première séance pour la voir ici.</p>`}</div>`;
   return h;
 }
 
@@ -1214,7 +1363,7 @@ document.addEventListener("click", e=>{
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, v = b.dataset.v, t = todayISO();
   switch(act){
-    case "tab": ui.tab = v; if (v!=="today") ui.wiz = null; if (v!=="profile") ui.draft = null; ui.confirmReset = false; window.scrollTo(0,0); break;
+    case "tab": if (v!=="today") { ui.logging = false; ui.logPick = false; } ui.tab = v; if (v!=="today") ui.wiz = null; if (v!=="profile") ui.draft = null; ui.confirmReset = false; window.scrollTo(0,0); break;
     case "start": ui.menu = false; ui.onb = {step:0, d:onbDefaults()}; window.scrollTo(0,0); break;
     case "demo": startDemo(); window.scrollTo(0,0); break;
     /* questions de profil */
@@ -1297,6 +1446,26 @@ document.addEventListener("click", e=>{
       if (L>=20 && L<=45) c.length = L; if (P>=2 && P<=10) c.periodLen = P;
       save(); toast("Cycle enregistré"); break; }
     case "pf": { const k=b.dataset.k; ui.draft[k] = b.dataset.bool ? v==="1" : v; if (k==="contra" && v==="diu" && ui.draft.diuCycle==null) ui.draft.diuCycle = true; break; }
+    case "log-start": startLog(v==="plan"); break;
+    case "log-close": ui.logging = false; ui.confirmDiscard = false; window.scrollTo(0,0); break;
+    case "log-pick": ui.logPick = true; ui.logQ = ""; ui.logFilter = "all"; window.scrollTo(0,0); render(); return;
+    case "log-pick-close": ui.logPick = false; window.scrollTo(0,0); break;
+    case "log-filter": ui.logFilter = v; break;
+    case "log-add": case "log-add-custom": {
+      const name = act==="log-add" ? v : (ui.logQ||"").trim().slice(0,60); if (!name) break;
+      const d = S.logDraft;
+      if (!d.items.some(x=>x.name===name)) d.items.push(newLogItem(name, b.dataset.kind || (act==="log-add-custom"?"custom":"")));
+      ui.logPick = false; ui.logQ = ""; save(); render();
+      setTimeout(()=>{ const c = document.querySelectorAll("#app .card"); const el = c[c.length-2]; el && el.scrollIntoView({block:"center"}); }, 30);
+      toast("Ajouté : "+name); return; }
+    case "log-del": S.logDraft.items.splice(+v,1); save(); break;
+    case "log-up": { const i = +v, a = S.logDraft.items; [a[i-1], a[i]] = [a[i], a[i-1]]; save(); break; }
+    case "log-addset": { const it = S.logDraft.items[+v], last = it.sets[it.sets.length-1]; it.sets.push(last ? {kg:last.kg, reps:last.reps} : {kg:"", reps:""}); save(); break; }
+    case "log-delset": { const [i,j] = v.split("|").map(Number); S.logDraft.items[i].sets.splice(j,1); save(); break; }
+    case "log-togglew": { const it = S.logDraft.items[+v]; it.w = !it.w; if (!it.w) it.sets.forEach(x=>x.kg=""); save(); break; }
+    case "log-rpe": S.logDraft.rpe = +v; save(); break;
+    case "log-save": if (!saveLog()) return; break;
+    case "log-discard": if (!ui.confirmDiscard) { ui.confirmDiscard = true; break; } S.logDraft = null; ui.logging = false; ui.confirmDiscard = false; save(); toast("Brouillon jeté"); window.scrollTo(0,0); break;
     case "pban": { const bn = ui.draft.banned = ui.draft.banned||[]; const i = bn.indexOf(v); i>=0 ? bn.splice(i,1) : bn.push(v); break; }
     case "pban-clear": ui.draft.banned = []; break;
     case "pban-open": ui.banOpen = !ui.banOpen; break;
@@ -1335,10 +1504,14 @@ document.addEventListener("input", e=>{
   if (el.dataset.pf && ui.draft) ui.draft[el.dataset.pf] = el.value;
   if (el.dataset.gmax !== undefined && ui.draft) ui.draft.gym = Object.assign({}, ui.draft.gym, {max:+el.value||null});
   if (el.dataset.time !== undefined && ui.wiz) ui.wiz.time = el.value;
+  if (el.dataset.lg && S.logDraft) { const [i,j,f] = el.dataset.lg.split("|"); const it = S.logDraft.items[+i]; if (it) { if (f) { if (it.sets[+j]) it.sets[+j][f] = el.value; } else it[j] = el.value; save(); } }
+  if (el.dataset.lgf && S.logDraft) { S.logDraft[el.dataset.lgf] = el.value; save(); }
+  if (el.dataset.logq !== undefined) { ui.logQ = el.value; const r = $("#lg-res"); if (r) r.innerHTML = pickerResults(); }
   if (el.dataset.onb && ui.onb) { ui.onb.d[el.dataset.onb] = el.value; if (el.dataset.onb==="name") { const nx = document.querySelector(".wiz-nav .pill"); if (nx) nx.disabled = !el.value.trim(); } }
   if (el.dataset.onbGmax !== undefined && ui.onb) ui.onb.d.gym = Object.assign({}, ui.onb.d.gym, {max:+el.value||null});
 });
 document.addEventListener("keydown", e=>{
+  if (e.key==="Enter" && e.target.id==="lg-q" && e.target.value.trim()) { e.preventDefault(); const first = document.querySelector("#lg-res [data-act=log-add]"); (first && ui.logQ && first.querySelector("b")?.textContent.toLowerCase()===ui.logQ.trim().toLowerCase() ? first : document.querySelector("#lg-res [data-act=log-add-custom]"))?.click(); }
   if (e.key==="Enter" && e.target.id==="o-name") { e.preventDefault(); document.querySelector(".wiz-nav .pill")?.click(); }
   if (e.key==="Escape" && ui.menu) { ui.menu = false; render(); }
 });
@@ -1366,6 +1539,7 @@ function importData(file){
 document.addEventListener("change", e=>{
   const el = e.target;
   if (el.dataset.time !== undefined && ui.wiz) { ui.wiz.time = el.value; render(); }
+  if (el.dataset.lgf==="date" && S.logDraft) { S.logDraft.date = el.value; save(); render(); }
   if (el.dataset.pf && ui.draft) ui.draft[el.dataset.pf] = el.value;
 });
 

@@ -196,21 +196,22 @@ const PERSONAS = {
 };
 const GOALS = {force:"Devenir plus forte", tonus:"Tonifier / dessiner", seche:"Perdre du gras", cardio:"Cardio & endurance", bienetre:"Bien-être & régularité"};
 const LEVELS = {debutante:"Débutante (moins de 6 mois)", inter:"Intermédiaire (6 mois – 2 ans)", confirmee:"Confirmée (2 ans et plus)"};
-const ZONES = {fessiers:"Fessiers", jambes:"Jambes", dos:"Dos", bras:"Bras", epaules:"Épaules", abdos:"Abdos"};
+const ZONES = {fessiers:"Fessiers", jambes:"Jambes", dos:"Dos", pecs:"Pectoraux", bras:"Bras", epaules:"Épaules", abdos:"Abdos"};
 const MOODS = [{k:"top",t:"Au top",v:1},{k:"bien",t:"Bien",v:.5},{k:"bof",t:"Bof",v:0},{k:"plat",t:"À plat",v:-.6},{k:"irritable",t:"À cran",v:-.4},{k:"triste",t:"Triste / sensible",v:-.5}];
 const SYMPTOMS = {crampes:"Crampes", ventre:"Ventre gonflé", tete:"Mal de tête", dos:"Mal de dos", seins:"Poitrine sensible", fatigue:"Fatigue lourde", rien:"Rien de spécial"};
 const PREFS = {libre:{t:"Poids libres", d:"Barres, haltères, disques"}, machine:{t:"Machines", d:"Guidé, rassurant, réglable"}, mix:{t:"Un mélange", d:"Le meilleur des deux"}};
-const EQUIP = {rack:"Barres olympiques et disques (rack)", smith:"Smith machine (barre guidée)", hipm:"Machine à hip thrust", presse:"Presse à cuisses", poulie:"Poulies / vis-à-vis", machines:"Machines guidées (leg curl, abduction…)", halt:"Haltères"};
+const EQUIP = {rack:"Barres olympiques et disques (rack)", smith:"Smith machine (barre guidée)", hipm:"Machine à hip thrust", presse:"Presse à cuisses", hack:"Hack squat / squat guidé", poulie:"Poulies / vis-à-vis", machines:"Machines guidées (leg extension, leg curl, adducteurs, pec deck, rowing, crunch…)", halt:"Haltères et barres fixes", kb:"Kettlebells", assist:"Machine tractions / dips assistés, chaise romaine", hyper:"Banc à lombaires (45°)", fonc:"Zone fonctionnelle (box, élastiques, médecine-ball, sangles)"};
 /* Équipement habituel par type de salle : ça varie d'un club à l'autre, la personne coche ce qu'il y a vraiment. */
 const GYMS = {
-  basicfit:{t:"Basic-Fit", e:{rack:1,smith:1,hipm:0,presse:1,poulie:1,machines:1,halt:1}, max:40},
-  fitnesspark:{t:"Fitness Park", e:{rack:1,smith:1,hipm:1,presse:1,poulie:1,machines:1,halt:1}, max:50},
-  onair:{t:"On Air", e:{rack:1,smith:1,hipm:1,presse:1,poulie:1,machines:1,halt:1}, max:50},
-  neoness:{t:"Neoness", e:{rack:1,smith:1,hipm:0,presse:1,poulie:1,machines:1,halt:1}, max:40},
-  keepcool:{t:"Keep Cool", e:{rack:0,smith:1,hipm:0,presse:1,poulie:1,machines:1,halt:1}, max:30},
-  orangebleue:{t:"L'Orange Bleue", e:{rack:0,smith:1,hipm:0,presse:1,poulie:1,machines:1,halt:1}, max:30},
-  autre:{t:"Autre chaîne", e:{rack:1,smith:1,hipm:0,presse:1,poulie:1,machines:1,halt:1}, max:40},
-  indep:{t:"Salle indépendante", e:{rack:1,smith:0,hipm:0,presse:1,poulie:1,machines:1,halt:1}, max:40}
+  /* Basic-Fit : machines Matrix et Technogym, poids libres, kettlebells, zone fonctionnelle et zone d'étirement dans tous les clubs. */
+  basicfit:{t:"Basic-Fit", e:{rack:1,smith:1,hipm:0,presse:1,hack:0,poulie:1,machines:1,halt:1,kb:1,assist:1,hyper:1,fonc:1}, max:40},
+  fitnesspark:{t:"Fitness Park", e:{rack:1,smith:1,hipm:1,presse:1,hack:1,poulie:1,machines:1,halt:1,kb:1,assist:1,hyper:1,fonc:1}, max:50},
+  onair:{t:"On Air", e:{rack:1,smith:1,hipm:1,presse:1,hack:1,poulie:1,machines:1,halt:1,kb:1,assist:1,hyper:1,fonc:1}, max:50},
+  neoness:{t:"Neoness", e:{rack:1,smith:1,hipm:0,presse:1,hack:0,poulie:1,machines:1,halt:1,kb:1,assist:1,hyper:1,fonc:1}, max:40},
+  keepcool:{t:"Keep Cool", e:{rack:0,smith:1,hipm:0,presse:1,hack:0,poulie:1,machines:1,halt:1,kb:1,assist:0,hyper:1,fonc:1}, max:30},
+  orangebleue:{t:"L'Orange Bleue", e:{rack:0,smith:1,hipm:0,presse:1,hack:0,poulie:1,machines:1,halt:1,kb:1,assist:0,hyper:1,fonc:1}, max:30},
+  autre:{t:"Autre chaîne", e:{rack:1,smith:1,hipm:0,presse:1,hack:0,poulie:1,machines:1,halt:1,kb:1,assist:1,hyper:1,fonc:1}, max:40},
+  indep:{t:"Salle indépendante", e:{rack:1,smith:0,hipm:0,presse:1,hack:0,poulie:1,machines:1,halt:1,kb:1,assist:1,hyper:1,fonc:0}, max:40}
 };
 
 /* ---------- exercise library ----------
@@ -220,35 +221,55 @@ const GYMS = {
 const V = (k,n,eq,need,r,ill,easy) => ({k,n,eq,need,r,ill,easy});
 const LIB = {
   hip:{z:["fessiers"], v:[V("libre","Hip thrust à la barre","barre","rack",[.5,.9,1.3],["hip","plate"]), V("machine","Hip thrust à la machine","machine","hipm",[.6,.9,1.2],["hip","pad"],1), V("machine","Hip thrust à la Smith machine","smith","smith",[.4,.75,1.1],["hip","smith"]), V("libre","Hip thrust haltère au banc","halt1","halt",[.2,.3,.4],["hip","db"],1)]},
-  squat:{z:["jambes","fessiers"], v:[V("libre","Squat à la barre","barre","rack",[.4,.6,.9],["backsquat","plate"]), V("machine","Squat à la Smith machine","smith","smith",[.3,.5,.75],["backsquat","smith"]), V("libre","Goblet squat (haltère)","halt1","halt",[.15,.22,.3],["squat","goblet"],1)]},
+  squat:{z:["jambes","fessiers"], v:[V("libre","Squat à la barre","barre","rack",[.4,.6,.9],["backsquat","plate"]), V("machine","Squat à la Smith machine","smith","smith",[.3,.5,.75],["backsquat","smith"]), V("machine","Hack squat","machine","hack",[.4,.7,1],["backsquat","smith"]), V("libre","Goblet squat (haltère)","halt1","halt",[.15,.22,.3],["squat","goblet"],1), V("libre","Goblet squat kettlebell","kb","kb",[.15,.22,.3],["squat","goblet"],1)]},
   rdl:{z:["fessiers","jambes"], v:[V("libre","Soulevé de terre roumain (barre)","barre","rack",[.35,.6,.85],["hinge","plate"]), V("libre","Soulevé de terre roumain haltères","halt","halt",[.12,.2,.28],["hinge","db"],1), V("machine","Pull-through à la poulie","poulie","poulie",[.15,.25,.35],["pullthrough","cable"])]},
   bulg:{z:["fessiers","jambes"], v:[V("libre","Fentes bulgares haltères","halt","halt",[.05,.1,.15],["bulg","db"]), V("machine","Fentes bulgares à la Smith machine","smith","smith",[.15,.3,.45],["bulg","smith"])]},
-  presse:{z:["jambes"], v:[V("machine","Presse à cuisses","presse","presse",[.8,1.3,2],["press","plate"],1), V("libre","Fentes marchées haltères","halt","halt",[.05,.08,.12],["lunge","db"])]},
+  presse:{z:["jambes","fessiers"], v:[V("machine","Presse à cuisses","presse","presse",[.8,1.3,2],["press","plate"],1), V("machine","Presse à cuisses guidée (à charge sélective)","machine","machines",[.6,1,1.4],["press","pad"],1), V("libre","Fentes marchées haltères","halt","halt",[.05,.08,.12],["lunge","db"])]},
+  fente:{z:["fessiers","jambes"], v:[V("libre","Fentes arrière haltères","halt","halt",[.05,.09,.13],["lunge","db"]), V("machine","Fentes à la Smith machine","smith","smith",[.15,.3,.45],["lunge","smith"]), V("libre","Fentes arrière kettlebell","kb","kb",[.08,.12,.16],["lunge","db"])]},
+  stepup:{z:["fessiers","jambes"], v:[V("libre","Step-up sur box haltères","halt","fonc",[.05,.08,.12],["stepup","db"]), V("libre","Step-up sur box (poids du corps)","pdc","fonc",null,["stepup",""],1)]},
+  sumo:{z:["fessiers","jambes"], v:[V("libre","Squat sumo kettlebell","kb","kb",[.15,.25,.35],["sumo","db"],1), V("libre","Squat sumo haltère","halt1","halt",[.15,.25,.35],["sumo","db"])]},
+  swing:{z:["fessiers","jambes"], v:[V("libre","Kettlebell swing","kb","kb",[.15,.22,.3],["hinge","db"]), V("libre","Swing haltère","halt1","halt",[.12,.18,.24],["hinge","db"])]},
+  legext:{z:["jambes"], v:[V("machine","Leg extension","machine","machines",[.25,.4,.55],["legext","pad"],1)]},
+  addu:{z:["jambes"], v:[V("machine","Adducteurs à la machine","machine","machines",[.35,.5,.7],["abd","pad"],1), V("machine","Adduction à la poulie basse","poulie","poulie",[.04,.07,.1],["kick","cable"])]},
+  mollets:{z:["jambes"], v:[V("machine","Mollets à la presse","presse","presse",[.6,1,1.4],["press","plate"],1), V("machine","Mollets debout à la Smith machine","smith","smith",[.3,.5,.7],["calf","smith"]), V("libre","Mollets haltères sur une marche","halt","halt",[.08,.12,.16],["calf","db"]), V("machine","Mollets assis à la machine","machine","machines",[.3,.45,.6],["legext","pad"])]},
   abd:{z:["fessiers"], v:[V("machine","Abduction à la machine","machine","machines",[.4,.6,.8],["abd","pad"],1), V("machine","Abduction à la poulie basse","poulie","poulie",[.04,.07,.1],["kick","cable"]), V("libre","Marche latérale avec élastique","pdc",null,null,["walk","band"])]},
-  legcurl:{z:["jambes"], v:[V("machine","Leg curl allongé","machine","machines",[.2,.3,.4],["curlprone","pad"],1), V("libre","Leg curl haltère allongée","halt1","halt",[.05,.08,.12],["curlprone","db"]), V("libre","Pont fessier une jambe, pieds sur banc","pdc",null,null,["bridge","bench"])]},
-  kick:{z:["fessiers"], v:[V("machine","Kickback à la poulie","poulie","poulie",[.05,.1,.15],["kick","cable"],1), V("libre","Kickback au sol avec élastique","pdc",null,null,["kickfloor","band"])]},
-  tirage:{z:["dos"], v:[V("machine","Tirage vertical","poulie","poulie",[.35,.5,.65],["pulldown","cable"],1), V("libre","Rowing haltère un bras","halt1","halt",[.1,.16,.22],["row1","db"])]},
-  row:{z:["dos"], v:[V("machine","Rowing assis à la poulie","poulie","poulie",[.3,.45,.6],["seatrow","cable"],1), V("libre","Rowing barre buste penché","barre","rack",[.3,.45,.6],["bentrow","plate"]), V("libre","Rowing haltères buste penché","halt","halt",[.06,.1,.14],["bentrow","db"])]},
-  bench:{z:["epaules","bras"], v:[V("libre","Développé couché haltères","halt","halt",[.08,.13,.2],["benchpress","db"]), V("machine","Développé couché à la machine","machine","machines",[.25,.4,.55],["chestpress","pad"],1), V("libre","Développé couché barre","barre","rack",[.35,.5,.7],["benchpress","plate"])]},
-  ohp:{z:["epaules"], v:[V("libre","Développé militaire haltères","halt","halt",[.06,.1,.14],["ohp","db"]), V("machine","Développé épaules à la machine","machine","machines",[.2,.3,.4],["ohpseat","pad"],1)]},
-  lat:{z:["epaules"], v:[V("libre","Élévations latérales haltères","halt","halt",[.03,.045,.06],["latraise","db"],1), V("machine","Élévations latérales à la poulie","poulie","poulie",[.025,.04,.05],["latraise","cable"])]},
-  face:{z:["dos","epaules"], v:[V("machine","Face pull à la poulie","poulie","poulie",[.12,.18,.25],["facepull","cable"],1), V("libre","Oiseau haltères buste penché","halt","halt",[.03,.045,.06],["revfly","db"])]},
-  curl:{z:["bras"], v:[V("libre","Curl biceps haltères","halt","halt",[.06,.09,.12],["curl","db"],1), V("machine","Curl biceps à la poulie","poulie","poulie",[.1,.15,.2],["curl","cable"])]},
-  tri:{z:["bras"], v:[V("machine","Extension triceps à la poulie","poulie","poulie",[.12,.18,.25],["pushdown","cable"],1), V("libre","Extension triceps haltère au-dessus de la tête","halt1","halt",[.08,.12,.16],["triover","db"])]},
-  pompes:{z:["bras","epaules"], v:[V("libre","Pompes (sur un banc si besoin)","pdc",null,null,["pushup",""])]},
+  legcurl:{z:["jambes"], v:[V("machine","Leg curl allongé","machine","machines",[.2,.3,.4],["curlprone","pad"],1), V("machine","Leg curl assis","machine","machines",[.25,.35,.45],["curlseat","pad"],1), V("libre","Leg curl haltère allongée","halt1","halt",[.05,.08,.12],["curlprone","db"]), V("libre","Pont fessier une jambe, pieds sur banc","pdc",null,null,["bridge","bench"])]},
+  lomb:{z:["dos","fessiers"], v:[V("libre","Extension lombaire au banc à 45°","pdc","hyper",null,["hyper",""],1), V("machine","Extension lombaire à la machine","machine","machines",[.3,.45,.6],["hyper","pad"]), V("libre","Extension au banc à 45° avec disque","disque","hyper",[.05,.1,.15],["hyper","plate"])]},
+  kick:{z:["fessiers"], v:[V("machine","Kickback à la poulie","poulie","poulie",[.05,.1,.15],["kick","cable"],1), V("machine","Kickback à la Smith machine (pied sur la barre)","smith","smith",[.1,.2,.3],["kickfloor","smith"]), V("libre","Kickback au sol avec élastique","pdc",null,null,["kickfloor","band"])]},
+  tirage:{z:["dos"], v:[V("machine","Tirage vertical","poulie","poulie",[.35,.5,.65],["pulldown","cable"],1), V("machine","Tirage vertical à la machine guidée","machine","machines",[.35,.5,.65],["pulldown","pad"],1), V("libre","Tractions assistées (machine)","pdc","assist",null,["pullup","pad"]), V("libre","Rowing haltère un bras","halt1","halt",[.1,.16,.22],["row1","db"])]},
+  pullover:{z:["dos"], v:[V("machine","Pull-over à la poulie haute (bras tendus)","poulie","poulie",[.12,.18,.25],["pushdown","cable"]), V("libre","Pull-over haltère couché","halt1","halt",[.08,.12,.16],["benchpress","db"])]},
+  shrug:{z:["dos"], v:[V("libre","Shrugs haltères","halt","halt",[.12,.2,.28],["calf","db"],1), V("machine","Shrugs à la Smith machine","smith","smith",[.3,.5,.7],["calf","smith"])]},
+  row:{z:["dos"], v:[V("machine","Rowing assis à la poulie","poulie","poulie",[.3,.45,.6],["seatrow","cable"],1), V("machine","Rowing assis à la machine guidée","machine","machines",[.3,.45,.6],["seatrow","pad"],1), V("libre","Rowing barre buste penché","barre","rack",[.3,.45,.6],["bentrow","plate"]), V("libre","Rowing haltères buste penché","halt","halt",[.06,.1,.14],["bentrow","db"]), V("libre","Rowing aux sangles (TRX)","pdc","fonc",null,["seatrow",""])]},
+  bench:{z:["pecs","bras","epaules"], v:[V("libre","Développé couché haltères","halt","halt",[.08,.13,.2],["benchpress","db"]), V("machine","Développé couché à la machine","machine","machines",[.25,.4,.55],["chestpress","pad"],1), V("libre","Développé couché barre","barre","rack",[.35,.5,.7],["benchpress","plate"]), V("machine","Développé couché à la Smith machine","smith","smith",[.25,.4,.55],["benchpress","smith"])]},
+  incline:{z:["pecs","epaules"], v:[V("libre","Développé incliné haltères","halt","halt",[.07,.11,.16],["benchpress","db"]), V("machine","Développé incliné à la machine","machine","machines",[.2,.32,.45],["chestpress","pad"],1), V("machine","Développé incliné à la Smith machine","smith","smith",[.2,.32,.45],["benchpress","smith"])]},
+  fly:{z:["pecs"], v:[V("machine","Pec deck (butterfly)","machine","machines",[.2,.3,.4],["chestpress","pad"],1), V("machine","Écarté à la poulie (vis-à-vis)","poulie","poulie",[.04,.06,.09],["latraise","cable"]), V("libre","Écarté haltères couché","halt","halt",[.04,.06,.09],["benchpress","db"])]},
+  dips:{z:["bras","pecs"], v:[V("libre","Dips assistés (machine)","pdc","assist",null,["dip","pad"]), V("machine","Dips à la machine guidée (triceps)","machine","machines",[.3,.45,.6],["dip","pad"],1), V("libre","Dips entre deux bancs","pdc",null,null,["dip",""],1)]},
+  ohp:{z:["epaules"], v:[V("libre","Développé militaire haltères","halt","halt",[.06,.1,.14],["ohp","db"]), V("machine","Développé épaules à la machine","machine","machines",[.2,.3,.4],["ohpseat","pad"],1), V("machine","Développé militaire à la Smith machine","smith","smith",[.15,.25,.35],["ohpseat","smith"]), V("libre","Développé Arnold haltères","halt","halt",[.05,.08,.12],["ohp","db"]), V("libre","Développé kettlebell un bras","kb","kb",[.06,.1,.14],["ohp","db"])]},
+  lat:{z:["epaules"], v:[V("libre","Élévations latérales haltères","halt","halt",[.03,.045,.06],["latraise","db"],1), V("machine","Élévations latérales à la poulie","poulie","poulie",[.025,.04,.05],["latraise","cable"]), V("machine","Élévations latérales à la machine","machine","machines",[.08,.12,.16],["latraise","pad"])]},
+  front:{z:["epaules"], v:[V("libre","Élévations frontales haltères","halt","halt",[.03,.05,.07],["latraise","db"],1), V("machine","Élévations frontales à la poulie basse","poulie","poulie",[.03,.05,.07],["latraise","cable"])]},
+  face:{z:["dos","epaules"], v:[V("machine","Face pull à la poulie","poulie","poulie",[.12,.18,.25],["facepull","cable"],1), V("machine","Oiseau à la machine (pec deck inversé)","machine","machines",[.12,.18,.25],["revfly","pad"],1), V("libre","Oiseau haltères buste penché","halt","halt",[.03,.045,.06],["revfly","db"])]},
+  curl:{z:["bras"], v:[V("libre","Curl biceps haltères","halt","halt",[.06,.09,.12],["curl","db"],1), V("machine","Curl biceps à la poulie","poulie","poulie",[.1,.15,.2],["curl","cable"]), V("machine","Curl biceps à la machine","machine","machines",[.1,.15,.2],["curl","pad"],1), V("libre","Curl barre EZ","ez","halt",[.15,.22,.3],["curl","db"])]},
+  hammer:{z:["bras"], v:[V("libre","Curl marteau haltères","halt","halt",[.06,.09,.12],["curl","db"],1), V("machine","Curl marteau à la poulie (corde)","poulie","poulie",[.1,.15,.2],["curl","cable"])]},
+  tri:{z:["bras"], v:[V("machine","Extension triceps à la poulie","poulie","poulie",[.12,.18,.25],["pushdown","cable"],1), V("machine","Extension triceps à la machine","machine","machines",[.15,.22,.3],["pushdown","pad"],1), V("libre","Extension triceps haltère au-dessus de la tête","halt1","halt",[.08,.12,.16],["triover","db"]), V("libre","Barre au front (barre EZ)","ez","halt",[.12,.18,.24],["benchpress","db"])]},
+  pompes:{z:["pecs","bras","epaules"], v:[V("libre","Pompes (sur un banc si besoin)","pdc",null,null,["pushup",""])]},
   planche:{z:["abdos"], timed:1, v:[V("libre","Planche sur les avant-bras","pdc",null,null,["plank",""])]},
   deadbug:{z:["abdos"], timed:1, v:[V("libre","Dead bug","pdc",null,null,["deadbug",""])]},
   sideplank:{z:["abdos"], timed:1, v:[V("libre","Gainage latéral","pdc",null,null,["sideplank",""])]},
-  pallof:{z:["abdos"], v:[V("machine","Pallof press à la poulie","poulie","poulie",[.08,.12,.15],["pallof","cable"],1), V("libre","Pallof press à l'élastique","pdc",null,null,["pallof","band"])]}
+  pallof:{z:["abdos"], v:[V("machine","Pallof press à la poulie","poulie","poulie",[.08,.12,.15],["pallof","cable"],1), V("libre","Pallof press à l'élastique","pdc","fonc",null,["pallof","band"])]},
+  crunch:{z:["abdos"], v:[V("machine","Crunch à la machine","machine","machines",[.25,.35,.45],["crunch","pad"],1), V("machine","Crunch à la poulie haute (à genoux)","poulie","poulie",[.2,.3,.4],["crunch","cable"]), V("libre","Crunch au sol","pdc",null,null,["crunch",""],1)]},
+  releves:{z:["abdos"], v:[V("libre","Relevés de jambes à la chaise romaine","pdc","assist",null,["dip",""]), V("libre","Relevés de jambes au sol","pdc",null,null,["deadbug",""],1)]},
+  rotation:{z:["abdos"], v:[V("machine","Rotation du buste à la machine","machine","machines",[.2,.3,.4],["pallof","pad"],1), V("libre","Russian twist (médecine-ball)","pdc","fonc",null,["crunch","ball"]), V("libre","Bûcheron à la poulie","poulie","poulie",[.08,.12,.16],["pallof","cable"])]},
+  mountain:{z:["abdos"], timed:1, v:[V("libre","Mountain climbers","pdc",null,null,["pushup",""])]},
+  slam:{z:["abdos","epaules"], timed:1, v:[V("libre","Slam ball / médecine-ball","pdc","fonc",null,["ohp","ball"])]}
 };
 /* Toutes les versions d'exercices, rangées par matériel, pour pouvoir exclure celles qu'on n'aime pas. */
-const BAN_GROUPS = [["Machines guidées", v=>["machine","presse","smith"].includes(v.eq)],["Poulies", v=>v.eq==="poulie"],["Barre", v=>v.eq==="barre"],["Haltères", v=>v.eq==="halt"||v.eq==="halt1"],["Poids du corps et élastique", v=>v.eq==="pdc"]];
+const BAN_GROUPS = [["Machines guidées", v=>["machine","presse","smith"].includes(v.eq)],["Poulies", v=>v.eq==="poulie"],["Barre olympique", v=>v.eq==="barre"],["Haltères, barres fixes et disques", v=>["halt","halt1","ez","disque"].includes(v.eq)],["Kettlebells", v=>v.eq==="kb"],["Poids du corps, assistée et fonctionnel", v=>v.eq==="pdc"]];
 function allVariants(){ const seen = new Set(), out = []; Object.values(LIB).forEach(L=>L.v.forEach(v=>{ if (!seen.has(v.n)) { seen.add(v.n); out.push(v); } })); return out; }
-const TIMED_DETAIL = {planche:"3 × 30–40 s", deadbug:"3 × 8 par côté, lentement", sideplank:"2 × 25–30 s par côté"};
+const TIMED_DETAIL = {planche:"3 × 30–40 s", deadbug:"3 × 8 par côté, lentement", sideplank:"2 × 25–30 s par côté", mountain:"3 × 30 s, rythme régulier", slam:"3 × 10 lancers"};
 const SPLITS = {
-  bas:{main:["hip","squat","rdl"], acc:["bulg","presse","abd","legcurl","kick"], core:["deadbug","sideplank"]},
-  haut:{main:["tirage","bench","row"], acc:["ohp","lat","face","curl","tri"], core:["planche","pallof"]},
-  full:{main:["squat","hip","tirage","bench"], acc:["row","rdl","pompes","bulg","face"], core:["planche","deadbug"]}
+  bas:{main:["hip","squat","rdl"], acc:["bulg","presse","abd","legcurl","kick","fente","legext","addu","stepup","sumo","swing","mollets","lomb"], core:["deadbug","sideplank","crunch","releves"]},
+  haut:{main:["tirage","bench","row"], acc:["ohp","lat","face","curl","tri","incline","fly","hammer","dips","pullover","front","shrug"], core:["planche","pallof","crunch","rotation"]},
+  full:{main:["squat","hip","tirage","bench"], acc:["row","rdl","pompes","bulg","face","presse","incline","legcurl","swing","dips"], core:["planche","deadbug","mountain","releves"]}
 };
 const LVL = {debutante:0, inter:1, confirmee:2};
 
@@ -258,12 +279,14 @@ function roundLoad(kg, eq){
   if (eq==="halt"||eq==="halt1") return kg<10 ? Math.max(1, Math.round(kg)) : Math.round(kg/2)*2;
   if (eq==="presse") return Math.max(20, Math.round(kg/5)*5);
   if (eq==="smith") return Math.max(0, Math.round(kg/2.5)*2.5);
+  if (eq==="kb") return Math.max(4, Math.round(kg/4)*4);
+  if (eq==="ez") return Math.max(5, Math.round(kg/2.5)*2.5);
   return Math.max(2.5, Math.round(kg/2.5)*2.5);
 }
-function stepOf(kg, eq){ return eq==="presse" ? 5 : (eq==="halt"||eq==="halt1") ? (kg<10?1:2) : 2.5; }
+function stepOf(kg, eq){ return eq==="presse" ? 5 : eq==="kb" ? 4 : (eq==="halt"||eq==="halt1") ? (kg<10?1:2) : 2.5; }
 function repFactor(lo,hi){ return 1 + (10 - (lo+hi)/2)*0.03; }
 function loadLabel(eq){
-  return {barre:"au total, barre de 20 kg comprise", smith:"de disques, barre guidée non comptée", halt:"par main, un haltère dans chaque main", halt1:"un seul haltère", presse:"de disques, sans le chariot", poulie:"sur la poulie", machine:"sur la machine"}[eq] || "";
+  return {barre:"au total, barre de 20 kg comprise", smith:"de disques, barre guidée non comptée", halt:"par main, un haltère dans chaque main", halt1:"un seul haltère", presse:"de disques, sans le chariot", poulie:"sur la poulie", machine:"sur la machine", kb:"une kettlebell", ez:"barre fixe, poids total", disque:"un disque tenu contre la poitrine"}[eq] || "";
 }
 function getLift(name){
   const v = S.lifts[name]; if (v==null) return null;
@@ -369,6 +392,41 @@ function band(a,b){ return `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b
 function rails(x){ return `<line x1="${x-14}" y1="6" x2="${x-14}" y2="148" stroke="${INK}" stroke-width="1.6"/><line x1="${x+14}" y1="6" x2="${x+14}" y2="148" stroke="${INK}" stroke-width="1.6"/>`; }
 const STAND = (x) => ({hip:[x,94], sh:[x,55], head:[x+3,37], legs:[[[x-2,94],[x-3,119],[x-3,142],[-12,0]].map((p,i)=>i===3?p:p), [[x+1,94],[x+2,119],[x+2,142],[13,0]]]});
 const POSES = {
+  stepup:g=>({f:1, hip:[92,84], sh:[98,46], head:[102,28],
+    legs:[[[92,84],[118,94],[116,112],[14,0]], [[90,86],[80,114],[74,142],[12,2]]],
+    arms:[[[98,46],[98,68],[99,88]], [[100,47],[101,69],[103,89]]],
+    back:`<rect x="100" y="114" width="58" height="34" rx="3" fill="${SKIN}" stroke="${INK}" stroke-width="2"/>`, front: g==="db" ? db([102,92],0,.85) : ""}),
+  sumo:g=>({f:0, tw:28, hip:[100,100], sh:[100,62], head:[100,42],
+    legs:[[[92,102],[66,112],[70,142],[-8,1]], [[108,102],[134,112],[130,142],[8,1]]],
+    arms:[[[88,64],[94,86],[98,108]], [[112,64],[106,86],[102,108]]], front:db([100,116],90,1)}),
+  legext:g=>({f:1, hip:[84,110], sh:[80,72], head:[83,54],
+    legs:[[[84,110],[112,108],[140,104],[4,-12]], [[86,112],[114,110],[142,106],[4,-12]]],
+    arms:[[[80,72],[82,94],[96,112]], [[82,73],[84,95],[98,113]]],
+    back:cap([66,116],[66,62],12,SKIN)+padR(60,114,46,9)+`<line x1="84" y1="123" x2="84" y2="148" stroke="${INK}" stroke-width="3"/>`, front:padR(140,96,10,16)}),
+  curlseat:g=>({f:1, hip:[84,110], sh:[80,72], head:[83,54],
+    legs:[[[84,110],[114,106],[110,136],[12,2]], [[86,112],[116,108],[113,138],[12,2]]],
+    arms:[[[80,72],[84,92],[100,100]], [[82,73],[86,93],[102,101]]],
+    back:cap([66,116],[66,62],12,SKIN)+padR(60,114,46,9)+`<line x1="84" y1="123" x2="84" y2="148" stroke="${INK}" stroke-width="3"/>`, front:padR(88,94,30,8)+padR(100,136,22,9)}),
+  hyper:g=>({f:1, hip:[92,92], sh:[120,118], head:[130,134], rot:50,
+    legs:[[[92,92],[68,112],[46,132],[-4,10]], [[90,94],[66,114],[44,134],[-4,10]]],
+    arms:[[[120,118],[110,126],[112,112]], [[122,119],[112,128],[115,114]]],
+    back:`<path d="M30 148 L104 92" stroke="${INK}" stroke-width="3"/><line x1="52" y1="148" x2="70" y2="120" stroke="${INK}" stroke-width="3"/>`+padR(84,88,26,12)+`<rect x="34" y="132" width="18" height="10" rx="3" fill="url(#ht)" stroke="${INK}" stroke-width="2"/>`, front: g==="plate" ? plate([114,114],12) : ""}),
+  pullup:g=>({f:1, hip:[100,100], sh:[100,58], head:[103,40],
+    legs:[[[100,100],[106,124],[98,140],[-6,6]], [[102,102],[110,124],[103,142],[-6,6]]],
+    arms:[[[100,58],[88,38],[92,12]], [[102,59],[114,38],[110,12]]],
+    back:`<line x1="60" y1="12" x2="142" y2="12" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/><line x1="64" y1="4" x2="64" y2="148" stroke="${INK}" stroke-width="2"/><line x1="138" y1="4" x2="138" y2="148" stroke="${INK}" stroke-width="2"/>`+(g==="pad"?padR(92,128,26,8):"")}),
+  dip:g=>({f:1, hip:[100,100], sh:[100,62], head:[103,44],
+    legs:[[[100,100],[112,120],[100,134],[-6,6]], [[102,102],[115,122],[104,136],[-6,6]]],
+    arms:[[[100,62],[90,80],[96,98]], [[102,63],[112,80],[106,99]]],
+    back:`<line x1="76" y1="98" x2="124" y2="98" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/><line x1="80" y1="98" x2="80" y2="148" stroke="${INK}" stroke-width="2"/><line x1="120" y1="98" x2="120" y2="148" stroke="${INK}" stroke-width="2"/>`+(g==="pad"?padR(92,130,26,8):"")}),
+  calf:g=>({f:1, hip:[100,90], sh:[100,52], head:[103,34],
+    legs:[[[98,90],[97,114],[96,134],[13,6]], [[101,90],[101,114],[101,135],[13,6]]],
+    arms:[[[100,52],[100,74],[100,94]], [[101,53],[102,75],[103,95]]],
+    back:`<rect x="88" y="140" width="40" height="8" rx="2" fill="${SKIN}" stroke="${INK}" stroke-width="2"/>`+(g==="smith"?rails(100)+plate([100,50],15):""), front: g==="db" ? db([101,98],0,.85) : ""}),
+  crunch:g=>({f:1, hip:[110,134], sh:[76,122], head:[62,112], rot:-55,
+    legs:[[[110,134],[132,110],[150,136],[12,0]], [[112,132],[134,108],[154,134],[12,0]]],
+    arms:[[[76,122],[70,106],[62,112]], [[78,121],[84,106],[70,104]]],
+    back: g==="pad" ? padR(40,138,90,8) : g==="cable" ? column(10)+cable([22,20],[66,108]) : "", front: g==="ball" ? `<circle cx="96" cy="112" r="9" fill="url(#ht)" stroke="${INK}" stroke-width="2"/>` : ""}),
   squat:g=>({f:1, hip:[86,104], sh:[98,66], head:[103,48],
     legs:[[[86,104],[112,101],[106,139],[14,0]], [[88,106],[117,104],[111,141],[14,0]]],
     arms:[[[98,66],[108,88],[114,72]], [[100,67],[112,90],[118,72]]], mid:db([118,74],90,1.25)}),
@@ -445,7 +503,7 @@ const POSES = {
     legs:[[[76,116],[104,114],[104,142],[14,0]], [[78,118],[108,116],[108,143],[14,0]]],
     arms:[[[74,76],[94,84],[116,80]], [[76,77],[96,86],[118,82]]],
     back:cap([58,120],[60,66],12,SKIN)+padR(52,118,44,9), front:padR(116,70,7,20)}),
-  ohp:g=>Object.assign(STAND(100), {f:1, arms:[[[100,55],[104,35],[106,15]], [[98,56],[100,36],[101,16]]], front:db([104,13],0,.9)}),
+  ohp:g=>Object.assign(STAND(100), {f:1, arms:[[[100,55],[104,35],[106,15]], [[98,56],[100,36],[101,16]]], front: g==="ball" ? `<circle cx="104" cy="10" r="10" fill="url(#ht)" stroke="${INK}" stroke-width="2"/>` : db([104,13],0,.9)}),
   ohpseat:g=>({f:1, hip:[88,112], sh:[90,72], head:[94,54],
     legs:[[[88,112],[116,110],[116,142],[14,0]], [[90,114],[120,112],[120,143],[14,0]]],
     arms:[[[90,72],[96,52],[98,32]], [[92,73],[99,53],[102,33]]],
@@ -600,7 +658,9 @@ function buildPlan(st, date, override){
     const pri = id => LIB[id].z.some(t=>z.includes(t)) ? 1 : 0;
     /* Exercices dont il reste au moins une version faisable (équipement de la salle, et pas exclue). */
     const okId = id => !!chooseVariant(id, ctx);
-    const mains = sp.main.filter(okId).sort((x,y)=>pri(y)-pri(x)), accs = sp.acc.filter(okId).sort((x,y)=>pri(y)-pri(x));
+    /* Les exercices d'isolation tournent chaque semaine : de la variété, mais les mêmes toute la semaine pour suivre la progression. */
+    const wk = Math.floor(dayDiff("2024-01-01", date)/7), acc0 = sp.acc.filter(okId), rot = acc0.length ? (wk*3) % acc0.length : 0;
+    const mains = sp.main.filter(okId).sort((x,y)=>pri(y)-pri(x)), accs = acc0.slice(rot).concat(acc0.slice(0,rot)).sort((x,y)=>pri(y)-pri(x));
     const nMain = tier>=3 ? Math.min(nEx>=4?2:1, mains.length) : 1;
     const ids = mains.slice(0,nMain).concat(accs).slice(0, Math.max(1,nEx-1));
     let mainS, accS, rpe;
@@ -611,7 +671,7 @@ function buildPlan(st, date, override){
     const altIdx = persona==="aventuriere" ? Math.abs(seed) % ids.length : -1;
     const items = ids.map((id,i)=>mk(id, i<nMain?mainS:accS, i<nMain?restMain:restAcc, i===altIdx)).filter(Boolean);
     items.forEach(it=>it.rpe = rpe);
-    const core = mk(pick(sp.core, seed), sch(3,10,12), 45); if (core) items.push(core);
+    const core = mk(pick(sp.core.filter(okId).length ? sp.core.filter(okId) : sp.core, seed), sch(3,10,12), 45); if (core) items.push(core);
     const labels = {bas:"Bas du corps", haut:"Haut du corps", full:"Full body"}, kinds = {4:"Force", 3:"Renfo", 2:"Circuit tonus"};
     title = labels[focus]+" · "+kinds[tier];
     sections.push({name:"Échauffement", items:wu});
@@ -964,8 +1024,8 @@ function viewToday(){
    On choisit ses exercices (bibliothèque, exos déjà faits, ou un nom libre), on note les séries, et la séance
    rejoint l'historique et la progression des charges, comme une séance proposée par l'app. Le brouillon est
    gardé dans S.logDraft : on peut quitter l'app au milieu et reprendre. */
-const CARDIO = ["Tapis de course","Tapis incliné (marche)","Vélo","Rameur","Elliptique","StairMaster","Corde à sauter","Cours collectif"];
-const ZONE_FILTERS = [["all","Tout"],["mine","Mes exos"],["fessiers","Fessiers"],["jambes","Jambes"],["dos","Dos"],["epaules","Épaules"],["bras","Bras"],["abdos","Abdos"],["cardio","Cardio"]];
+const CARDIO = ["Tapis de course","Tapis incliné (marche)","Vélo droit","Vélo semi-allongé","Rameur","Elliptique","Escalier (stair climber)","Ascent trainer","Corde à sauter","Biking virtuel","Cours collectif"];
+const ZONE_FILTERS = [["all","Tout"],["mine","Mes exos"],["fessiers","Fessiers"],["jambes","Jambes"],["dos","Dos"],["pecs","Pectoraux"],["epaules","Épaules"],["bras","Bras"],["abdos","Abdos"],["cardio","Cardio"]];
 function variantInfo(name){
   for (const [id,L] of Object.entries(LIB)) { const v = L.v.find(x=>x.n===name); if (v) return {id, v, z:L.z, timed:!!L.timed}; }
   return null;
@@ -998,7 +1058,7 @@ function startLog(fromPlan){
 function logFocus(items){
   const zs = new Set(); let cardio = 0, any = 0;
   items.forEach(it=>{ if (it.cardio) { cardio++; return; } any++; (variantInfo(it.name)?.z||[]).forEach(z=>zs.add(z)); });
-  const low = ["fessiers","jambes"].some(z=>zs.has(z)), up = ["dos","epaules","bras"].some(z=>zs.has(z));
+  const low = ["fessiers","jambes"].some(z=>zs.has(z)), up = ["dos","pecs","epaules","bras"].some(z=>zs.has(z));
   if (!any && cardio) return "cardio";
   if (low && up) return "full"; if (low) return "bas"; if (up) return "haut";
   if (zs.has("abdos") && zs.size===1) return "mobilite";
@@ -1110,8 +1170,8 @@ const STYLES = {
   tonus:{t:"Tonus & endurance", d:"Plus léger, 12 à 15 reps, repos courts", tier:2, main:[3,12,15,45], acc:[3,12,15,45]},
   circuit:{t:"Circuit", d:"Exos enchaînés, 3 tours, ça transpire", tier:2, main:[3,12,15,0], acc:[3,12,15,0], circuit:true}
 };
-const BZONES = [["fessiers","Fessiers"],["jambes","Jambes"],["dos","Dos"],["epaules","Épaules"],["bras","Bras"],["abdos","Abdos"],["cardio","Cardio"]];
-const COMPOUND = new Set(["hip","squat","rdl","tirage","bench","row","presse","ohp","bulg"]);
+const BZONES = [["fessiers","Fessiers"],["jambes","Jambes"],["dos","Dos"],["pecs","Pectoraux"],["epaules","Épaules"],["bras","Bras"],["abdos","Abdos"],["cardio","Cardio"]];
+const COMPOUND = new Set(["hip","squat","rdl","tirage","bench","row","presse","ohp","bulg","fente","incline","sumo","dips"]);
 const shuffle = a => { for (let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; };
 function goalStyle(){ return {force:"force", tonus:"muscle", seche:"circuit", cardio:"circuit", bienetre:"tonus"}[S.profile.goal]||"muscle"; }
 function nExFor(dur){ return dur<=20?3:dur<=30?4:dur<=45?5:dur<=60?6:7; }
@@ -1159,7 +1219,7 @@ function buildCustomPlan(cfg){
   if (cfg.warm) {
     const zs = new Set(cfg.items.flatMap(x=>variantInfo(x.n)?.z||[])), wu = [{name:"Cardio léger (vélo ou rameur)", detail:(cfg.dur<=30?5:7)+" min, tu dois pouvoir parler"}];
     if (zs.has("fessiers")||zs.has("jambes")) wu.push({name:"Mobilité hanches 90/90 + squats au poids du corps", detail:"2 tours × 8"});
-    if (["dos","epaules","bras"].some(z=>zs.has(z))) wu.push({name:"Rotations d'épaules à l'élastique", detail:"2 × 12"});
+    if (["dos","pecs","epaules","bras"].some(z=>zs.has(z))) wu.push({name:"Rotations d'épaules à l'élastique", detail:"2 × 12"});
     if (items.some(x=>x.w)) wu.push({name:"Séries de montée en charge", detail:"Sur le 1er exercice : 2 séries légères (50 % puis 75 % de ta charge)"});
     sections.push({name:"Échauffement", items:wu});
   }
@@ -1190,7 +1250,7 @@ function rollItems(cfg){
     chosen.forEach(id=>{ const v = randVariant(id, ctx); if (v) out.push({n:v.n}); });
   }
   if (wantCardio) {
-    const machines = shuffle(CARDIO.filter(c=>c!=="Cours collectif"));
+    const machines = shuffle(CARDIO.filter(c=>c!=="Cours collectif" && c!=="Biking virtuel"));
     if (onlyCardio) { const total = Math.max(15, cfg.dur-10); out.push({n:machines[0], kind:"cardio", min:Math.round(total/2)}, {n:machines[1], kind:"cardio", min:total-Math.round(total/2)}); }
     else out.push({n:machines[0], kind:"cardio", min:cfg.dur<=30?8:12});
   }
@@ -1198,7 +1258,7 @@ function rollItems(cfg){
 }
 function rerollOne(cfg, i){
   const x = cfg.items[i], ctx = buildCtx((STYLES[cfg.style]||STYLES.muscle).tier), used = new Set(cfg.items.map(y=>y.n));
-  if (x.kind==="cardio") { const m = shuffle(CARDIO.filter(c=>c!=="Cours collectif" && !used.has(c)))[0]; if (m) cfg.items[i] = Object.assign({}, x, {n:m}); return; }
+  if (x.kind==="cardio") { const m = shuffle(CARDIO.filter(c=>c!=="Cours collectif" && c!=="Biking virtuel" && !used.has(c)))[0]; if (m) cfg.items[i] = Object.assign({}, x, {n:m}); return; }
   const inf = variantInfo(x.n), zones = inf ? inf.z : cfg.zones.filter(z=>z!=="cardio");
   const usedIds = new Set(cfg.items.map(y=>variantInfo(y.n)?.id).filter(Boolean));
   const ids = shuffle(Object.keys(LIB).filter(id=>!usedIds.has(id) && variantsOk(id, ctx).length && (!zones.length || LIB[id].z.some(z=>zones.includes(z)))));
@@ -1229,7 +1289,7 @@ function viewBuild(){
     q = b.mode==="random" ? "On tire au sort dans quoi ?" : "Tu veux travailler quoi ?";
     sub = b.mode==="random" ? "Choisis une ou plusieurs zones, ou laisse « Peu importe » pour une vraie surprise." : "Une ou plusieurs zones. Le cardio s'ajoute en bloc à part.";
     body = `<div class="chips">${b.mode==="random"?`<button class="chip" data-act="b-zone" data-v="" aria-pressed="${!b.zones.length}">Peu importe</button>`:""}${BZONES.map(([z,t])=>`<button class="chip" data-act="b-zone" data-v="${z}" aria-pressed="${b.zones.includes(z)}">${t}</button>`).join("")}</div>
-      <div class="chips">${[["bas",["fessiers","jambes"],"Bas du corps"],["haut",["dos","epaules","bras"],"Haut du corps"],["full",["fessiers","jambes","dos","epaules","bras","abdos"],"Full body"]].map(([kk,zs,t])=>`<button class="ob" data-act="b-zoneset" data-v="${zs.join(",")}">${t}</button>`).join("")}</div>`;
+      <div class="chips">${[["bas",["fessiers","jambes"],"Bas du corps"],["haut",["dos","pecs","epaules","bras"],"Haut du corps"],["full",["fessiers","jambes","dos","pecs","epaules","bras","abdos"],"Full body"]].map(([kk,zs,t])=>`<button class="ob" data-act="b-zoneset" data-v="${zs.join(",")}">${t}</button>`).join("")}</div>`;
     ok = b.mode==="random" || b.zones.length>0;
   } else if (k==="dur") {
     q = "Tu as combien de temps ?"; sub = "Échauffement et étirements compris.";

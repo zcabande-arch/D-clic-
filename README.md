@@ -106,6 +106,12 @@ selon le cycle, l'énergie et la forme du jour.
 - **Séance** : 10 petites questions (heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas),
   puis la séance avec les charges, le minuteur de repos et la progression automatique. Une carte explique pourquoi on
   ressent cette humeur, selon la phase du jour.
+- **Bibliothèque d'exercices** (environ 110 versions, chacune dessinée) : tout ce qu'on trouve dans une salle comme Basic-Fit
+  (machines Matrix et Technogym) : presse, hack squat, Smith machine, leg extension, leg curl allongé et assis, adducteurs,
+  abducteurs, mollets, pec deck, développé couché et incliné (haltères, Smith, machine), tirage vertical, tractions et dips
+  assistés, rowing (poulie, machine, haltères, barre, sangles), oiseau à la machine, élévations, curls (haltères, poulie, machine,
+  barre EZ), triceps, crunch machine et poulie, rotation du buste, banc à lombaires, kettlebells, box, médecine-ball…
+  On coche dans *Profil* ce que sa salle a vraiment (chaque club est différent) ; les séances n'utilisent que ça.
 - **Construire sa séance soi-même** (accueil Séance, « Ou fais-la à ta façon ») :
   - *Étape par étape* : zones (ou raccourcis Bas / Haut / Full body, cardio en plus), durée, genre de séance
     (Force, Muscle, Tonus & endurance, Circuit), puis le choix des exercices dans l'ordre voulu (avec « Compléter au hasard »),

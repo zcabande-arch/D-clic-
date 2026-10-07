@@ -349,3 +349,9 @@ dialog.sheet .row{justify-content:flex-start;margin-top:10px}
 .prevwrap{position:relative}
 .flipbtn{position:absolute;right:10px;bottom:10px;border:0;border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;background:rgba(0,0,0,.6);color:#fff}
 .flipbtn.on{background:var(--flash);color:var(--flash-ink)}
+/* Visionneuse : enregistrer la photo, zoom en pinçant */
+.lbsave{position:absolute;top:10px;right:10px;z-index:2;border:0;border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;background:rgba(0,0,0,.6);color:#fff}
+#lbImg{transform-origin:center center;will-change:transform}
+dialog.lb.zoomed{overflow:visible}
+dialog.lb.zoomed img{border-radius:0}
+dialog.lb.zoomed .lbinfo,dialog.lb.zoomed .lbsave{opacity:0;pointer-events:none}

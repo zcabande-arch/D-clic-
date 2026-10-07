@@ -775,9 +775,9 @@ function render(){
   $("#nav").hidden = false;
   renderTabs();
   if (ui.logging && !S.logDraft) ui.logging = false;
-  const v = ui.tab==="today" ? (ui.logging ? viewLog() : ui.wiz ? viewWizard() : viewToday()) : ui.tab==="cycle" ? viewCycle() : ui.tab==="stats" ? viewStats() : viewProfile();
-  const top = ui.wiz || (ui.logging && ui.tab==="today") ? "" : `<div class="top"><button class="iconbtn" data-act="menu" aria-label="Réglages" aria-expanded="${!!ui.menu}">${MENU_ICON}</button>${demo?`<span class="label">Mode exemple</span>`:""}</div>`;
-  const banner = demo && !ui.wiz && !ui.logging ? `<div class="banner"><p><b>Exemple</b> : profil d'Inès, données inventées. Crée ton profil pour que tout soit à toi.</p><button class="ob" data-act="start">Créer mon profil</button></div>` : "";
+  const v = ui.tab==="today" ? (ui.build ? viewBuild() : ui.logging ? viewLog() : ui.wiz ? viewWizard() : viewToday()) : ui.tab==="cycle" ? viewCycle() : ui.tab==="stats" ? viewStats() : viewProfile();
+  const top = ui.wiz || ((ui.logging || ui.build) && ui.tab==="today") ? "" : `<div class="top"><button class="iconbtn" data-act="menu" aria-label="Réglages" aria-expanded="${!!ui.menu}">${MENU_ICON}</button>${demo?`<span class="label">Mode exemple</span>`:""}</div>`;
+  const banner = demo && !ui.wiz && !ui.logging && !ui.build ? `<div class="banner"><p><b>Exemple</b> : profil d'Inès, données inventées. Crée ton profil pour que tout soit à toi.</p><button class="ob" data-act="start">Créer mon profil</button></div>` : "";
   $("#app").innerHTML = `<div class="stack">${top}${banner}${v}</div>`;
   if (!toastOn) renderFloat();
   renderDrawer();
@@ -887,7 +887,8 @@ function finishOnboarding(){
   if (d.lastStart) { S.cycle.lastStart = d.lastStart; S.cycle.starts = (S.cycle.starts||[]).filter(x=>x!==d.lastStart).concat([d.lastStart]).sort(); }
   if (+d.cycleLen>=20 && +d.cycleLen<=45) S.cycle.length = +d.cycleLen;
   if (+d.periodLen>=2 && +d.periodLen<=10) S.cycle.periodLen = +d.periodLen;
-  if (S.today && !S.today.finished && S.checkins[todayISO()]) { S.today.plan = buildPlan(S, todayISO(), ui.override); S.today.log = {}; }
+  if (S.today && !S.today.finished && S.today.cfg) { S.today.plan = buildCustomPlan(S.today.cfg); S.today.log = {}; }
+  else if (S.today && !S.today.finished && S.checkins[todayISO()]) { S.today.plan = buildPlan(S, todayISO(), ui.override); S.today.log = {}; }
   ui.onb = null; ui.tab = "today"; ui.draft = null; ui.menu = false;
   save(); flush(); window.scrollTo(0,0);
   toast(had && !wasDemo ? "Profil mis à jour" : "Profil créé. À toi de jouer, "+S.profile.name+" !");
@@ -913,12 +914,13 @@ function viewToday(){
   let h = `<div class="stack" style="gap:8px"><span class="label">${esc(fmtLong(t))}</span><h1>${hour<5||hour>=18?"Bonsoir":"Salut"} ${esc(p.name)}</h1><div class="row">${phaseChip(ci,p.hormonal)}</div></div>`;
   if (S.today && S.today.date!==t) S.today = null;
   const ans = S.checkins[t], doneToday = S.today && S.today.date===t && S.today.finished;
-  if ((!ans || !S.today) && !doneToday) {
+  if (!S.today) {
     h += `<div class="card glow g-pink" style="min-height:330px;justify-content:space-between"><div><span class="label">Avant ta séance</span><h2 style="margin-top:4px">On construit ta séance du jour</h2></div>
       <div class="bignum"><span class="dotnum">10</span><span>questions</span></div>
       <p class="small" style="color:rgba(255,255,255,.85)">Heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas. Ta séance s'adapte aux réponses et à ton cycle.</p>
       <button class="pill block" data-act="wiz"><span>Commencer</span><span class="plus">${PLUS}</span></button></div>`;
-    h += logCard();
+    h += S.logDraft ? logCard() : "";
+    h += buildChoicesCard();
     h += weekCard();
     if (ci && !p.hormonal) h += `<div class="card glow ${PHASES[ci.key].g}"><span class="label">Ta phase en ce moment</span><h3>${PHASES[ci.key].name}${ci.late?" (fin de cycle)":""}</h3><p class="small">${PHASES[ci.key].feel}</p><button class="ob" style="align-self:flex-start" data-act="go-cycle">Pourquoi je me sens comme ça ?</button></div>`;
     return h;
@@ -935,7 +937,7 @@ function viewToday(){
     ${ruler(plan.tier*25-10)}
     <p class="coach">${esc(plan.message)}</p>
     <ul class="why">${plan.why.map(w=>`<li>${esc(w)}</li>`).join("")}</ul>
-    <div class="row"><button class="ob" data-act="ovr" data-v="-1" ${plan.tier<=1?"disabled":""}>Plus doux</button><button class="ob" data-act="ovr" data-v="1" ${plan.tier>=4?"disabled":""}>Plus intense</button><button class="ob" data-act="redo">Modifier mes réponses</button></div></div>`;
+    <div class="row">${plan.custom ? `<button class="ob" data-act="b-edit">Modifier ma séance</button>${plan.custom==="random"?`<button class="ob" data-act="b-today-reroll">🎲 Relancer</button>`:""}<button class="ob" data-act="b-drop">Autre façon</button>` : `<button class="ob" data-act="ovr" data-v="-1" ${plan.tier<=1?"disabled":""}>Plus doux</button><button class="ob" data-act="ovr" data-v="1" ${plan.tier>=4?"disabled":""}>Plus intense</button><button class="ob" data-act="redo">Modifier mes réponses</button>`}</div></div>`;
   if (plan.challenge) h += `<div class="banner"><p>${esc(plan.challenge)}</p></div>`;
   h += moodCard(ans, plan.phase, p.hormonal);
   plan.sections.forEach((sec,si)=>{
@@ -1097,6 +1099,200 @@ function saveLog(){
   S.logDraft = null; ui.logging = false; ui.logPick = false; ui.confirmDiscard = false;
   save(); window.scrollTo(0,0); toast("Séance enregistrée");
   return true;
+}
+
+/* ---------- construire sa séance : étape par étape, ou au hasard ----------
+   Le résultat est un plan comme celui du questionnaire (mêmes charges conseillées, minuteur, progression),
+   gardé dans S.today avec sa recette (cfg) pour pouvoir le modifier ou le relancer. */
+const STYLES = {
+  force:{t:"Force", d:"Lourd, peu de reps, longs repos", tier:4, main:[4,4,6,150], acc:[3,6,8,120]},
+  muscle:{t:"Muscle", d:"8 à 12 reps, le classique pour se dessiner", tier:3, main:[4,8,10,90], acc:[3,10,12,75]},
+  tonus:{t:"Tonus & endurance", d:"Plus léger, 12 à 15 reps, repos courts", tier:2, main:[3,12,15,45], acc:[3,12,15,45]},
+  circuit:{t:"Circuit", d:"Exos enchaînés, 3 tours, ça transpire", tier:2, main:[3,12,15,0], acc:[3,12,15,0], circuit:true}
+};
+const BZONES = [["fessiers","Fessiers"],["jambes","Jambes"],["dos","Dos"],["epaules","Épaules"],["bras","Bras"],["abdos","Abdos"],["cardio","Cardio"]];
+const COMPOUND = new Set(["hip","squat","rdl","tirage","bench","row","presse","ohp","bulg"]);
+const shuffle = a => { for (let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; };
+function goalStyle(){ return {force:"force", tonus:"muscle", seche:"circuit", cardio:"circuit", bienetre:"tonus"}[S.profile.goal]||"muscle"; }
+function nExFor(dur){ return dur<=20?3:dur<=30?4:dur<=45?5:dur<=60?6:7; }
+function buildCtx(tier){
+  const p = S.profile, lvl = LVL[p.level]??1, a = S.checkins[todayISO()]||{};
+  return {gym:gymOf(p), banned:new Set(p.banned||[]), deb:lvl===0, lvl, crowded:a.crowd==="bondee", bw:+p.bw||60, tier, allowUp:a.pain!=="fortes" && a.sleep!=="mal"};
+}
+/* Versions faisables d'un exercice (équipement de la salle, pas exclues). */
+function variantsOk(id, ctx){ const eqp = ctx.gym.equip; return LIB[id].v.filter(v=>(!v.need || eqp[v.need]) && !ctx.banned.has(v.n)); }
+function randVariant(id, ctx, avoid){
+  const ok = variantsOk(id, ctx), heavy = ok.filter(v=>v.eq!=="pdc" && v.n!==avoid), pool = heavy.length ? heavy : ok.filter(v=>v.n!==avoid);
+  return pool.length ? pool[Math.floor(Math.random()*pool.length)] : ok[0] || null;
+}
+function makeItemByName(name, sc, rest, ctx){
+  const inf = variantInfo(name);
+  if (!inf) { // exercice perso (créé en notant une séance)
+    const last = getLift(name), it = {name, eq:last?.eq||"libre", ill:null, w:true, r:0, sets:sc.sets, lo:sc.lo, hi:sc.hi, rest};
+    if (last) { const rec = recommend(it, ctx); Object.assign(it, {kg:rec.kg, reason:rec.reason, up:!!rec.up}); }
+    else Object.assign(it, {kg:null, reason:"Exercice à toi : note ta charge à la première série, je la retiendrai pour la prochaine fois."});
+    return it;
+  }
+  const v = inf.v, lvl = ctx.lvl;
+  if (inf.timed) return {id:inf.id, name:v.n, ill:v.ill, timed:true, detail:TIMED_DETAIL[inf.id]};
+  const it = {id:inf.id, name:v.n, eq:v.eq, ill:v.ill, w:v.eq!=="pdc", r:v.r?v.r[lvl]:0, sets:sc.sets, lo:sc.lo, hi:sc.hi, rest};
+  if (it.w) {
+    const rec = recommend(it, ctx);
+    Object.assign(it, {kg:rec.kg, reason:rec.reason, up:!!rec.up, first:!!rec.first});
+    if ((v.eq==="halt"||v.eq==="halt1") && it.kg > ctx.gym.max) { it.kg = ctx.gym.max; it.reason = "Ta salle monte jusqu'à "+ctx.gym.max+" kg en haltères : fais le haut de la fourchette."; }
+  } else it.reason = "Poids du corps. Quand tu fais "+sc.hi+" reps partout, ralentis la descente (3 s) pour corser.";
+  return it;
+}
+function buildCustomPlan(cfg){
+  const t = todayISO(), p = S.profile, st = STYLES[cfg.style]||STYLES.muscle, ci = cycleInfo(S.cycle, t);
+  const lut = !p.hormonal && ci?.key==="lut", ctx = buildCtx(st.tier), restAdd = lut && !st.circuit ? 30 : 0;
+  const items = [], cardio = []; let nMain = 0;
+  cfg.items.forEach(x=>{
+    if (x.kind==="cardio") { const m = +x.min||10; cardio.push({name:x.n, cardio:true, min:m, detail:m+" min"+(st.tier>=3?", dont 4 × 1 min plus fort":", à un rythme où tu peux parler")}); return; }
+    const inf = variantInfo(x.n), main = nMain<2 && !!inf && !inf.timed && COMPOUND.has(inf.id);
+    const sc = main ? st.main : st.acc; if (main) nMain++;
+    const it = makeItemByName(x.n, {sets:sc[0], lo:sc[1], hi:sc[2]}, sc[3] ? sc[3]+restAdd : 0, ctx);
+    if (it) { if (!it.timed) it.rpe = st.tier>=4 ? 8 : st.tier===3 ? 7 : 6; items.push(it); }
+  });
+  const focus = logFocus(cfg.items.map(x=>x.kind==="cardio" ? {cardio:true} : {name:x.n}));
+  const sections = [];
+  if (cfg.warm) {
+    const zs = new Set(cfg.items.flatMap(x=>variantInfo(x.n)?.z||[])), wu = [{name:"Cardio léger (vélo ou rameur)", detail:(cfg.dur<=30?5:7)+" min, tu dois pouvoir parler"}];
+    if (zs.has("fessiers")||zs.has("jambes")) wu.push({name:"Mobilité hanches 90/90 + squats au poids du corps", detail:"2 tours × 8"});
+    if (["dos","epaules","bras"].some(z=>zs.has(z))) wu.push({name:"Rotations d'épaules à l'élastique", detail:"2 × 12"});
+    if (items.some(x=>x.w)) wu.push({name:"Séries de montée en charge", detail:"Sur le 1er exercice : 2 séries légères (50 % puis 75 % de ta charge)"});
+    sections.push({name:"Échauffement", items:wu});
+  }
+  if (items.length) sections.push(st.circuit ? {name:"Circuit, 3 tours", note:"Enchaîne les exercices sans pause, puis 90 s de repos entre les tours.", items} : {name:"Bloc principal", items});
+  if (cardio.length) sections.push({name:"Cardio", items:cardio});
+  sections.push({name:"Fin de séance", items:[{name:"Étirements des zones travaillées", detail:"3–4 min"}]});
+  const why = [cfg.mode==="random" ? "Tirée au hasard parmi les exercices de ta salle." : "Construite par toi, étape par étape.", st.t+" : "+st.d.toLowerCase()+"."];
+  if (ci && !p.hormonal) why.push("J"+ci.day+" de ton cycle, phase "+PHASES[ci.key].name.toLowerCase()+(lut?" : 30 s de repos en plus.":"."));
+  const tips = [];
+  if (lut) tips.push("Phase lutéale : bois une gourde de plus, tu as plus chaud que d'habitude.");
+  if (p.injuries) tips.push("Pense à ta contrainte : « "+p.injuries+" ». Adapte ou remplace ce qui gêne.");
+  const title = (cfg.mode==="random" ? "Surprise · " : "") + FOCUS_TITLES[focus] + (cfg.mode==="random" ? "" : " · "+st.t);
+  const message = cfg.mode==="random" ? pick(["Séance surprise : laisse-toi porter, et relance si un exo ne te dit rien.","Les dés ont parlé. Chaque exo compte, même ceux que tu n'aurais pas choisis."], hash(t+title)) : "Ta séance, tes choix. Les charges sont calculées d'après tes dernières fois.";
+  return {date:t, title, tier:st.tier, score:st.tier, focus, why, sections, tips, challenge:null, message, phase:(!p.hormonal && ci)?ci.key:null, cycleDay:ci?.day||null, time:null, duration:cfg.dur, custom:cfg.mode};
+}
+/* Tirage au sort : de gros exercices d'abord, puis des exercices d'isolation, le gainage à la fin. */
+function rollItems(cfg){
+  const ctx = buildCtx((STYLES[cfg.style]||STYLES.muscle).tier), zones = cfg.zones.filter(z=>z!=="cardio"), wantCardio = cfg.zones.includes("cardio");
+  const onlyCardio = wantCardio && !zones.length;
+  const out = [];
+  if (!onlyCardio) {
+    const ids = Object.keys(LIB).filter(id=>variantsOk(id, ctx).length && (!zones.length || LIB[id].z.some(z=>zones.includes(z))));
+    const core = shuffle(ids.filter(id=>LIB[id].z.includes("abdos"))), big = shuffle(ids.filter(id=>COMPOUND.has(id))), rest = shuffle(ids.filter(id=>!COMPOUND.has(id) && !LIB[id].z.includes("abdos")));
+    const n = Math.max(1, nExFor(cfg.dur) - (wantCardio?1:0)), abOnly = zones.length===1 && zones[0]==="abdos";
+    const order = abOnly ? core : big.slice(0, Math.min(2, Math.ceil(n/2))).concat(rest, big.slice(2));
+    const chosen = order.slice(0, abOnly ? n : n - (core.length && (!zones.length || zones.includes("abdos") || n>=5) ? 1 : 0));
+    if (!abOnly && chosen.length < n && core.length) chosen.push(core[0]);
+    chosen.forEach(id=>{ const v = randVariant(id, ctx); if (v) out.push({n:v.n}); });
+  }
+  if (wantCardio) {
+    const machines = shuffle(CARDIO.filter(c=>c!=="Cours collectif"));
+    if (onlyCardio) { const total = Math.max(15, cfg.dur-10); out.push({n:machines[0], kind:"cardio", min:Math.round(total/2)}, {n:machines[1], kind:"cardio", min:total-Math.round(total/2)}); }
+    else out.push({n:machines[0], kind:"cardio", min:cfg.dur<=30?8:12});
+  }
+  return out;
+}
+function rerollOne(cfg, i){
+  const x = cfg.items[i], ctx = buildCtx((STYLES[cfg.style]||STYLES.muscle).tier), used = new Set(cfg.items.map(y=>y.n));
+  if (x.kind==="cardio") { const m = shuffle(CARDIO.filter(c=>c!=="Cours collectif" && !used.has(c)))[0]; if (m) cfg.items[i] = Object.assign({}, x, {n:m}); return; }
+  const inf = variantInfo(x.n), zones = inf ? inf.z : cfg.zones.filter(z=>z!=="cardio");
+  const usedIds = new Set(cfg.items.map(y=>variantInfo(y.n)?.id).filter(Boolean));
+  const ids = shuffle(Object.keys(LIB).filter(id=>!usedIds.has(id) && variantsOk(id, ctx).length && (!zones.length || LIB[id].z.some(z=>zones.includes(z)))));
+  const v = ids.length ? randVariant(ids[0], ctx) : inf ? randVariant(inf.id, ctx, x.n) : null;
+  if (v) cfg.items[i] = {n:v.n};
+}
+function startBuild(mode, cfg){
+  ui.build = cfg ? JSON.parse(JSON.stringify(cfg)) : {mode, zones:[], dur:+S.profile.duration||45, style:goalStyle(), items:[], warm:true};
+  ui.build.step = cfg ? buildSteps().length-1 : 0; ui.build.picking = false;
+  ui.wiz = null; ui.logging = false; ui.tab = "today"; window.scrollTo(0,0);
+}
+function buildSteps(){ return ui.build.mode==="random" ? ["zones","dur","recap"] : ["zones","dur","style","pick","recap"]; }
+function startBuiltPlan(){
+  const b = ui.build, cfg = {mode:b.mode, zones:b.zones, dur:b.dur, style:b.style, items:b.items, warm:b.warm};
+  const old = S.today && !S.today.finished && S.today.date===todayISO() ? S.today : null, byName = {};
+  if (old) allItems(old.plan).forEach(([k,x])=>{ if (old.log[k]) byName[x.name] = old.log[k]; });
+  S.today = {date:todayISO(), override:0, plan:buildCustomPlan(cfg), log:{}, finished:false, cfg};
+  allItems(S.today.plan).forEach(([k,x])=>{ if (byName[x.name]) S.today.log[k] = byName[x.name]; });
+  ui.build = null; ui.finishing = false; save(); window.scrollTo(0,0); toast("C'est parti !");
+}
+function viewBuild(){
+  const b = ui.build, steps = buildSteps(), k = steps[b.step], n = steps.length;
+  if (b.picking || k==="pick") return viewBuildPick();
+  if (k==="recap") return viewBuildRecap();
+  const head = `<div class="row between"><button class="circ plain" data-act="b-back" aria-label="Retour">${ARROW_L}</button><span>${b.mode==="random"?"Aléatoire":"Ma séance"} · ${b.step+1} / ${n}</span><span style="width:46px"></span></div>`;
+  let q = "", sub = "", body = "", ok = true;
+  if (k==="zones") {
+    q = b.mode==="random" ? "On tire au sort dans quoi ?" : "Tu veux travailler quoi ?";
+    sub = b.mode==="random" ? "Choisis une ou plusieurs zones, ou laisse « Peu importe » pour une vraie surprise." : "Une ou plusieurs zones. Le cardio s'ajoute en bloc à part.";
+    body = `<div class="chips">${b.mode==="random"?`<button class="chip" data-act="b-zone" data-v="" aria-pressed="${!b.zones.length}">Peu importe</button>`:""}${BZONES.map(([z,t])=>`<button class="chip" data-act="b-zone" data-v="${z}" aria-pressed="${b.zones.includes(z)}">${t}</button>`).join("")}</div>
+      <div class="chips">${[["bas",["fessiers","jambes"],"Bas du corps"],["haut",["dos","epaules","bras"],"Haut du corps"],["full",["fessiers","jambes","dos","epaules","bras","abdos"],"Full body"]].map(([kk,zs,t])=>`<button class="ob" data-act="b-zoneset" data-v="${zs.join(",")}">${t}</button>`).join("")}</div>`;
+    ok = b.mode==="random" || b.zones.length>0;
+  } else if (k==="dur") {
+    q = "Tu as combien de temps ?"; sub = "Échauffement et étirements compris.";
+    body = `<div class="bignum"><span class="dotnum">${b.dur}</span><span>minutes</span></div><div class="opts">${[[20,"20 min","Express : 3 exos"],[30,"30 min","Court : 4 exos"],[45,"45 min","Le classique : 5 exos"],[60,"1 h","Complète : 6 exos"],[75,"1 h 15","Longue : 7 exos"]].map(([v,t,d])=>`<button class="opt" data-act="b-dur" data-v="${v}" aria-pressed="${b.dur===v}"><b>${t}</b><span>${d}</span></button>`).join("")}</div>`;
+  } else if (k==="style") {
+    q = "Quel genre de séance ?"; sub = "Ça règle les séries, les répétitions et les temps de repos.";
+    body = `<div class="opts">${Object.entries(STYLES).map(([kk,v])=>`<button class="opt" data-act="b-style" data-v="${kk}" aria-pressed="${b.style===kk}"><b>${v.t}</b><span>${v.d} · ${v.main[0]} × ${v.main[1]}–${v.main[2]}</span></button>`).join("")}</div>`;
+  }
+  return `<div class="wiz">${head}<div class="card glow g-mauve" style="gap:18px"><div class="pbar"><i style="width:${Math.round((b.step+1)/n*100)}%"></i></div>
+    <div class="stack" style="gap:6px"><p class="q">${q}</p><p class="small" style="color:rgba(255,255,255,.85)">${sub}</p></div>${body}
+    <div class="wiz-nav"><button class="pill" data-act="b-next" ${ok?"":"disabled"}><span>${b.mode==="random"&&k==="dur"?"Tirer ma séance":"Suivant"}</span><span class="plus">${b.mode==="random"&&k==="dur"?"🎲":ARROW_R}</span></button></div></div></div>`;
+}
+function viewBuildPick(){
+  const b = ui.build, sel = b.items.map(x=>x.n), rec = nExFor(b.dur), f = b.filter || "zones";
+  const ctx = buildCtx((STYLES[b.style]||STYLES.muscle).tier), zones = b.zones.filter(z=>z!=="cardio");
+  const tabs = [["zones", zones.length ? "Tes zones" : "Tout"], ...zones.map(z=>[z, ZONES[z]]), ["all","Tout"], ["mine","Mes exos"], ["cardio","Cardio"]].filter((x,i,a)=>a.findIndex(y=>y[0]===x[0] || (y[1]===x[1]))===i);
+  let list;
+  if (f==="cardio") list = CARDIO.map(n=>({n, kind:"cardio"}));
+  else if (f==="mine") list = Object.keys(S.lifts).filter(n=>!ctx.banned.has(n)).map(n=>({n, inf:variantInfo(n)}));
+  else { const zf = f==="zones" ? zones : f==="all" ? [] : [f];
+    list = Object.keys(LIB).flatMap(id=>variantsOk(id, ctx).filter(v=>!zf.length || LIB[id].z.some(z=>zf.includes(z))).map(v=>({n:v.n, inf:variantInfo(v.n)}))); }
+  const nMus = b.items.filter(x=>x.kind!=="cardio").length;
+  let h = `<div class="row between"><button class="circ plain" data-act="${b.picking?"b-pick-close":"b-back"}" aria-label="Retour">${ARROW_L}</button><span class="label">${b.picking?"Ajouter des exercices":"Ma séance · "+(b.step+1)+" / "+buildSteps().length}</span><span style="width:46px"></span></div>
+    <h1>Choisis tes exercices</h1>
+    <p class="small muted">Dans l'ordre où tu veux les faire. Pour ${b.dur} min, compte environ <b>${rec}</b> exercices (${nMus} choisi${nMus>1?"s":""}).</p>
+    <div class="chips hscroll">${tabs.map(([kk,t])=>`<button class="chip" style="flex:none" data-act="b-filter" data-v="${kk}" aria-pressed="${f===kk}">${t}</button>`).join("")}</div>
+    <div class="card" style="padding:6px 20px">`;
+  h += list.length ? list.map(o=>{ const i = sel.indexOf(o.n), img = o.inf ? illustration(o.inf.v.ill) : "";
+    return `<button class="pickrow" data-act="b-toggle" data-v="${esc(o.n)}" data-kind="${o.kind||""}" ${i>=0?'aria-pressed="true"':""}>${img?`<span class="ill sm">${img}</span>`:`<span class="ill sm noimg">${o.kind==="cardio"?"♥":"+"}</span>`}<span class="pk"><b>${esc(o.n)}</b><span>${o.kind==="cardio"?"Cardio":o.inf?esc(o.inf.z.map(z=>ZONES[z]).join(", ")):"Ton exercice"}</span></span><span class="plusc">${i>=0?`<b class="dotnum" style="font-size:.95rem">${i+1}</b>`:PLUS}</span></button>`; }).join("")
+    : `<p class="muted small" style="padding:14px 0">Rien ici pour l'instant.</p>`;
+  h += `</div><div class="row"><button class="ob" data-act="b-fill" ${nMus>=rec?"disabled":""}>🎲 Compléter au hasard</button>${sel.length?`<button class="linkbtn" data-act="b-clear">Tout enlever</button>`:""}</div>
+    <button class="pill block" data-act="${b.picking?"b-pick-close":"b-next"}" ${sel.length?"":"disabled"}><span>${b.picking?"Retour au récap":"Voir ma séance"}</span><span class="plus">${ARROW_R}</span></button>`;
+  return h;
+}
+function viewBuildRecap(){
+  const b = ui.build, st = STYLES[b.style];
+  if (!b.items.length && b.mode==="random") b.items = rollItems(b);
+  let nMain = 0;
+  const rows = b.items.map((x,i)=>{
+    const inf = variantInfo(x.n), img = inf ? illustration(inf.v.ill) : "";
+    let scheme;
+    if (x.kind==="cardio") scheme = `<span class="row" style="gap:6px"><input type="number" inputmode="numeric" min="3" max="90" value="${x.min||10}" data-bmin="${i}" style="width:72px;padding:6px 8px;height:36px" aria-label="Minutes"> min</span>`;
+    else if (inf?.timed) scheme = esc(TIMED_DETAIL[inf.id]);
+    else { const main = nMain<2 && !!inf && COMPOUND.has(inf.id); if (main) nMain++; const sc = main ? st.main : st.acc; scheme = st.circuit ? `${sc[1]}–${sc[2]} reps par tour` : `${sc[0]} × ${sc[1]}–${sc[2]} reps`; }
+    return `<div class="brow">${img?`<span class="ill sm">${img}</span>`:`<span class="ill sm noimg">${x.kind==="cardio"?"♥":i+1}</span>`}<div class="pk"><b>${esc(x.n)}</b><span>${scheme}</span></div>
+      <div class="bacts">${i>0?`<button class="mini" data-act="b-up" data-v="${i}" aria-label="Monter">↑</button>`:""}<button class="mini" data-act="b-roll" data-v="${i}" aria-label="Changer au hasard">🎲</button><button class="mini" data-act="b-del" data-v="${i}" aria-label="Retirer">✕</button></div></div>`;
+  }).join("");
+  return `<div class="row between"><button class="circ plain" data-act="b-back" aria-label="Retour">${ARROW_L}</button><span class="label">${b.mode==="random"?"Aléatoire":"Ma séance"} · récap</span><span style="width:46px"></span></div>
+    <h1>${b.mode==="random"?"Ta séance surprise":"Ta séance"}</h1>
+    <div class="card"><div class="row between"><span class="label">${b.dur} min · ${esc(st.t)}</span>${b.mode==="random"?`<button class="ob" data-act="b-reroll">🎲 Tout relancer</button>`:""}</div>
+      <div>${rows || `<p class="muted small">Aucun exercice.</p>`}</div>
+      <button class="ob" style="align-self:flex-start" data-act="b-pick-open">+ Ajouter un exercice</button></div>
+    <div class="card"><span class="label">Genre de séance</span><div class="chips">${Object.entries(STYLES).map(([kk,v])=>`<button class="chip" data-act="b-style" data-v="${kk}" data-stay="1" aria-pressed="${b.style===kk}">${v.t}</button>`).join("")}</div>
+      <p class="note">${esc(st.d)}. ${st.circuit?"3 tours, 90 s de repos entre les tours.":`Les 2 premiers gros exercices : ${st.main[0]} × ${st.main[1]}–${st.main[2]}, repos ${fmtRest(st.main[3])}. Les autres : ${st.acc[0]} × ${st.acc[1]}–${st.acc[2]}.`}</p>
+      <div class="chips"><button class="chip" data-act="b-warm" aria-pressed="${b.warm}">Échauffement inclus</button></div></div>
+    <button class="pill block" data-act="b-start" ${b.items.length?"":"disabled"}><span>C'est parti</span><span class="plus">${ARROW_R}</span></button>`;
+}
+function buildChoicesCard(){
+  return `<div class="card"><span class="label">Ou fais-la à ta façon</span><div class="menu">
+    <button data-act="b-start-mode" data-v="steps"><span><b style="font-weight:500">Je construis ma séance</b><br><span class="note">Zones, durée, genre de séance, puis tes exos</span></span><span class="chev">›</span></button>
+    <button data-act="b-start-mode" data-v="random"><span><b style="font-weight:500">Aléatoire 🎲</b><br><span class="note">Une séance tirée au sort, à relancer si besoin</span></span><span class="chev">›</span></button>
+    <button data-act="log-start"><span><b style="font-weight:500">Noter une séance déjà faite</b><br><span class="note">Tes exos, tes séries, dans ton bilan</span></span><span class="chev">›</span></button>
+  </div></div>`;
 }
 
 /* « Pourquoi je me sens comme ça » : l'humeur du questionnaire, expliquée par la phase du jour. */
@@ -1363,7 +1559,7 @@ document.addEventListener("click", e=>{
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, v = b.dataset.v, t = todayISO();
   switch(act){
-    case "tab": if (v!=="today") { ui.logging = false; ui.logPick = false; } ui.tab = v; if (v!=="today") ui.wiz = null; if (v!=="profile") ui.draft = null; ui.confirmReset = false; window.scrollTo(0,0); break;
+    case "tab": if (v!=="today") { ui.logging = false; ui.logPick = false; ui.build = null; } ui.tab = v; if (v!=="today") ui.wiz = null; if (v!=="profile") ui.draft = null; ui.confirmReset = false; window.scrollTo(0,0); break;
     case "start": ui.menu = false; ui.onb = {step:0, d:onbDefaults()}; window.scrollTo(0,0); break;
     case "demo": startDemo(); window.scrollTo(0,0); break;
     /* questions de profil */
@@ -1447,6 +1643,31 @@ document.addEventListener("click", e=>{
       save(); toast("Cycle enregistré"); break; }
     case "pf": { const k=b.dataset.k; ui.draft[k] = b.dataset.bool ? v==="1" : v; if (k==="contra" && v==="diu" && ui.draft.diuCycle==null) ui.draft.diuCycle = true; break; }
     case "log-start": startLog(v==="plan"); break;
+    /* construire sa séance */
+    case "b-start-mode": startBuild(v); break;
+    case "b-edit": startBuild(null, S.today.cfg); break;
+    case "b-drop": S.today = null; ui.finishing = false; save(); window.scrollTo(0,0); break;
+    case "b-today-reroll": { const cfg = S.today.cfg; cfg.items = rollItems(cfg); S.today.plan = buildCustomPlan(cfg); S.today.log = {}; save(); toast("Nouvelle séance tirée"); break; }
+    case "b-back": { const b2 = ui.build; if (b2.step<=0) ui.build = null; else { b2.step--; if (buildSteps()[b2.step]==="pick" && b2.mode==="random") b2.step--; } window.scrollTo(0,0); break; }
+    case "b-next": { const b2 = ui.build, steps = buildSteps(); if (steps[b2.step]==="dur" && b2.mode==="random") b2.items = rollItems(b2); if (steps[b2.step]==="zones" && b2.mode!=="random") b2.filter = "zones"; b2.step = Math.min(steps.length-1, b2.step+1); window.scrollTo(0,0); break; }
+    case "b-zone": { const b2 = ui.build; if (!v) b2.zones = []; else { const i = b2.zones.indexOf(v); i>=0 ? b2.zones.splice(i,1) : b2.zones.push(v); } break; }
+    case "b-zoneset": ui.build.zones = v.split(","); break;
+    case "b-dur": ui.build.dur = +v; render(); setTimeout(()=>{ if (ui.build) document.querySelector("[data-act=b-next]")?.click(); }, 200); return;
+    case "b-style": ui.build.style = v; if (!b.dataset.stay) { render(); setTimeout(()=>{ if (ui.build) document.querySelector("[data-act=b-next]")?.click(); }, 200); return; } break;
+    case "b-filter": ui.build.filter = v; break;
+    case "b-toggle": { const it2 = ui.build.items, i = it2.findIndex(x=>x.n===v); if (i>=0) it2.splice(i,1); else it2.push(b.dataset.kind==="cardio" ? {n:v, kind:"cardio", min:ui.build.zones.length===1&&ui.build.zones[0]==="cardio"?Math.max(15,ui.build.dur-10):10} : {n:v}); const y = window.scrollY; render(); window.scrollTo(0,y); return; }
+    case "b-fill": { const b2 = ui.build, need = nExFor(b2.dur) - b2.items.filter(x=>x.kind!=="cardio").length; if (need<=0) break;
+      const extra = rollItems(Object.assign({}, b2, {zones:b2.zones.filter(z=>z!=="cardio")})).filter(x=>x.kind!=="cardio"), usedIds = new Set(b2.items.map(x=>variantInfo(x.n)?.id).filter(Boolean));
+      extra.filter(x=>!usedIds.has(variantInfo(x.n)?.id)).slice(0, need).forEach(x=>b2.items.push(x)); toast("Complété au hasard"); break; }
+    case "b-clear": ui.build.items = []; break;
+    case "b-pick-open": ui.build.picking = true; ui.build.filter = "zones"; window.scrollTo(0,0); break;
+    case "b-pick-close": ui.build.picking = false; window.scrollTo(0,0); break;
+    case "b-up": { const a2 = ui.build.items, i = +v; [a2[i-1], a2[i]] = [a2[i], a2[i-1]]; break; }
+    case "b-del": ui.build.items.splice(+v,1); break;
+    case "b-roll": rerollOne(ui.build, +v); break;
+    case "b-reroll": ui.build.items = rollItems(ui.build); break;
+    case "b-warm": ui.build.warm = !ui.build.warm; break;
+    case "b-start": startBuiltPlan(); break;
     case "log-close": ui.logging = false; ui.confirmDiscard = false; window.scrollTo(0,0); break;
     case "log-pick": ui.logPick = true; ui.logQ = ""; ui.logFilter = "all"; window.scrollTo(0,0); render(); return;
     case "log-pick-close": ui.logPick = false; window.scrollTo(0,0); break;
@@ -1475,7 +1696,12 @@ document.addEventListener("click", e=>{
       /* On refait la séance sans cet exercice, en gardant ce qui est déjà noté sur les autres. */
       const old = S.today.plan, oldLog = S.today.log, byName = {};
       allItems(old).forEach(([k2,x])=>{ if (oldLog[k2] && x.name!==it.name) byName[x.name] = oldLog[k2]; });
-      S.today.plan = buildPlan(S, t, ui.override); S.today.log = {};
+      if (S.today.cfg) {
+        const cfg = S.today.cfg, i = cfg.items.findIndex(x=>x.n===it.name);
+        if (i>=0) { const inf = variantInfo(it.name), v = inf ? randVariant(inf.id, buildCtx(old.tier), it.name) : null; if (v && v.n!==it.name) cfg.items[i] = {n:v.n}; else cfg.items.splice(i,1); }
+        S.today.plan = buildCustomPlan(cfg);
+      } else S.today.plan = buildPlan(S, t, ui.override);
+      S.today.log = {};
       allItems(S.today.plan).forEach(([k2,x])=>{ if (byName[x.name]) S.today.log[k2] = byName[x.name]; });
       const repl = allItems(S.today.plan).map(([,x])=>x).find(x=>x.id===it.id);
       save(); toast(repl ? "Remplacé par : "+repl.name : "« "+it.name+" » retiré"); break; }
@@ -1488,7 +1714,7 @@ document.addEventListener("click", e=>{
       if (!d.name || !d.name.trim()) { toast("Indique ton prénom"); $("#p-name")?.focus(); return; }
       const g = gymOf(d);
       const prof = {name:d.name.trim(), level:d.level, goal:d.goal, persona:d.persona, perWeek:+d.perWeek||3, duration:+d.duration||45, focus:d.focus||[], banned:d.banned||[], injuries:(d.injuries||"").trim(), contra:contraOf(d), diuCycle:contraOf(d)==="diu" ? !!d.diuCycle : null, hormonal:isHormonal(contraOf(d), d.diuCycle), bw:(+d.bw>=35 && +d.bw<=160)?+d.bw:null, gym:{chain:g.chain, pref:g.pref, equip:g.equip, max:g.max}};
-      { S.profile = prof; if (S.today && !S.today.finished && S.checkins[t]) { S.today.plan = buildPlan(S,t,ui.override); S.today.log = {}; } toast("Profil enregistré"); }
+      { S.profile = prof; if (S.today && !S.today.finished && S.today.cfg) { S.today.plan = buildCustomPlan(S.today.cfg); S.today.log = {}; } else if (S.today && !S.today.finished && S.checkins[t]) { S.today.plan = buildPlan(S,t,ui.override); S.today.log = {}; } toast("Profil enregistré"); }
       ui.draft = null; save(); window.scrollTo(0,0); break; }
     case "reset": ui.confirmReset = true; break;
     case "reset-yes": {
@@ -1505,6 +1731,7 @@ document.addEventListener("input", e=>{
   if (el.dataset.gmax !== undefined && ui.draft) ui.draft.gym = Object.assign({}, ui.draft.gym, {max:+el.value||null});
   if (el.dataset.time !== undefined && ui.wiz) ui.wiz.time = el.value;
   if (el.dataset.lg && S.logDraft) { const [i,j,f] = el.dataset.lg.split("|"); const it = S.logDraft.items[+i]; if (it) { if (f) { if (it.sets[+j]) it.sets[+j][f] = el.value; } else it[j] = el.value; save(); } }
+  if (el.dataset.bmin !== undefined && ui.build) { const x = ui.build.items[+el.dataset.bmin]; if (x) x.min = clamp(+el.value||10, 1, 120); }
   if (el.dataset.lgf && S.logDraft) { S.logDraft[el.dataset.lgf] = el.value; save(); }
   if (el.dataset.logq !== undefined) { ui.logQ = el.value; const r = $("#lg-res"); if (r) r.innerHTML = pickerResults(); }
   if (el.dataset.onb && ui.onb) { ui.onb.d[el.dataset.onb] = el.value; if (el.dataset.onb==="name") { const nx = document.querySelector(".wiz-nav .pill"); if (nx) nx.disabled = !el.value.trim(); } }

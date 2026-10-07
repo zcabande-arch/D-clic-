@@ -1,5 +1,5 @@
 // Service worker de Phase Gym : l'app s'ouvre même sans réseau (au fond de la salle).
-const SHELL = "phase-gym-shell-v4";
+const SHELL = "phase-gym-shell-v5";
 const FONTS = "phase-gym-fonts-v1";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png", "./icons/apple-touch-icon.png"];
 

@@ -106,6 +106,13 @@ selon le cycle, l'énergie et la forme du jour.
 - **Séance** : 10 petites questions (heure, temps dispo, humeur, énergie, sommeil, corps, stress, envie, affluence, repas),
   puis la séance avec les charges, le minuteur de repos et la progression automatique. Une carte explique pourquoi on
   ressent cette humeur, selon la phase du jour.
+- **Construire sa séance soi-même** (accueil Séance, « Ou fais-la à ta façon ») :
+  - *Étape par étape* : zones (ou raccourcis Bas / Haut / Full body, cardio en plus), durée, genre de séance
+    (Force, Muscle, Tonus & endurance, Circuit), puis le choix des exercices dans l'ordre voulu (avec « Compléter au hasard »),
+    et un récap pour monter, changer au hasard ou retirer un exercice.
+  - *Aléatoire* : zones (ou « Peu importe ») et durée, puis une séance tirée au sort parmi l'équipement de la salle,
+    sans les exercices exclus. « Tout relancer » ou 🎲 sur un seul exercice.
+  Dans les deux cas, la séance a ses charges conseillées, le minuteur et la progression, et peut être modifiée ou relancée ensuite.
 - **Noter sa propre séance** (« Tu as fait ta propre séance ? » sur l'accueil, « J'ai fait autrement » pendant une séance
   proposée, ou « + Noter une séance » dans *Bilan*) : on choisit ses exercices dans la liste (recherche, filtres par zone,
   « Mes exos »), on en crée avec son propre nom, on ajoute du cardio en minutes, puis on note les séries (kg × reps).

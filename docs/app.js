@@ -78,7 +78,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   }
   function showLb(dir){
     const it=LB.list[LB.i],img=$("#lbImg");
-    img.src=it.img;
+    resetZoom();img.src=it.img;prefetchPhoto(it.img);
     img.classList.remove("from-up","from-down");
     if(dir){void img.offsetWidth;img.classList.add(dir>0?"from-down":"from-up");}
     const many=LB.list.length>1;
@@ -97,21 +97,104 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const mineNow=cur!=null&&S.photos.some(p=>p.uid===S.uid&&p.hour===cur);
     return S.photos.filter(p=>!(p.hour===cur&&!mineNow)).sort((a,b)=>a.hour-b.hour||a.ts-b.ts);
   }
+  // Zoom en pinçant / écartant deux doigts ; à un doigt on déplace la photo agrandie.
+  const ZM={s:1,x:0,y:0};
+  function applyZoom(){
+    const img=$("#lbImg");
+    img.style.transform=ZM.s>1?`translate(${ZM.x}px,${ZM.y}px) scale(${ZM.s})`:"";
+    $("#dlgLb").classList.toggle("zoomed",ZM.s>1);
+  }
+  function resetZoom(){ZM.s=1;ZM.x=0;ZM.y=0;applyZoom();}
+  function clampPan(){
+    const r=$("#lbImg"),w=r.offsetWidth,h=r.offsetHeight;
+    // Plus grande que l'écran : on peut aller jusqu'aux bords ; plus petite : elle reste dans l'écran.
+    const mx=Math.abs(innerWidth-w*ZM.s)/2,my=Math.abs(innerHeight-h*ZM.s)/2;
+    ZM.x=Math.max(-mx,Math.min(mx,ZM.x));ZM.y=Math.max(-my,Math.min(my,ZM.y));
+  }
   (function lbGestures(){
-    const d=$("#dlgLb");let sx=0,sy=0,lastWheel=0;
-    d.addEventListener("click",()=>{if(LB.moved){LB.moved=false;return;}d.close();});
-    d.addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;LB.moved=false;},{passive:true});
-    d.addEventListener("touchmove",e=>{if(e.cancelable)e.preventDefault();},{passive:false});
+    const d=$("#dlgLb");let sx=0,sy=0,lastWheel=0,pinch=null,pan=null,wasZoomed=false,multi=false;
+    const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+    const mid=t=>({x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2});
+    const center=()=>{const r=$("#lbImg").getBoundingClientRect();return{x:r.left+r.width/2-ZM.x,y:r.top+r.height/2-ZM.y};};
+    d.addEventListener("click",e=>{
+      if(e.target.closest("button"))return;
+      if(LB.moved){LB.moved=false;return;}
+      if(ZM.s>1){resetZoom();return;}   // photo agrandie : un toucher la remet à sa taille
+      d.close();
+    });
+    d.addEventListener("close",resetZoom);
+    d.addEventListener("gesturestart",e=>e.preventDefault());
+    d.addEventListener("touchstart",e=>{
+      if(e.touches.length===2){
+        multi=true;LB.moved=true;pan=null;
+        const m=mid(e.touches),c=center();
+        pinch={d0:dist(e.touches),s0:ZM.s,qx:(m.x-c.x-ZM.x)/ZM.s,qy:(m.y-c.y-ZM.y)/ZM.s,c};
+        return;
+      }
+      if(e.touches.length>2)return;
+      sx=e.touches[0].clientX;sy=e.touches[0].clientY;LB.moved=false;multi=false;wasZoomed=ZM.s>1;
+      pan=wasZoomed?{x0:ZM.x,y0:ZM.y}:null;
+    },{passive:true});
+    d.addEventListener("touchmove",e=>{
+      if(e.cancelable)e.preventDefault();
+      if(pinch&&e.touches.length===2){
+        const m=mid(e.touches);
+        ZM.s=Math.max(1,Math.min(5,pinch.s0*dist(e.touches)/pinch.d0));
+        ZM.x=m.x-pinch.c.x-ZM.s*pinch.qx;ZM.y=m.y-pinch.c.y-ZM.s*pinch.qy;
+        clampPan();applyZoom();
+      }else if(pan&&e.touches.length===1){
+        const t=e.touches[0];
+        if(Math.abs(t.clientX-sx)+Math.abs(t.clientY-sy)>6)LB.moved=true;
+        ZM.x=pan.x0+t.clientX-sx;ZM.y=pan.y0+t.clientY-sy;clampPan();applyZoom();
+      }
+    },{passive:false});
     d.addEventListener("touchend",e=>{
+      if(e.touches.length){pinch=null;if(e.touches.length===1&&ZM.s>1){sx=e.touches[0].clientX;sy=e.touches[0].clientY;pan={x0:ZM.x,y0:ZM.y};}return;}
+      if(pinch||multi){pinch=null;if(ZM.s<1.05)resetZoom();setTimeout(()=>{LB.moved=false;},400);return;}
+      if(wasZoomed||ZM.s>1){pan=null;if(LB.moved)setTimeout(()=>{LB.moved=false;},400);return;}
       const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
       if(Math.abs(dy)>50&&Math.abs(dy)>Math.abs(dx)){LB.moved=true;stepLb(dy<0?1:-1);}
       else if(Math.abs(dx)>50||Math.abs(dy)>10)LB.moved=true;
       // Le clic qui suit éventuellement un balayage est ignoré ; au-delà, un toucher ferme à nouveau.
       if(LB.moved)setTimeout(()=>{LB.moved=false;},400);
     });
-    d.addEventListener("wheel",e=>{e.preventDefault();const now=Date.now();if(now-lastWheel<350||Math.abs(e.deltaY)<20)return;lastWheel=now;stepLb(e.deltaY>0?1:-1);},{passive:false});
+    d.addEventListener("wheel",e=>{
+      e.preventDefault();
+      if(e.ctrlKey){ZM.s=Math.max(1,Math.min(5,ZM.s*Math.exp(-e.deltaY/100)));if(ZM.s<1.02)resetZoom();else{clampPan();applyZoom();}return;}
+      if(ZM.s>1)return;
+      const now=Date.now();if(now-lastWheel<350||Math.abs(e.deltaY)<20)return;lastWheel=now;stepLb(e.deltaY>0?1:-1);
+    },{passive:false});
     d.addEventListener("keydown",e=>{if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();stepLb(1);}else if(e.key==="ArrowUp"||e.key==="ArrowLeft"){e.preventDefault();stepLb(-1);}});
   })();
+
+  // ---------- enregistrer une photo ----------
+  // La photo est téléchargée à l'avance : sur iPhone/iPad, la feuille de partage (« Enregistrer l'image »)
+  // doit s'ouvrir tout de suite après le toucher, sans attente réseau.
+  const blobCache=new Map();
+  function prefetchPhoto(src){
+    if(!src||blobCache.has(src))return blobCache.get(src);
+    const p=fetch(src,{mode:"cors"}).then(r=>{if(!r.ok)throw new Error(r.status);return r.blob();});
+    p.catch(()=>blobCache.delete(src));blobCache.set(src,p);
+    if(blobCache.size>30)blobCache.delete(blobCache.keys().next().value);
+    return p;
+  }
+  async function savePhoto(src,name){
+    const fname=(name||"declic-photo")+".jpg";
+    let blob=null;const p=prefetchPhoto(src);
+    try{blob=await p;}catch(e){}
+    if(blob){
+      const file=new File([blob],fname,{type:blob.type||"image/jpeg"});
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
+        try{await navigator.share({files:[file]});return;}
+        catch(e){if(e&&e.name==="AbortError")return;}
+      }
+      const a=el("a",{href:URL.createObjectURL(blob),download:fname});document.body.append(a);a.click();a.remove();
+      toast("Photo enregistrée");return;
+    }
+    const a=el("a",{href:src,download:fname,target:"_blank",rel:"noopener"});document.body.append(a);a.click();a.remove();
+  }
+  function photoName(it){return "declic-"+(it.uid?(it.uid===S.uid?"moi":pName(it.uid)).replace(/[^\p{L}\p{N}]+/gu,"-")+"-"+S.day+"-"+it.hour+"h":Date.now());}
+  $("#lbSave").addEventListener("click",e=>{e.stopPropagation();const it=LB.list[LB.i];if(it)savePhoto(it.img,photoName(it));});
 
   // ---------- fiche d'un membre (toucher sa photo de profil) ----------
   document.addEventListener("click",e=>{
@@ -596,10 +679,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const close=()=>$("#dlgActions").close();
     const btn=(label,fn,cls="")=>el("button",{class:"btn ghost act "+cls,type:"button",onclick:()=>{close();fn();}},label);
     const text=isPhoto?(it.caption||""):it.text;
+    if(isPhoto)prefetchPhoto(it.img);
     $("#acBody").replaceChildren(...[
       el("div",{class:"emojirow"},...EMOJIS.map(e=>el("button",{type:"button",class:myR&&myR.emoji===e?"me":"","aria-label":"Réagir "+e,onclick:()=>{close();react(it,e);}},e))),
       btn("↩ Répondre",()=>startReply(ctx)),
       isPhoto?btn("🔍 Agrandir",()=>zoom(it.img,viewerList())):null,
+      isPhoto?btn("⤓ Enregistrer la photo",()=>savePhoto(it.img,photoName(it))):null,
       text?btn("📋 Copier le texte",async()=>{try{await navigator.clipboard.writeText(text);toast("Texte copié");}catch(e){toast("Copie impossible");}}):null,
       !isPhoto&&mine?btn("🗑 Supprimer",()=>deleteMessage(it),"danger"):null,
       el("p",{class:"legend",style:"text-align:center;margin:8px 0 0",text:(mine?"Toi":pName(it.uid))+" · "+hm(it.ts)})].filter(Boolean));

@@ -1111,11 +1111,63 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   });
 
   // ---------- code de récupération (sans e-mail) ----------
-  function openAccount(){$("#aCode").value="";openDlg("#dlgAccount");setTimeout(()=>$("#aCode").focus(),50);}
+  const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function emailErr(e,fallback){
+    return e.code==="bad_code"?"Code incorrect ou expiré. Vérifie-le, ou redemande un code."
+      :e.code==="no_account"?"Aucun compte Déclic avec cet e-mail."
+      :e.code==="email_taken"?"Cet e-mail est déjà utilisé par un autre compte."
+      :e.code==="rate_limited"?"Trop d’essais d’un coup. Attends une minute et réessaie."
+      :e.code==="bad_email"?"Cette adresse e-mail n’est pas valide."
+      :fallback||"Ça n’a pas marché. Vérifie ta connexion et réessaie.";
+  }
+  function openAccount(){
+    S.loginEmail=null;$("#aCode").value="";$("#aOtp").value="";$("#aStep1").hidden=false;$("#aStep2").hidden=true;$("#aGo").textContent="Continuer";
+    openDlg("#dlgAccount");setTimeout(()=>$("#aCode").focus(),50);
+  }
   $("#aGo").addEventListener("click",async()=>{
     const b=$("#aGo");b.disabled=true;$("#aErr").textContent="";
-    try{await S.account.login($("#aCode").value);toast("Compte retrouvé !");setTimeout(()=>location.reload(),600);return;}
-    catch(e){$("#aErr").textContent=e.code==="invalid_argument"?"Le code fait 16 caractères (4 groupes de 4).":e.code==="bad_code"?"Code incorrect. Vérifie-le et réessaie.":"Ça n’a pas marché. Vérifie ta connexion et réessaie.";}
+    const v=$("#aCode").value.trim();
+    try{
+      if(S.loginEmail){
+        await S.account.verifyLogin(S.loginEmail,$("#aOtp").value);
+        toast("Compte retrouvé !");setTimeout(()=>location.reload(),600);return;
+      }
+      if(v.includes("@")){
+        if(!EMAIL_RE.test(v))throw Object.assign(new Error(),{code:"bad_email"});
+        await S.account.sendLogin(v);
+        S.loginEmail=v;$("#aStep1").hidden=true;$("#aStep2").hidden=false;b.textContent="Valider";
+        $("#aSent").textContent=`On vient d’envoyer un code à ${v}. Regarde tes e-mails (et les indésirables).`;
+        setTimeout(()=>$("#aOtp").focus(),50);
+      }else{
+        await S.account.login(v);toast("Compte retrouvé !");setTimeout(()=>location.reload(),600);return;
+      }
+    }catch(e){
+      $("#aErr").textContent=e.code==="invalid_argument"?"Tape ton e-mail, ou ton code de 16 caractères (4 groupes de 4)."
+        :e.code==="bad_code"&&!S.loginEmail?"Code incorrect. Vérifie-le et réessaie.":emailErr(e);
+    }
+    b.disabled=false;
+  });
+  // Ajouter / changer l'e-mail du compte (depuis le profil).
+  function openEmail(){
+    S.pendingEmail=null;$("#eMail").value=S.authEmail||"";$("#eOtp").value="";$("#eStep1").hidden=false;$("#eStep2").hidden=true;$("#eGo").textContent="Recevoir le code";
+    openDlg("#dlgEmail");setTimeout(()=>$("#eMail").focus(),50);
+  }
+  $("#eGo").addEventListener("click",async()=>{
+    const b=$("#eGo");b.disabled=true;$("#eErr").textContent="";
+    try{
+      if(S.pendingEmail){
+        await S.account.confirmEmail(S.pendingEmail,$("#eOtp").value);
+        S.authEmail=S.pendingEmail;$("#dlgEmail").close();toast("E-mail enregistré");render();
+      }else{
+        const v=$("#eMail").value.trim().toLowerCase();
+        if(!EMAIL_RE.test(v))throw Object.assign(new Error(),{code:"bad_email"});
+        if(v===S.authEmail){$("#dlgEmail").close();b.disabled=false;return;}
+        await S.account.addEmail(v);
+        S.pendingEmail=v;$("#eStep1").hidden=true;$("#eStep2").hidden=false;b.textContent="Valider";
+        $("#eSent").textContent=`On vient d’envoyer un code à ${v}. Regarde tes e-mails (et les indésirables), puis tape-le ici.`;
+        setTimeout(()=>$("#eOtp").focus(),50);
+      }
+    }catch(e){$("#eErr").textContent=emailErr(e);}
     b.disabled=false;
   });
   async function createRecoveryCode(){
@@ -1215,11 +1267,15 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const choices=el("div",{class:"choices"},...NOTIF_TYPES.map(([k,label])=>el("label",{class:"switch"},
       el("input",{type:"checkbox",checked:prefs[k]!==false,onchange:e=>setNotif(k,e.target.checked)}),el("span",{text:label}))));
     const rAt=me.recoveryAt?new Date(me.recoveryAt).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}):null;
-    const account=el("div",{class:"setrow"},el("div",{},el("b",{text:"Code de récupération"}),
-        el("p",{text:rAt?`Créé le ${rAt}. Garde-le précieusement : sur un autre téléphone, choisis « J’ai déjà un compte » et tape ce code.`:"Crée un code pour retrouver ton compte (profil, groupes, points) si tu changes de téléphone. Pas d’e-mail, pas de mot de passe."})),
-      el("button",{class:rAt?"btn ghost small":"btn flash small",onclick:createRecoveryCode},rAt?"Nouveau code":"Créer mon code"));
+    const emailRow=el("div",{class:"setrow"},el("div",{},el("b",{text:"E-mail de récupération"}),
+        el("p",{text:S.authEmail?`${S.authEmail} — sur un autre appareil, choisis « J’ai déjà un compte » et tape cet e-mail : tu recevras un code.`:"Ajoute ton e-mail pour retrouver ton compte (profil, groupes, points) si tu changes de téléphone."})),
+      el("button",{class:S.authEmail?"btn ghost small":"btn flash small",onclick:openEmail},S.authEmail?"Changer":"Ajouter"));
+    // Avec un e-mail, le code de récupération n'est plus proposé (en créer un remplacerait l'e-mail du compte).
+    const account=S.authEmail?null:el("div",{class:"setrow"},el("div",{},el("b",{text:"Code de récupération"}),
+        el("p",{text:rAt?`Créé le ${rAt}. Garde-le précieusement : sur un autre téléphone, choisis « J’ai déjà un compte » et tape ce code.`:"Sans e-mail : un code à garder pour retrouver ton compte si tu changes de téléphone."})),
+      el("button",{class:"btn ghost small",onclick:createRecoveryCode},rAt?"Nouveau code":"Créer mon code"));
     return el("section",{class:"profile settings"},el("h2",{text:"Réglages"}),
-      account,
+      emailRow,...(account?[account]:[]),
       el("div",{class:"setrow setcol"},el("div",{class:"setline"},el("div",{},el("b",{text:"Notifications"}),el("p",{text:txt})),ctl),choices),
       el("div",{class:"setrow setcol"},el("div",{},el("b",{text:"Thème de l’application"}),
         el("p",{text:"Rien que pour toi. Dans un groupe qui a son propre thème, c’est celui du groupe qui s’affiche."})),
@@ -1240,6 +1296,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     catch(e){app.replaceChildren(el("p",{class:"notice",text:"Impossible de se connecter à Déclic. Vérifie ta connexion internet."}),el("div",{class:"row",style:"margin-top:12px"},el("button",{class:"btn",onclick:()=>location.reload()},"Réessayer")));return;}
     const {db,uid,account}=opened;
     S.db=db;S.uid=uid;S.account=account;S.prefillName="";
+    account.email().then(e=>{S.authEmail=e;if(S.editProfile)render();}).catch(()=>{});
     db.collection("profiles").limit(1000).onSnapshot(s=>{const m={};s.docs.forEach(d=>m[d.id]=d.data());S.profiles=m;S.profilesLoaded=true;render();},e=>{if(e.code==="unavailable")toast("Connexion perdue, nouvelle tentative…");S.profilesLoaded=true;render();});
     db.collection("groups").where("members","array-contains",uid).onSnapshot(s=>{S.groups=s.docs.map(d=>({id:d.id,...d.data()}));S.groupsLoaded=true;syncActivity();render();},e=>{if(e.code!=="unavailable")toast("Impossible de charger tes groupes.");});
     S.push=await pushState();

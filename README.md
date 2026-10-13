@@ -135,6 +135,9 @@ selon le cycle, l'énergie et la forme du jour.
 Tout reste sur le téléphone (aucun compte, aucune base à installer) et l'app marche sans réseau.
 Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/phase/** : ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
 
+**Vente sur Etsy :** l'app complète demande un code d'accès (fourni dans le PDF vendu) ; la démo **…/phase/?demo** reste libre.
+Fiche Etsy, images, PDF et outils : voir [`vente/LISEZMOI.md`](vente/LISEZMOI.md). Le PDF contenant le code n'est jamais dans le dépôt.
+
 ## Version avec serveur (auto-hébergée)
 
 Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.

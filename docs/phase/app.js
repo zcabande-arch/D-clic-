@@ -718,7 +718,22 @@ function itemByKey(k){ const [si,ii] = k.split("-").map(Number); return S.today.
 /* ---------- state & storage ---------- */
 let S = null, demo = false;
 let ui = {tab:"today", wiz:null, wizStep:0, override:0, finishing:false, rpe:null};
-const LS_KEY = "phase-gym-v1", LOOK_KEY = "phase-gym-look";
+const LS_KEY = "phase-gym-v1", LOOK_KEY = "phase-gym-look", ACCESS_KEY = "phase-gym-acces";
+/* ---------- accès réservé aux acheteuses ----------
+   L'app complète demande le code reçu dans le PDF Etsy. Seule l'empreinte SHA-256 du code est ici (le code lui-même
+   n'est jamais dans le dépôt) ; pour changer de code : node vente/outils/nouveau-code.mjs, puis remplacer ou ajouter
+   l'empreinte. La démo (?demo ou « Voir la démo ») reste libre. */
+const ACCESS_HASHES = ["795de80f1a4b4dd872f23a2f0247a249f55401b7f8c611aecd769b6ed24fe241"];
+const ETSY_URL = ""; // lien de l'annonce Etsy, à remplir une fois publiée (sinon le bouton d'achat est masqué)
+function isUnlocked(){ try { return localStorage.getItem(ACCESS_KEY)==="1"; } catch(e){ return false; } }
+function setUnlocked(){ try { localStorage.setItem(ACCESS_KEY, "1"); } catch(e){} }
+async function checkCode(raw){
+  const n = String(raw||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if (n.length < 8 || !(window.crypto && crypto.subtle)) return false;
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("phase-gym:"+n));
+  const hex = [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  return ACCESS_HASHES.includes(hex);
+}
 let saveTimer = null;
 function blank(){ return {v:2, profile:null, cycle:{lastStart:null,length:28,periodLen:5,starts:[]}, checkins:{}, sessions:[], lifts:{}, today:null}; }
 function makeDemo(){
@@ -773,14 +788,15 @@ function demoToday(){
 function boot(){
   let loaded = null;
   try { const raw = localStorage.getItem(LS_KEY); if (raw) loaded = JSON.parse(raw); } catch(e){}
-  if (loaded && loaded.profile) { S = Object.assign(blank(), loaded); demo = false; }
+  if (loaded && loaded.profile) { S = Object.assign(blank(), loaded); demo = false; setUnlocked(); } // déjà utilisatrice : on ne la bloque pas
   else if (/[?&]demo\b/.test(location.search)) startDemo();
+  else if (!isUnlocked()) { S = blank(); demo = false; ui.lock = true; }
   else { S = blank(); demo = false; ui.onb = {step:-1, d:onbDefaults()}; }
   /* Demande au navigateur de ne pas effacer les données de l'app quand le téléphone manque de place. */
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch(e){}
   render();
 }
-function startDemo(){ S = makeDemo(); demo = true; demoToday(); ui.onb = null; ui.tab = "today"; }
+function startDemo(){ S = makeDemo(); demo = true; demoToday(); ui.onb = null; ui.lock = false; ui.tab = "today"; }
 
 /* ---------- thème ---------- */
 function getLook(){ try { return Object.assign({theme:"auto", accent:"lime"}, JSON.parse(localStorage.getItem(LOOK_KEY)||"{}")); } catch(e){ return {theme:"auto", accent:"lime"}; } }
@@ -827,6 +843,7 @@ function renderTabs(){
 }
 const MENU_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h16"/></svg>';
 function render(){
+  if (ui.lock) { $("#nav").hidden = true; $("#app").innerHTML = viewLock(); renderFloat(); renderDrawer(); return; }
   if (ui.onb) {
     $("#nav").hidden = true;
     $("#app").innerHTML = ui.onb.step < 0 ? viewWelcome() : viewOnboarding();
@@ -837,7 +854,7 @@ function render(){
   if (ui.logging && !S.logDraft) ui.logging = false;
   const v = ui.tab==="today" ? (ui.build ? viewBuild() : ui.logging ? viewLog() : ui.wiz ? viewWizard() : viewToday()) : ui.tab==="cycle" ? viewCycle() : ui.tab==="stats" ? viewStats() : viewProfile();
   const top = ui.wiz || ((ui.logging || ui.build) && ui.tab==="today") ? "" : `<div class="top"><button class="iconbtn" data-act="menu" aria-label="Réglages" aria-expanded="${!!ui.menu}">${MENU_ICON}</button>${demo?`<span class="label">Mode exemple</span>`:""}</div>`;
-  const banner = demo && !ui.wiz && !ui.logging && !ui.build ? `<div class="banner"><p><b>Exemple</b> : profil d'Inès, données inventées. Crée ton profil pour que tout soit à toi.</p><button class="ob" data-act="start">Créer mon profil</button></div>` : "";
+  const banner = demo && !ui.wiz && !ui.logging && !ui.build ? `<div class="banner"><p><b>Exemple</b> : profil d'Inès, données inventées. Crée ton profil pour que tout soit à toi.</p><button class="ob" data-act="start">Créer mon profil</button>${ETSY_URL && !isUnlocked() ? `<a class="ob" style="text-decoration:none" href="${ETSY_URL}" target="_blank" rel="noopener">Acheter l'app</a>` : ""}</div>` : "";
   $("#app").innerHTML = `<div class="stack">${top}${banner}${v}</div>`;
   if (!toastOn) renderFloat();
   renderDrawer();
@@ -867,7 +884,30 @@ function renderDrawer(){
       <button data-act="import"><span>Restaurer une sauvegarde</span>${CHEV}</button>
       <button data-act="reset" style="color:#E5484D"><span>Tout effacer</span>${CHEV}</button></div>
       ${ui.confirmReset?`<div class="banner"><p>Effacer profil, cycle, charges et historique ? C'est définitif.</p><button class="ob danger" data-act="reset-yes">Oui, tout effacer</button></div>`:""}</div>`}
+    <div class="card"><details class="ph"><summary>Conditions d'utilisation</summary><div class="stack small" style="margin-top:10px;gap:8px;color:var(--soft)">
+      <p>Phase Gym est vendue pour un usage personnel. Le lien et le code d'accès ne doivent pas être partagés, revendus ou publiés.</p>
+      <p>Les séances, charges et explications sont des conseils généraux d'entraînement. Elles ne remplacent pas l'avis d'un·e professionnel·le de santé ou d'un·e coach. Écoute ton corps : arrête un exercice qui fait mal.</p>
+      <p>Phase Gym n'est ni un dispositif médical ni une méthode de contraception : les dates d'ovulation affichées sont des estimations et ne doivent jamais servir à éviter ou à obtenir une grossesse.</p>
+      <p>Les noms de salles cités servent seulement à pré-remplir l'équipement ; Phase Gym n'est liée à aucune de ces enseignes.</p></div></details>
+      <details class="ph"><summary>Confidentialité</summary><div class="stack small" style="margin-top:10px;gap:8px;color:var(--soft)">
+      <p>Tout ce que tu entres (profil, cycle, humeurs, séances) reste sur ton téléphone, dans ce navigateur. Rien n'est envoyé sur un serveur, il n'y a ni compte, ni publicité, ni pisteur.</p>
+      <p>Seules les polices d'écriture sont chargées depuis Google Fonts la première fois. Tu peux tout effacer à tout moment (« Tout effacer » plus haut).</p></div></details></div>
     <p class="note">Phase Gym n'est ni un outil médical ni une méthode de contraception. Règles très douloureuses, cycles très irréguliers ou humeur qui pèse vraiment avant les règles : parles-en à un·e médecin ou une sage-femme.</p>
+  </div>`;
+}
+
+function viewLock(){
+  return `<div class="welcome"><div class="card glow g-pink">
+    <div class="stack" style="gap:14px"><img class="logo" src="icons/icon-192.png" alt=""><p class="big">Phase Gym</p>
+    <p style="font-size:1.05rem">Des séances de salle qui suivent ton cycle, ton énergie et ta forme du jour.</p></div>
+    <form class="stack" style="gap:10px" data-form="unlock" autocomplete="off">
+      <label class="label" for="acc-code" style="color:rgba(255,255,255,.9)">Ton code d'accès</label>
+      <input id="acc-code" name="code" placeholder="PG-XXXX-XXXX-XXXX" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" style="text-transform:uppercase;letter-spacing:.06em">
+      <button class="pill block" type="submit"><span>Déverrouiller l'app</span><span class="plus">${ARROW_R}</span></button>
+      <p class="small" style="color:rgba(255,255,255,.85)">Il est dans le PDF reçu après ton achat sur Etsy (Etsy › Achats et avis › Télécharger les fichiers). À entrer une seule fois par appareil.</p>
+    </form></div>
+    <button class="ob" style="align-self:center" data-act="demo">Voir la démo</button>
+    ${ETSY_URL?`<a class="ob" style="align-self:center;text-decoration:none" href="${ETSY_URL}" target="_blank" rel="noopener">Acheter l'app sur Etsy</a>`:""}
   </div>`;
 }
 
@@ -901,7 +941,7 @@ function viewWelcome(){
     <ul class="feat"><li>Une séance construite chaque jour avec 10 petites questions.</li><li>Les charges qui montent toutes seules quand tu es prête.</li><li>Ton cycle expliqué : pourquoi tu te sens comme ça, phase par phase.</li><li>Tout reste sur ton téléphone. Pas de compte, pas de pub.</li></ul>
     <div class="stack" style="gap:10px"><p class="small" style="color:rgba(255,255,255,.85)">D'abord, quelques questions pour faire ton profil. Ça prend 2 minutes.</p>
     <button class="pill block" data-act="onb-go"><span>${redo?"Reprendre les questions":"C'est parti"}</span><span class="plus">${ARROW_R}</span></button></div></div>
-    ${redo?`<button class="ob" data-act="onb-cancel">Annuler</button>`:`<button class="ob" style="align-self:center" data-act="demo">Voir un exemple d'abord</button>`}
+    ${redo?`<button class="ob" data-act="onb-cancel">Annuler</button>`:`<button class="ob" style="align-self:center" data-act="demo">Voir un exemple d'abord</button><button class="linkbtn" style="align-self:center" data-act="import">J'ai une sauvegarde à restaurer</button>`}
   </div>`;
 }
 function viewOnboarding(){
@@ -997,7 +1037,7 @@ function viewToday(){
     ${ruler(plan.tier*25-10)}
     <p class="coach">${esc(plan.message)}</p>
     <ul class="why">${plan.why.map(w=>`<li>${esc(w)}</li>`).join("")}</ul>
-    <div class="row">${plan.custom ? `<button class="ob" data-act="b-edit">Modifier ma séance</button>${plan.custom==="random"?`<button class="ob" data-act="b-today-reroll">🎲 Relancer</button>`:""}<button class="ob" data-act="b-drop">Autre façon</button>` : `<button class="ob" data-act="ovr" data-v="-1" ${plan.tier<=1?"disabled":""}>Plus doux</button><button class="ob" data-act="ovr" data-v="1" ${plan.tier>=4?"disabled":""}>Plus intense</button><button class="ob" data-act="redo">Modifier mes réponses</button>`}</div></div>`;
+    <div class="row">${plan.custom ? `<button class="ob" data-act="b-edit">Modifier ma séance</button>${plan.custom==="random"?`<button class="ob" data-act="b-today-reroll">🎲 Relancer</button>`:""}<button class="ob" data-act="b-drop">Autre façon</button>` : `<button class="ob" data-act="ovr" data-v="-1" ${plan.tier<=1?"disabled":""}>Plus doux</button><button class="ob" data-act="ovr" data-v="1" ${plan.tier>=4?"disabled":""}>Plus intense</button><button class="ob" data-act="redo">Modifier mes réponses</button><button class="ob" data-act="b-drop">Autre façon</button>`}</div></div>`;
   if (plan.challenge) h += `<div class="banner"><p>${esc(plan.challenge)}</p></div>`;
   h += moodCard(ans, plan.phase, p.hormonal);
   plan.sections.forEach((sec,si)=>{
@@ -1620,7 +1660,7 @@ document.addEventListener("click", e=>{
   const act = b.dataset.act, v = b.dataset.v, t = todayISO();
   switch(act){
     case "tab": if (v!=="today") { ui.logging = false; ui.logPick = false; ui.build = null; } ui.tab = v; if (v!=="today") ui.wiz = null; if (v!=="profile") ui.draft = null; ui.confirmReset = false; window.scrollTo(0,0); break;
-    case "start": ui.menu = false; ui.onb = {step:0, d:onbDefaults()}; window.scrollTo(0,0); break;
+    case "start": ui.menu = false; if (!isUnlocked()) { S = blank(); demo = false; ui.lock = true; window.scrollTo(0,0); break; } ui.onb = {step:0, d:onbDefaults()}; window.scrollTo(0,0); break;
     case "demo": startDemo(); window.scrollTo(0,0); break;
     /* questions de profil */
     case "onb-go": ui.onb.step = 0; window.scrollTo(0,0); break;
@@ -1796,6 +1836,13 @@ document.addEventListener("input", e=>{
   if (el.dataset.logq !== undefined) { ui.logQ = el.value; const r = $("#lg-res"); if (r) r.innerHTML = pickerResults(); }
   if (el.dataset.onb && ui.onb) { ui.onb.d[el.dataset.onb] = el.value; if (el.dataset.onb==="name") { const nx = document.querySelector(".wiz-nav .pill"); if (nx) nx.disabled = !el.value.trim(); } }
   if (el.dataset.onbGmax !== undefined && ui.onb) ui.onb.d.gym = Object.assign({}, ui.onb.d.gym, {max:+el.value||null});
+});
+document.addEventListener("submit", async e=>{
+  if (e.target.dataset.form!=="unlock") return;
+  e.preventDefault();
+  const v = e.target.code.value;
+  if (await checkCode(v)) { setUnlocked(); ui.lock = false; S = blank(); demo = false; ui.onb = {step:-1, d:onbDefaults()}; render(); toast("Bienvenue dans Phase Gym !"); }
+  else { toast("Ce code ne marche pas. Vérifie-le dans ton PDF."); e.target.code.focus(); }
 });
 document.addEventListener("keydown", e=>{
   if (e.key==="Enter" && e.target.id==="lg-q" && e.target.value.trim()) { e.preventDefault(); const first = document.querySelector("#lg-res [data-act=log-add]"); (first && ui.logQ && first.querySelector("b")?.textContent.toLowerCase()===ui.logQ.trim().toLowerCase() ? first : document.querySelector("#lg-res [data-act=log-add-custom]"))?.click(); }

@@ -85,11 +85,34 @@
 
 <dialog id="dlgAccount">
   <h2>Retrouver mon compte</h2>
-  <p class="hint">Entre le code de récupération que tu as créé dans ton profil sur ton ancien appareil.</p>
-  <label for="aCode">Code de récupération</label>
-  <input type="text" id="aCode" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" style="text-transform:uppercase;letter-spacing:.08em">
+  <div id="aStep1">
+    <p class="hint">Entre l’e-mail ajouté dans ton profil, ou ton code de récupération.</p>
+    <label for="aCode">E-mail ou code de récupération</label>
+    <input type="text" id="aCode" autocapitalize="off" autocomplete="email" spellcheck="false" maxlength="120" placeholder="toi@exemple.fr">
+  </div>
+  <div id="aStep2" hidden>
+    <p class="hint" id="aSent"></p>
+    <label for="aOtp">Code reçu par e-mail</label>
+    <input type="text" id="aOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="letter-spacing:.2em;font-size:20px">
+  </div>
   <p class="err" id="aErr"></p>
-  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="aGo">Retrouver mon compte</button></div>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="aGo">Continuer</button></div>
+</dialog>
+
+<dialog id="dlgEmail">
+  <h2>Ton e-mail</h2>
+  <div id="eStep1">
+    <p class="hint">Il sert seulement à retrouver ton compte si tu changes de téléphone. Personne d’autre ne le voit.</p>
+    <label for="eMail">Adresse e-mail</label>
+    <input type="email" id="eMail" autocapitalize="off" autocomplete="email" spellcheck="false" maxlength="120" placeholder="toi@exemple.fr">
+  </div>
+  <div id="eStep2" hidden>
+    <p class="hint" id="eSent"></p>
+    <label for="eOtp">Code reçu par e-mail</label>
+    <input type="text" id="eOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" style="letter-spacing:.2em;font-size:20px">
+  </div>
+  <p class="err" id="eErr"></p>
+  <div class="row"><button class="btn ghost" data-close>Annuler</button><button class="btn" id="eGo">Recevoir le code</button></div>
 </dialog>
 
 <dialog id="dlgCode">

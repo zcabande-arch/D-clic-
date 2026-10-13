@@ -68,6 +68,17 @@ async function recoveryEmail(norm) {
   const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("declic:" + norm)));
   return `r-${Array.from(h.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("")}@declic-recup.invalid`;
 }
+const normEmail = (e) => String(e || "").trim().toLowerCase();
+const normOtp = (t) => String(t || "").replace(/\D/g, "");
+function emailError(err) {
+  const m = err.message || "";
+  if (/signups? not allowed|user not found/i.test(m)) return dbError("no_account", m);
+  if (/already (been )?registered|already exists|email_exists/i.test(m) || err.code === "email_exists") return dbError("email_taken", m);
+  if (/expired|invalid/i.test(m) && /token|otp|code/i.test(m)) return dbError("bad_code", m);
+  if (/rate|too many|security purposes/i.test(m) || err.status === 429) return dbError("rate_limited", m);
+  if (/invalid.*email|email.*invalid|validate email/i.test(m)) return dbError("bad_email", m);
+  return mapError(err);
+}
 function makeAccount(sb, notifyUrl) {
   return {
     async createCode() {
@@ -80,6 +91,28 @@ function makeAccount(sb, notifyUrl) {
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.code) throw dbError(j.error || "internal", j.detail || "Création du code impossible");
       return j.code;
+    },
+    // Récupération par e-mail : un code à 6 chiffres est envoyé (pas de lien, qui s'ouvrirait dans Safari et non dans l'app).
+    async email() {
+      const { data } = await sb.auth.getUser();
+      const e = data?.user?.email || "";
+      return e && !e.endsWith(".invalid") ? e : null;
+    },
+    async addEmail(email) {
+      const { error } = await sb.auth.updateUser({ email: normEmail(email) });
+      if (error) throw emailError(error);
+    },
+    async confirmEmail(email, token) {
+      const { error } = await sb.auth.verifyOtp({ email: normEmail(email), token: normOtp(token), type: "email_change" });
+      if (error) throw emailError(error);
+    },
+    async sendLogin(email) {
+      const { error } = await sb.auth.signInWithOtp({ email: normEmail(email), options: { shouldCreateUser: false } });
+      if (error) throw emailError(error);
+    },
+    async verifyLogin(email, token) {
+      const { error } = await sb.auth.verifyOtp({ email: normEmail(email), token: normOtp(token), type: "email" });
+      if (error) throw emailError(error);
     },
     async login(code) {
       const norm = normCode(code);

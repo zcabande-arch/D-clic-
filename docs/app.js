@@ -1002,7 +1002,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(vid){
         const blob=await prep;
         b.textContent="Envoi de la vidéo…";
-        extra={video:await S.db.uploadFile(blob),dur:Math.round(vid.dur*10)/10};
+        let url;
+        try{url=await S.db.uploadFile(blob);}
+        catch(e){throw Object.assign(e,{stage:"video",size:blob.size,vtype:blob.type});}
+        extra={video:url,dur:Math.round(vid.dur*10)/10};
       }
       await S.db.doc("groups/"+S.current).collection("photos").doc(`${d}_${pad(sl.hour)}_${S.uid}`).set({uid:S.uid,date:d,hour:sl.hour,ts:Date.now(),lateMin:sl.sinceMin,img:S.pendingShot,caption:$("#sCap").value.trim().slice(0,80),...extra});
       const g=S.groups.find(x=>x.id===S.current);
@@ -1012,7 +1015,17 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       recordSlot(d,sl.hour,sl.sinceMin).catch(()=>{});
       S.pendingShot=null;dropShotVideo();$("#dlgShot").close();S.scrollBottom=true;if(S.day!==d)setDay(d);
       toast(`${vid?"Vidéo":"Photo"} envoyée : +${after-before} pts`+(sl.sinceMin<=ON_TIME?" (à l’heure)":" (en retard)"));
-    }catch(e){$("#sErr").textContent=e&&e.code==="too_big"?"Cette vidéo est trop lourde. Filme moins longtemps.":e&&e.code==="quota_exceeded"?"Fichier trop lourd ou espace plein.":"L’envoi a échoué. Réessaie.";}
+    }catch(e){
+      e=e||{};const msg=String(e.message||"");
+      const mb=e.size?` (${(e.size/1e6).toFixed(1)} Mo)`:"";
+      // Stockage qui refuse les vidéos, ou base qui refuse le champ « video » : le script mise-a-jour-videos.sql n'a pas été lancé.
+      const notReady=(e.stage==="video"&&/mime|not supported|invalid.*type|415/i.test(msg))||(vid&&e.code==="permission_denied");
+      $("#sErr").textContent=e.code==="too_big"?"Cette vidéo est trop lourde. Filme moins longtemps."
+        :notReady?"Les vidéos ne sont pas encore activées : il faut lancer le script « mise-a-jour-videos.sql » dans Supabase."
+        :e.code==="quota_exceeded"?(vid?`Vidéo trop lourde pour le stockage${mb}. Si le script vidéos n’a pas été lancé dans Supabase, lance-le ; sinon filme moins longtemps.`:"Fichier trop lourd ou espace plein.")
+        :e.code==="unavailable"?"Pas de connexion. Réessaie."
+        :"L’envoi a échoué. Réessaie."+(vid&&msg?` (${msg.slice(0,90)})`:"");
+    }
     b.disabled=false;b.textContent=label;
   });
 

@@ -501,6 +501,7 @@ function renderWelcome(app) {
       <button class="btn ghost wide" id="wJoin">${ill("invite", "ill sm")} On m'a invité·e sur une liste</button>
       ${S.store?.account ? `<button class="link" id="wRecover">J'ai déjà un compte</button>` : ""}
     </div>
+    <p class="legal-links"><a href="legal.html#mentions">Mentions légales</a> · <a href="legal.html#confidentialite">Confidentialité</a> · <a href="legal.html#conditions">Conditions</a></p>
   </div>`;
   app.querySelectorAll("[data-kind]").forEach(
     (b) =>
@@ -665,7 +666,7 @@ function createForm(prefix, kind) {
         S.access === false
           ? `<div class="field access"><label for="${prefix}Access">Code d'accès</label>
         <input id="${prefix}Access" class="code-in" maxlength="9" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD-1234">
-        <p class="hint">Le code reçu après ton achat. Il sert une seule fois ; inviter ta famille, ta coloc ou tes amis reste gratuit.${S.store?.mode === "demo" ? " (Démonstration : DEMO-2026)" : ""}</p></div>`
+        <p class="hint">Le code reçu après ton achat. Il sert une seule fois ; inviter ta famille, ta coloc ou tes amis reste gratuit. <a href="legal.html#conditions">Conditions de vente</a>.${S.store?.mode === "demo" ? " (Démonstration : DEMO-2026)" : ""}</p></div>`
           : ""
       }
       <p class="err" id="${prefix}CErr"></p>
@@ -1149,6 +1150,11 @@ function usHtml() {
     <h3 class="sect">Rayons</h3>
     <ul class="group">
       ${row("uCatMode", catIll("epicerie", "ill xs"), "#F9DEC6", "Rayon des nouveaux articles", S.catMode === "ask" ? "Je choisis à chaque fois" : "Deviné automatiquement (modifiable)")}
+    </ul>
+    <h3 class="sect">À propos</h3>
+    <ul class="group">
+      <li><a class="growrow" href="legal.html#confidentialite"><span class="bubble" style="--tint:#E6DDF6">${ill("cle", "ill xs")}</span><span class="gmain"><span class="gname">Informations légales</span><small>Mentions, confidentialité, conditions de vente</small></span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></a></li>
+      <li><a class="growrow" href="mailto:pasltempssav@gmail.com?subject=Take%20Out"><span class="bubble" style="--tint:#F8D3E3">${ill("invite", "ill xs")}</span><span class="gmain"><span class="gname">Nous écrire</span><small>pasltempssav@gmail.com</small></span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3l3 3-3 3"/></svg></a></li>
     </ul>
     <h3 class="sect">Mon compte</h3>
     <ul class="group">

@@ -340,3 +340,9 @@ body.has-nav .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 .catcell .bubble{width:38px;height:38px}
 .catcell[aria-pressed="true"]{border-color:var(--ink);background:var(--surface)}
 .catcell:active{transform:scale(.97)}
+
+/* ---------- informations légales ---------- */
+.legal-links{text-align:center;font-size:.82rem;color:var(--muted);margin:26px 0 8px}
+.legal-links a{color:inherit}
+a.growrow{text-decoration:none}
+.field.access .hint a{color:inherit}

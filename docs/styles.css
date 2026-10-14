@@ -355,3 +355,14 @@ dialog.sheet .row{justify-content:flex-start;margin-top:10px}
 dialog.lb.zoomed{overflow:visible}
 dialog.lb.zoomed img{border-radius:0}
 dialog.lb.zoomed .lbinfo,dialog.lb.zoomed .lbsave{opacity:0;pointer-events:none}
+/* Vidéos courtes */
+.pic{position:relative}
+.playbadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;padding-left:4px;pointer-events:none}
+.durbadge{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:700;border-radius:999px;padding:3px 8px;pointer-events:none}
+.vidtag{position:absolute;left:10px;bottom:10px;border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;background:rgba(0,0,0,.6);color:#fff}
+.vidtag[hidden],.flipbtn[hidden]{display:none}
+dialog.lb video{display:block;max-width:94vw;max-height:88vh;border-radius:16px;background:#000}
+dialog.lb video[hidden],dialog.lb img[hidden]{display:none}
+.lbclose{position:absolute;top:10px;left:10px;z-index:2;border:0;border-radius:50%;width:36px;height:36px;font-size:16px;font-weight:700;background:rgba(0,0,0,.6);color:#fff}
+#lbVid.bump{animation:lbBump .25s ease-out}
+dialog.lb.isvid .lbinfo{bottom:auto;top:54px}

@@ -55,7 +55,7 @@
 
 <dialog id="dlgShot">
   <h2 id="sTitle">Ta photo</h2>
-  <div class="prevwrap"><img class="preview" id="sPrev" alt="Aperçu de ta photo"><button class="flipbtn" id="sFlip" type="button">⇆ Retourner</button></div>
+  <div class="prevwrap"><img class="preview" id="sPrev" alt="Aperçu de ta photo"><button class="flipbtn" id="sFlip" type="button">⇆ Retourner</button><span class="vidtag" id="sVidTag" hidden></span></div>
   <label for="sCap">Légende (facultatif)</label>
   <input type="text" id="sCap" maxlength="80" placeholder="Ce que tu fais, là, maintenant">
   <p class="err" id="sErr"></p>
@@ -136,7 +136,7 @@
   <div class="row"><button class="btn ghost" data-close>Fermer</button><button class="btn flash" id="mShare">Enregistrer ou partager</button></div>
 </dialog>
 
-<dialog id="dlgLb" class="lb"><img id="lbImg" alt=""><button id="lbSave" class="lbsave" type="button" aria-label="Enregistrer la photo">⤓ Enregistrer</button><div class="lbinfo" id="lbInfo" hidden><span id="lbWho"></span><span id="lbCount"></span></div></dialog>
+<dialog id="dlgLb" class="lb"><img id="lbImg" alt=""><video id="lbVid" playsinline controls loop preload="metadata" hidden></video><button id="lbClose" class="lbclose" type="button" aria-label="Fermer">✕</button><button id="lbSave" class="lbsave" type="button" aria-label="Enregistrer la photo">⤓ Enregistrer</button><div class="lbinfo" id="lbInfo" hidden><span id="lbWho"></span><span id="lbCount"></span></div></dialog>
 
 <input type="file" id="fileIn" accept="image/*" hidden>
 <div class="toast" id="toast" role="status"></div>

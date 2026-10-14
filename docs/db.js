@@ -281,6 +281,16 @@ function makeDb(sb, uid) {
 
   return {
     // Envoie une image (data URL) dans le stockage et renvoie son adresse publique.
+    // Envoie un fichier tel quel (vidéo) et renvoie son adresse publique.
+    async uploadFile(blob) {
+      const t = blob.type || "";
+      const ext = /mp4/.test(t) ? "mp4" : /quicktime/.test(t) ? "mov" : /webm/.test(t) ? "webm" : "jpg";
+      const type = t || (ext === "mov" ? "video/quicktime" : "video/mp4");
+      const path = `${uid}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await sb.storage.from("media").upload(path, blob, { contentType: type, cacheControl: "31536000", upsert: false });
+      if (error) throw mapError(error);
+      return sb.storage.from("media").getPublicUrl(path).data.publicUrl;
+    },
     async uploadImage(dataUrl) {
       return (await uploadMedia({ img: dataUrl })).img;
     },

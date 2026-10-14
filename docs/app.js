@@ -77,8 +77,15 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     showLb();$("#dlgLb").showModal();
   }
   function showLb(dir){
-    const it=LB.list[LB.i],img=$("#lbImg");
-    resetZoom();img.src=it.img;prefetchPhoto(it.img);
+    const it=LB.list[LB.i],img=$("#lbImg"),vd=$("#lbVid");
+    resetZoom();
+    $("#dlgLb").classList.toggle("isvid",!!it.video);
+    if(it.video){
+      img.hidden=true;vd.hidden=false;vd.poster=it.img;vd.src=it.video;
+      const p=vd.play();if(p&&p.catch)p.catch(()=>{});
+    }else{
+      stopLbVideo();vd.hidden=true;img.hidden=false;img.src=it.img;prefetchPhoto(it.img);
+    }
     img.classList.remove("from-up","from-down");
     if(dir){void img.offsetWidth;img.classList.add(dir>0?"from-down":"from-up");}
     const many=LB.list.length>1;
@@ -86,9 +93,11 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     $("#lbWho").textContent=it.uid?`${it.uid===S.uid?"Toi":pName(it.uid)} · ${it.hour}h`+(it.caption?` · ${it.caption}`:""):"";
     $("#lbCount").textContent=many?`${LB.i+1}/${LB.list.length}`:"";
   }
+  function stopLbVideo(){const vd=$("#lbVid");try{vd.pause();}catch(e){}if(vd.getAttribute("src")){vd.removeAttribute("src");vd.load();}}
+  const lbIsVideo=()=>!!(LB.list[LB.i]&&LB.list[LB.i].video);
   function stepLb(d){
     const j=LB.i+d;
-    if(j<0||j>=LB.list.length){const img=$("#lbImg");img.classList.remove("bump");void img.offsetWidth;img.classList.add("bump");return;}
+    if(j<0||j>=LB.list.length){const img=lbIsVideo()?$("#lbVid"):$("#lbImg");img.classList.remove("bump");void img.offsetWidth;img.classList.add("bump");return;}
     LB.i=j;showLb(d);
   }
   // Les photos visibles du jour, dans l'ordre (sans celles encore masquées du déclic en cours).
@@ -117,15 +126,16 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const mid=t=>({x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2});
     const center=()=>{const r=$("#lbImg").getBoundingClientRect();return{x:r.left+r.width/2-ZM.x,y:r.top+r.height/2-ZM.y};};
     d.addEventListener("click",e=>{
-      if(e.target.closest("button"))return;
+      if(e.target.closest("button")||e.target.closest("video"))return;
       if(LB.moved){LB.moved=false;return;}
       if(ZM.s>1){resetZoom();return;}   // photo agrandie : un toucher la remet à sa taille
       d.close();
     });
-    d.addEventListener("close",resetZoom);
+    d.addEventListener("close",()=>{resetZoom();stopLbVideo();});
+    $("#lbClose").addEventListener("click",e=>{e.stopPropagation();d.close();});
     d.addEventListener("gesturestart",e=>e.preventDefault());
     d.addEventListener("touchstart",e=>{
-      if(e.touches.length===2){
+      if(e.touches.length===2&&!lbIsVideo()){
         multi=true;LB.moved=true;pan=null;
         const m=mid(e.touches),c=center();
         pinch={d0:dist(e.touches),s0:ZM.s,qx:(m.x-c.x-ZM.x)/ZM.s,qy:(m.y-c.y-ZM.y)/ZM.s,c};
@@ -136,7 +146,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       pan=wasZoomed?{x0:ZM.x,y0:ZM.y}:null;
     },{passive:true});
     d.addEventListener("touchmove",e=>{
-      if(e.cancelable)e.preventDefault();
+      // Sur une vidéo, on laisse les commandes natives (barre de lecture) fonctionner.
+      if(e.cancelable&&!(lbIsVideo()&&e.target.closest("video")))e.preventDefault();
       if(pinch&&e.touches.length===2){
         const m=mid(e.touches);
         ZM.s=Math.max(1,Math.min(5,pinch.s0*dist(e.touches)/pinch.d0));
@@ -164,7 +175,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(ZM.s>1)return;
       const now=Date.now();if(now-lastWheel<350||Math.abs(e.deltaY)<20)return;lastWheel=now;stepLb(e.deltaY>0?1:-1);
     },{passive:false});
-    d.addEventListener("keydown",e=>{if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();stepLb(1);}else if(e.key==="ArrowUp"||e.key==="ArrowLeft"){e.preventDefault();stepLb(-1);}});
+    document.addEventListener("keydown",e=>{if(!d.open)return;if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();stepLb(1);}else if(e.key==="ArrowUp"||e.key==="ArrowLeft"){e.preventDefault();stepLb(-1);}});
   })();
 
   // ---------- enregistrer une photo ----------
@@ -179,9 +190,11 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     return p;
   }
   async function savePhoto(src,name){
-    const fname=(name||"declic-photo")+".jpg";
+    let fname=(name||"declic-photo")+".jpg";
     let blob=null;const p=prefetchPhoto(src);
     try{blob=await p;}catch(e){}
+    const ext=(blob&&blob.type||src).match(/mp4|quicktime|mov|webm/);
+    if(ext)fname=fname.replace(/\.jpg$/,"."+(ext[0]==="quicktime"?"mov":ext[0]));
     if(blob){
       const file=new File([blob],fname,{type:blob.type||"image/jpeg"});
       if(navigator.canShare&&navigator.canShare({files:[file]})){
@@ -194,7 +207,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const a=el("a",{href:src,download:fname,target:"_blank",rel:"noopener"});document.body.append(a);a.click();a.remove();
   }
   function photoName(it){return "declic-"+(it.uid?(it.uid===S.uid?"moi":pName(it.uid)).replace(/[^\p{L}\p{N}]+/gu,"-")+"-"+S.day+"-"+it.hour+"h":Date.now());}
-  $("#lbSave").addEventListener("click",e=>{e.stopPropagation();const it=LB.list[LB.i];if(it)savePhoto(it.img,photoName(it));});
+  $("#lbSave").addEventListener("click",e=>{e.stopPropagation();const it=LB.list[LB.i];if(it)savePhoto(it.video||it.img,photoName(it));});
 
   // ---------- fiche d'un membre (toucher sa photo de profil) ----------
   document.addEventListener("click",e=>{
@@ -299,6 +312,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   }
   function pickFile(target,camera){
     S.fileTarget=target;const f=$("#fileIn");
+    f.setAttribute("accept",target==="shot"?"image/*,video/*":"image/*");
     if(camera)f.setAttribute("capture",camera);else f.removeAttribute("capture");
     f.click();
   }
@@ -306,7 +320,17 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const f=e.target.files[0];e.target.value="";if(!f)return;
     try{
       if(S.fileTarget==="avatar"){S.draftAvatar=await squareAvatar(f);render();}
+      else if(S.fileTarget==="shot"&&isVideoFile(f)){
+        if(f.size>VIDEO_SRC_MAX){toast("Cette vidéo est trop lourde.");return;}
+        toast("Préparation de la vidéo…");
+        dropShotVideo();
+        let vid;try{vid=await openVideo(f);}catch(err){toast("Cette vidéo n’a pas pu être lue.");return;}
+        if(vid.dur>VIDEO_MAX_S+.5){vid.drop();toast(`Vidéo trop longue : ${VIDEO_MAX_S} secondes maximum.`);return;}
+        S.shotVideo=vid;S.shotFile=null;S.pendingShot=vid.poster;$("#sPrev").src=vid.poster;
+        $("#sFlip").hidden=true;$("#sVidTag").hidden=false;$("#sVidTag").textContent=`🎥 Vidéo · ${Math.max(1,Math.round(vid.dur))} s`;
+        $("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta vidéo de ${sl.hour}h`:"Ta vidéo";$("#sGo").textContent="Envoyer la vidéo";openDlg("#dlgShot");}
       else if(S.fileTarget==="shot"){
+        dropShotVideo();$("#sFlip").hidden=false;$("#sVidTag").hidden=true;$("#sGo").textContent="Envoyer la photo";
         S.shotFile=f;S.shotFront=await isFrontCamera(f);
         S.shotFlip=S.shotFront&&selfieFlipPref();
         S.pendingShot=await compress(f,undefined,undefined,S.shotFlip);$("#sPrev").src=S.pendingShot;updateFlipBtn();$("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta photo de ${sl.hour}h`:"Ta photo";openDlg("#dlgShot");}
@@ -540,7 +564,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const late=p.lateMin>ON_TIME;
     const bubble=el("div",{class:"bubble"},
       el("div",{class:"meta"},el("span",{class:"who",text:mine?"Toi":pName(p.uid)}),el("time",{text:hm(p.ts)}),late?el("span",{class:"late",text:`+${p.lateMin} min`}):null),
-      el("button",{class:"pic"+(veil?" veiled":""),"aria-label":veil?"Photo masquée":"Agrandir la photo de "+pName(p.uid),onclick:e=>{if(!veil)picTap(p,e.currentTarget);}},el("img",{src:p.img,alt:"",loading:"lazy",draggable:"false"})));
+      el("button",{class:"pic"+(veil?" veiled":""),"aria-label":veil?"Photo masquée":"Agrandir la photo de "+pName(p.uid),onclick:e=>{if(!veil)picTap(p,e.currentTarget);}},el("img",{src:p.img,alt:"",loading:"lazy",draggable:"false"}),p.video&&!veil?el("span",{class:"playbadge","aria-hidden":"true"},"▶"):null,p.video&&!veil&&p.dur?el("span",{class:"durbadge",text:`${Math.round(p.dur)} s`}):null));
     if(veil){bubble.append(el("p",{class:"veilnote",text:"Envoie ta photo pour la voir."}));return el("div",{class:"msg"},avEl(p.uid,32),bubble);}
     if(p.caption)bubble.append(el("p",{class:"caption",text:p.caption}));
     // reactions
@@ -679,12 +703,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const close=()=>$("#dlgActions").close();
     const btn=(label,fn,cls="")=>el("button",{class:"btn ghost act "+cls,type:"button",onclick:()=>{close();fn();}},label);
     const text=isPhoto?(it.caption||""):it.text;
-    if(isPhoto)prefetchPhoto(it.img);
+    if(isPhoto)prefetchPhoto(it.video||it.img);
     $("#acBody").replaceChildren(...[
       el("div",{class:"emojirow"},...EMOJIS.map(e=>el("button",{type:"button",class:myR&&myR.emoji===e?"me":"","aria-label":"Réagir "+e,onclick:()=>{close();react(it,e);}},e))),
       btn("↩ Répondre",()=>startReply(ctx)),
       isPhoto?btn("🔍 Agrandir",()=>zoom(it.img,viewerList())):null,
-      isPhoto?btn("⤓ Enregistrer la photo",()=>savePhoto(it.img,photoName(it))):null,
+      isPhoto?btn(it.video?"⤓ Enregistrer la vidéo":"⤓ Enregistrer la photo",()=>savePhoto(it.video||it.img,photoName(it))):null,
       text?btn("📋 Copier le texte",async()=>{try{await navigator.clipboard.writeText(text);toast("Texte copié");}catch(e){toast("Copie impossible");}}):null,
       !isPhoto&&mine?btn("🗑 Supprimer",()=>deleteMessage(it),"danger"):null,
       el("p",{class:"legend",style:"text-align:center;margin:8px 0 0",text:(mine?"Toi":pName(it.uid))+" · "+hm(it.ts)})].filter(Boolean));
@@ -701,7 +725,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(!isToday||sl.phase!=="open"||mineNow)return null;
     return el("div",{class:"bar open slim"},el("div",{class:"in"},
       el("div",{class:"txt"},el("span",{class:"l1","data-l1":"1"}),el("span",{class:"l2","data-clock":"1"})),
-      el("button",{class:"btn small",onclick:()=>pickFile("shot","environment")},"📷 Ma photo")));
+      el("button",{class:"btn small",onclick:()=>pickFile("shot","environment")},"📷 Photo / vidéo")));
   }
 
   let lastKey="";
@@ -865,6 +889,93 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // ---------- selfies : effet miroir ----------
   // L'iPhone montre le selfie en miroir pendant la prise, puis l'enregistre dans l'autre sens.
   // « ⇆ Retourner » corrige ; pour les selfies, le choix est retenu pour les suivants.
+  // ---------- vidéos courtes (à la place d'une photo) ----------
+  const VIDEO_MAX_S=15;            // durée maximale
+  const VIDEO_KEEP_BYTES=6e6;      // en dessous, la vidéo est envoyée telle quelle
+  const VIDEO_UP_MAX=24e6;         // taille maximale envoyée (le stockage accepte 25 Mo)
+  const VIDEO_SRC_MAX=400e6;       // au-delà, inutile d'essayer de la lire
+  const isVideoFile=f=>/^video\//.test(f.type||"")||/\.(mov|mp4|m4v|webm)$/i.test(f.name||"");
+  function dropShotVideo(){if(S.shotVideo){S.shotVideo.drop();S.shotVideo=null;}}
+  $("#dlgShot").addEventListener("close",()=>{if(!$("#sGo").disabled)dropShotVideo();});
+  // Charge la vidéo (muette, hors écran), vérifie sa durée et en tire une image d'aperçu.
+  async function openVideo(file){
+    const url=URL.createObjectURL(file);
+    const v=document.createElement("video");
+    v.muted=true;v.playsInline=true;v.setAttribute("playsinline","");v.preload="auto";
+    v.style.cssText="position:fixed;left:-10px;top:-10px;width:2px;height:2px;opacity:0;pointer-events:none";
+    document.body.append(v);
+    const drop=()=>{try{v.pause();}catch(e){}v.removeAttribute("src");v.load();v.remove();URL.revokeObjectURL(url);};
+    try{
+      await new Promise((res,rej)=>{
+        const t=setTimeout(()=>rej(new Error("timeout")),20000);
+        v.addEventListener("loadeddata",()=>{clearTimeout(t);res();},{once:true});
+        v.addEventListener("error",()=>{clearTimeout(t);rej(new Error("video"));},{once:true});
+        v.src=url;v.load();
+        const p=v.play();if(p&&p.then)p.then(()=>v.pause()).catch(()=>{});
+      });
+      v.pause();
+      // Certaines vidéos n'annoncent pas leur durée : on va à la fin pour la connaître.
+      if(!isFinite(v.duration)||!v.duration)await seekVideo(v,1e7);
+      const dur=isFinite(v.duration)?v.duration:0;
+      await seekVideo(v,Math.min(.1,dur/2||0));
+      const sc=Math.min(1,900/Math.max(v.videoWidth,v.videoHeight));
+      const c=document.createElement("canvas");c.width=Math.round(v.videoWidth*sc)||2;c.height=Math.round(v.videoHeight*sc)||2;
+      c.getContext("2d").drawImage(v,0,0,c.width,c.height);
+      return {file,v,url,dur,poster:c.toDataURL("image/jpeg",.75),drop,blob:null};
+    }catch(e){drop();throw e;}
+  }
+  function seekVideo(v,t){return new Promise(res=>{if(Math.abs(v.currentTime-t)<.01)return res();const to=setTimeout(res,3000);v.addEventListener("seeked",()=>{clearTimeout(to);res();},{once:true});v.currentTime=t;});}
+  // Choisit ce qui part : la vidéo d'origine si elle est légère, sinon une version réduite (720 px).
+  function prepareVideo(vid,onProgress){
+    if(vid.blob)return Promise.resolve(vid.blob);
+    const f=vid.file,type=f.type||(/\.mov$/i.test(f.name)?"video/quicktime":"video/mp4");
+    const original=f.type?f:new Blob([f],{type});
+    const small=f.size<=VIDEO_KEEP_BYTES&&/mp4|quicktime/.test(type);
+    const job=small?Promise.resolve(null):reencodeVideo(vid,onProgress).catch(()=>null);
+    return job.then(out=>{
+      const blob=out&&out.size<f.size?out:original;
+      if(blob.size>VIDEO_UP_MAX)throw Object.assign(new Error("too_big"),{code:"too_big"});
+      vid.blob=blob;return blob;
+    });
+  }
+  // Rejoue la vidéo dans un canevas réduit et l'enregistre (MediaRecorder), son compris.
+  // Tout ce qui doit se faire dans le geste de l'utilisateur (son, lecture) est fait avant la première attente.
+  function reencodeVideo(vid,onProgress){
+    if(typeof MediaRecorder==="undefined"||!HTMLCanvasElement.prototype.captureStream)return Promise.resolve(null);
+    const mime=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4;codecs=avc1,mp4a"].find(m=>{try{return MediaRecorder.isTypeSupported(m);}catch(e){return false;}});
+    if(!mime)return Promise.resolve(null);
+    const v=vid.v,sc=Math.min(1,720/Math.max(v.videoWidth,v.videoHeight));
+    const c=document.createElement("canvas");c.width=Math.max(2,Math.round(v.videoWidth*sc/2)*2);c.height=Math.max(2,Math.round(v.videoHeight*sc/2)*2);
+    const x=c.getContext("2d");x.drawImage(v,0,0,c.width,c.height);
+    const stream=c.captureStream(30);
+    let ac=null;
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;ac=new AC();
+      const src=ac.createMediaElementSource(v),dst=ac.createMediaStreamDestination();
+      src.connect(dst);dst.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
+      if(ac.state==="suspended")ac.resume().catch(()=>{});
+    }catch(e){ac=null;}
+    if(!ac)return Promise.resolve(null);   // sans le son, mieux vaut garder la vidéo d'origine
+    const rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:1600000,audioBitsPerSecond:96000});
+    const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+    v.muted=false;v.currentTime=0;
+    const playing=v.play();
+    rec.start(1000);
+    let raf=0,ended=false;
+    const draw=()=>{if(ended)return;x.drawImage(v,0,0,c.width,c.height);if(vid.dur)onProgress&&onProgress(Math.min(1,v.currentTime/vid.dur));raf=requestAnimationFrame(draw);};
+    draw();
+    return Promise.resolve(playing).then(()=>new Promise(res=>{
+      const to=setTimeout(res,(vid.dur+8)*1000);
+      v.addEventListener("ended",()=>{clearTimeout(to);res();},{once:true});
+    })).then(()=>new Promise(res=>{
+      ended=true;cancelAnimationFrame(raf);
+      rec.addEventListener("stop",res,{once:true});rec.stop();
+    })).then(()=>{
+      const out=new Blob(chunks,{type:mime.split(";")[0]});
+      return out.size>20000?out:null;
+    }).catch(()=>{try{rec.state!=="inactive"&&rec.stop();}catch(e){}return null;})
+      .finally(()=>{ended=true;cancelAnimationFrame(raf);try{v.pause();v.muted=true;}catch(e){}ac&&ac.close().catch(()=>{});});
+  }
   async function isFrontCamera(file){
     try{const t=new TextDecoder("latin1").decode(await file.slice(0,131072).arrayBuffer());return /front camera|frontcamera|front-facing|FaceTime/i.test(t);}
     catch(e){return false;}
@@ -883,17 +994,26 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     const sl=slotNow();if(!S.pendingShot||!S.current)return;
     if(sl.phase!=="open"){$("#sErr").textContent="Aucun déclic en cours (de 8h à 20h).";return;}
     const d=todayKey(),b=$("#sGo");b.disabled=true;
+    const label=b.textContent,vid=S.shotVideo;
+    // Le réencodage (H.264, lisible partout) démarre tout de suite, dans le geste de l'utilisateur (nécessaire pour garder le son sur iPhone).
+    const prep=vid?prepareVideo(vid,pc=>{b.textContent=`Préparation… ${Math.round(pc*100)} %`;}):null;
     try{
-      await S.db.doc("groups/"+S.current).collection("photos").doc(`${d}_${pad(sl.hour)}_${S.uid}`).set({uid:S.uid,date:d,hour:sl.hour,ts:Date.now(),lateMin:sl.sinceMin,img:S.pendingShot,caption:$("#sCap").value.trim().slice(0,80)});
+      let extra={};
+      if(vid){
+        const blob=await prep;
+        b.textContent="Envoi de la vidéo…";
+        extra={video:await S.db.uploadFile(blob),dur:Math.round(vid.dur*10)/10};
+      }
+      await S.db.doc("groups/"+S.current).collection("photos").doc(`${d}_${pad(sl.hour)}_${S.uid}`).set({uid:S.uid,date:d,hour:sl.hour,ts:Date.now(),lateMin:sl.sinceMin,img:S.pendingShot,caption:$("#sCap").value.trim().slice(0,80),...extra});
       const g=S.groups.find(x=>x.id===S.current);
       const before=scoreDay(S.uid,d,g).pts;
       const after=scoreDay(S.uid,d,g,{...slotsOf(S.uid,d),[sl.hour]:sl.sinceMin}).pts;
       S.backfilled[`${d}_${pad(sl.hour)}_${S.uid}`]=1;
       recordSlot(d,sl.hour,sl.sinceMin).catch(()=>{});
-      S.pendingShot=null;$("#dlgShot").close();S.scrollBottom=true;if(S.day!==d)setDay(d);
-      toast(`Photo envoyée : +${after-before} pts`+(sl.sinceMin<=ON_TIME?" (à l’heure)":" (en retard)"));
-    }catch(e){$("#sErr").textContent=e&&e.code==="quota_exceeded"?"Espace plein pour ce groupe.":"L’envoi a échoué. Réessaie.";}
-    b.disabled=false;
+      S.pendingShot=null;dropShotVideo();$("#dlgShot").close();S.scrollBottom=true;if(S.day!==d)setDay(d);
+      toast(`${vid?"Vidéo":"Photo"} envoyée : +${after-before} pts`+(sl.sinceMin<=ON_TIME?" (à l’heure)":" (en retard)"));
+    }catch(e){$("#sErr").textContent=e&&e.code==="too_big"?"Cette vidéo est trop lourde. Filme moins longtemps.":e&&e.code==="quota_exceeded"?"Fichier trop lourd ou espace plein.":"L’envoi a échoué. Réessaie.";}
+    b.disabled=false;b.textContent=label;
   });
 
   $("#cGo").addEventListener("click",async()=>{

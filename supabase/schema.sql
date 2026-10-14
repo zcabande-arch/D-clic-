@@ -42,7 +42,8 @@ $$;
 create or replace function public.media_ok(d jsonb) returns boolean
 language sql immutable as $$
   select (coalesce(d->>'img', '') = '' or (d->>'img') like '%/storage/v1/object/public/media/%')
-     and (coalesce(d->>'avatar', '') = '' or (d->>'avatar') like '%/storage/v1/object/public/media/%');
+     and (coalesce(d->>'avatar', '') = '' or (d->>'avatar') like '%/storage/v1/object/public/media/%')
+     and (coalesce(d->>'video', '') = '' or (d->>'video') like '%/storage/v1/object/public/media/%');
 $$;
 
 create or replace function public.is_group_sub(c text) returns boolean
@@ -198,7 +199,7 @@ end $$;
 -- ---------- stockage des photos ----------
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('media', 'media', true, 2000000, array['image/jpeg', 'image/png', 'image/webp'])
+values ('media', 'media', true, 25000000, array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm'])
 on conflict (id) do nothing;
 
 drop policy if exists media_insert on storage.objects;

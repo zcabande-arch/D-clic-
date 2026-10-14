@@ -161,7 +161,7 @@ async function onPhoto(coll: unknown, id: unknown) {
   const name = await nameOf(author);
   const payload = {
     title: g.data.name || "Déclic",
-    body: `📸 ${name} a publié sa photo de ${photo.data.hour}h` + (photo.data.caption ? ` : « ${photo.data.caption} »` : ""),
+    body: `${photo.data.video ? "🎥" : "📸"} ${name} a publié sa ${photo.data.video ? "vidéo" : "photo"} de ${photo.data.hour}h` + (photo.data.caption ? ` : « ${photo.data.caption} »` : ""),
     tag: `photo-${group}-${photo.data.hour}`,
   };
   return json({ sent: await notifyUids(others, payload, "photo", group) });
@@ -379,7 +379,7 @@ async function purgeOldPhotos() {
       ) || [];
       if (!rows.length) break;
       const paths = rows
-        .map((r: { data: { img?: string } }) => r.data.img || "")
+        .flatMap((r: { data: { img?: string; video?: string } }) => [r.data.img || "", r.data.video || ""])
         .filter((u: string) => u.includes(MEDIA_MARK))
         .map((u: string) => u.slice(u.indexOf(MEDIA_MARK) + MEDIA_MARK.length));
       if (paths.length) must(await sb.storage.from("media").remove(paths), "suppression fichiers");

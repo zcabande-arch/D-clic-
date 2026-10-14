@@ -1023,8 +1023,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       $("#sErr").textContent=e.code==="too_big"?"Cette vidéo est trop lourde. Filme moins longtemps."
         :notReady?"Les vidéos ne sont pas encore activées : il faut lancer le script « mise-a-jour-videos.sql » dans Supabase."
         :e.code==="quota_exceeded"?(vid?`Vidéo trop lourde pour le stockage${mb}. Si le script vidéos n’a pas été lancé dans Supabase, lance-le ; sinon filme moins longtemps.`:"Fichier trop lourd ou espace plein.")
-        :e.code==="unavailable"?"Pas de connexion. Réessaie."
-        :"L’envoi a échoué. Réessaie."+(vid&&msg?` (${msg.slice(0,90)})`:"");
+        :e.code==="unavailable"||/load failed|failed to fetch|network/i.test(msg)?(vid?`La vidéo n’a pas pu partir${mb}. Vérifie ta connexion et réessaie.`:"Pas de connexion. Réessaie.")
+        :"L’envoi a échoué. Réessaie."+(vid?` [${e.stage||"doc"} · ${e.code||"?"}${msg?" · "+msg.slice(0,90):""}]`:"");
     }
     b.disabled=false;b.textContent=label;
   });

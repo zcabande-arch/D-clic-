@@ -109,6 +109,9 @@ tr{break-inside:avoid}
 .legend{display:flex;gap:6mm;font-size:8.8pt;margin-top:1mm}
 .legend span{display:inline-flex;align-items:center;gap:2mm}
 .legend i{width:8mm;height:1.2mm;border-radius:1mm;display:inline-block}
+table.suivi td{height:5.6mm;white-space:nowrap;padding:0 2mm;border:.25mm solid #e2dfd8}
+table.suivi th{border:.25mm solid #e2dfd8;font-size:7.6pt}
+table.suivi .d i{width:3.2mm;height:3.2mm}
 .toc li{display:flex;justify-content:space-between;border-bottom:.25mm dotted #ccc;padding:2mm 0;font-size:11pt}
 `;
 
@@ -122,6 +125,7 @@ parts.push(`<section style="break-before:auto"><div class="stack" style="gap:7mm
   <li><span>2. Que faire selon ton humeur</span><span>6 humeurs</span></li>
   <li><span>3. Les exercices</span><span>${EXOS.length} fiches illustrées</span></li>
   <li><span>4. Le récap en un coup d'œil</span><span>tableau couleur</span></li>
+  <li><span>Mon suivi du mois</span><span>à imprimer</span></li>
   <li><span>Bon à savoir</span><span>santé, sources</span></li></ul>
   <h2 style="margin-top:6mm">Comment lire ce livre</h2>
   <p>Chaque exercice porte quatre pastilles, une par phase du cycle, et des étiquettes d'humeur. Elles te disent d'un coup d'œil s'il est fait pour toi aujourd'hui.</p>
@@ -161,7 +165,7 @@ parts.push(`<section><div class="stack" style="gap:5mm"><h2>Contraception hormon
   <h2 style="margin-top:4mm">Tout le monde n'est pas pareil</h2>
   <p>En moyenne, les hormones jouent sur l'humeur et l'énergie, mais beaucoup moins qu'on le croit pour la plupart des femmes : une revue de 47 études a trouvé que le sommeil, le stress, la santé et le soutien des proches pèsent souvent plus que la phase.</p>
   <p>À l'inverse, certaines femmes sont très sensibles aux variations hormonales, même avec des taux normaux. Environ 3 à 8 % ont un trouble dysphorique prémenstruel (TDPM) : tristesse, anxiété ou colère fortes chaque mois avant les règles. Ça se soigne : parles-en à un·e médecin ou une sage-femme.</p>
-  <div class="box"><span class="kick">L'astuce</span><p style="margin-top:1.5mm">Note pendant 2 ou 3 mois ton énergie et ton humeur avant chaque séance (l'app Phase Gym le fait pour toi). Tu verras tes propres tendances, qui comptent plus que n'importe quelle moyenne.</p></div></div></section>`);
+  <div class="box"><span class="kick">L'astuce</span><p style="margin-top:1.5mm">Note pendant 2 ou 3 mois ton énergie et ton humeur avant chaque séance (le tableau « Mon suivi du mois » à la fin du livre est fait pour ça). Tu verras tes propres tendances, qui comptent plus que n'importe quelle moyenne.</p></div></div></section>`);
 
 // Partie 2
 parts.push(`<section><div class="part"><span class="n">02</span><h1>Que faire selon<br>ton humeur</h1><p>Six humeurs, ce qui les explique souvent, le genre de séance qui fait du bien et les exercices à choisir.</p></div></section>`);
@@ -195,9 +199,17 @@ parts.push(`<section><div class="stack" style="gap:4mm"><span class="kick">Parti
   </tbody></table>
   <p class="muted" style="font-size:8.5pt">${Object.keys(MOODS).map((k) => `${MOODS[k].e} ${MOODS[k].n}`).join(" · ")}</p></div></section>`);
 
+// Mon suivi du mois (à imprimer)
+parts.push(`<section><div class="stack" style="gap:3mm"><span class="kick">À imprimer ou à remplir sur tablette</span><h2>Mon suivi du mois</h2>
+  <p class="muted" style="font-size:9pt">Chaque jour : le jour de ton cycle, ta phase (colorie la pastille), ton humeur, ton énergie de 1 à 5 et ta séance. Après 2 ou 3 mois, tu verras tes propres tendances.</p>
+  <table class="suivi"><thead><tr><th style="width:10mm">Date</th><th style="width:12mm">Jour</th><th style="width:26mm">Phase</th><th>Humeur</th><th style="width:24mm">Énergie</th><th>Séance</th></tr></thead><tbody>
+  ${Array.from({ length: 31 }, (_, i) => `<tr><td class="muted">${i + 1}</td><td></td><td>${PHASES.map((ph) => `<span class="d l0" style="--c:${ph.c};margin-right:1.2mm"><i></i></span>`).join("")}</td><td></td><td class="muted" style="font-size:7.5pt;letter-spacing:.15em;white-space:nowrap">1 2 3 4 5</td><td></td></tr>`).join("")}
+  </tbody></table>
+  <p class="muted" style="font-size:8pt">${PHASES.map((ph) => `<span style="color:${ph.c}">●</span> ${ph.n}`).join(" · ")} · Humeurs : ${Object.keys(MOODS).map((k) => `${MOODS[k].e} ${MOODS[k].n}`).join(" · ")}</p></div></section>`);
+
 // Bon à savoir
 parts.push(`<section><div class="stack" style="gap:5mm"><h2>Bon à savoir</h2>
-  <div class="box hl" style="--c:#E3197C"><h3>Santé</h3><p style="margin-top:1.5mm">Ce livre donne des conseils généraux d'entraînement. Il ne remplace pas l'avis d'un·e professionnel·le de santé ou d'un·e coach. Arrête un exercice qui fait mal. Règles très douloureuses, cycles très irréguliers ou humeur qui pèse vraiment avant les règles : parles-en à un·e médecin ou une sage-femme. Ni ce livre ni l'app ne sont une méthode de contraception.</p></div>
+  <div class="box hl" style="--c:#E3197C"><h3>Santé</h3><p style="margin-top:1.5mm">Ce livre donne des conseils généraux d'entraînement. Il ne remplace pas l'avis d'un·e professionnel·le de santé ou d'un·e coach. Arrête un exercice qui fait mal. Règles très douloureuses, cycles très irréguliers ou humeur qui pèse vraiment avant les règles : parles-en à un·e médecin ou une sage-femme. Ce livre n'est pas une méthode de contraception.</p></div>
   <div class="box"><h3>Les bases qui comptent plus que tout</h3><ul class="plain" style="margin-top:2mm"><li>● Échauffe-toi 5 à 10 minutes avant chaque séance.</li><li>● La bonne charge : les 2 dernières répétitions sont dures mais propres.</li><li>● Monte la charge quand tu fais le haut de la fourchette de répétitions à toutes les séries.</li><li>● Laisse 48 h avant de retravailler le même muscle.</li><li>● Dors, mange assez de protéines, bois : c'est là que tu progresses.</li></ul></div>
   <div class="box"><h3>Sources</h3><ul class="plain muted" style="margin-top:2mm;font-size:9pt">${SOURCES.map((s) => `<li>${s}</li>`).join("")}</ul></div>
   <p class="muted" style="font-size:8.5pt">Phase Gym · usage personnel · ne pas partager ni revendre. Les illustrations en couleur ont été créées avec l'aide d'une IA.</p></div></section>`);

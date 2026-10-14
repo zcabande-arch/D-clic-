@@ -179,7 +179,7 @@ parts.push(`<section><div class="part"><span class="n">03</span><h1>Les exercice
 for (const z of ZONES) {
   const list = EXOS.filter((e) => e.z === z);
   parts.push(`<section><div class="zone"><span class="dot9">${String(ZONES.indexOf(z) + 1).padStart(2, "0")}</span><h2>${z}</h2></div>
-  ${list.map((e) => { const h = ill(e.v), isImg = h.startsWith("<img");
+  ${list.map((e) => { const h = ill(e.v), isImg = h.startsWith("<img") && !h.includes(".webp");
     return `<article class="ex"><div class="pic ${h ? (isImg ? "dark" : "") : "none"}">${h || "♥"}</div><div>
       <h3>${esc(e.n)}</h3><p class="meta">${esc(e.mus)} · <span>${esc(e.vars)}</span></p>
       <ol>${e.pas.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>

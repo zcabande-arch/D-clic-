@@ -543,9 +543,8 @@ const illCache = {};
 const SPRITES = {
   "Tirage vertical":"tirage", "Tirage vertical à la machine guidée":"tirage2", "Tractions assistées (machine)":"traction",
   "Presse à cuisses":"presse", "Presse à cuisses guidée (à charge sélective)":"presse", "Mollets à la presse":"presse",
-  "Rowing assis à la poulie":"rowmachine", "Rowing assis à la machine guidée":"rowmachine", "Rowing haltère un bras":"row1", "Rowing haltères buste penché":"rowbanc",
-  "Kickback à la poulie":"kickcable", "Kickback à la Smith machine (pied sur la barre)":"kickmachine", "Kickback au sol avec élastique":"kickfloor",
-  "Développé couché à la machine":"pecdeck", "Développé incliné à la machine":"pecdeck", "Pec deck (butterfly)":"fly",
+  "Rowing assis à la poulie":"rowmachine", "Rowing haltère un bras":"row1", "Rowing haltères buste penché":"rowbanc",
+  "Kickback à la poulie":"kickcable", "Kickback à la Smith machine (pied sur la barre)":"kickmachine", "Kickback au sol avec élastique":"kickfloor", "Développé incliné à la machine":"pecdeck", "Pec deck (butterfly)":"fly",
   "Leg curl allongé":"legcurl", "Développé militaire haltères":"ohpseat", "Développé Arnold haltères":"ohpseat",
   "Squat à la barre":"squatbarre", "Squat à la Smith machine":"smithsquat", "Soulevé de terre roumain (barre)":"rdl",
   "Fentes marchées haltères":"fente", "Fentes arrière haltères":"fente", "Fentes arrière kettlebell":"fente", "Fentes bulgares haltères":"bulgare",
@@ -553,12 +552,14 @@ const SPRITES = {
   "Curl biceps haltères":"curl2", "Curl marteau haltères":"curl", "Élévations latérales haltères":"latraise", "Face pull à la poulie":"facepull",
   "Planche sur les avant-bras":"planche", "Hip thrust à la barre":"hipthrust", "Kettlebell swing":"kbswing", "Swing haltère":"kbswing",
   "Squat sumo kettlebell":"kbsumo", "Squat sumo haltère":"kbsumo", "Extension lombaire au banc à 45°":"lombaires", "Extension au banc à 45° avec disque":"lombaires",
-  "Step-up sur box haltères":"stepup", "Step-up sur box (poids du corps)":"stepup", "Dips entre deux bancs":"dipsbanc",
-  "Crunch au sol":"crunch", "Pompes (sur un banc si besoin)":"pompes", "Mountain climbers":"pompes", "Russian twist (médecine-ball)":"twist",
-  "Vélo droit":"velo", "Biking virtuel":"velo", "Rameur":"rameur", "Tapis de course":"tapis", "Tapis incliné (marche)":"tapis", "Battle ropes":"battle"
+  "Step-up sur box haltères":"stepup", "Dips entre deux bancs":"dipsbanc",
+  "Crunch au sol":"crunch", "Pompes (sur un banc si besoin)":"pompes", "Russian twist (médecine-ball)":"twist",
+  "Vélo droit":"velo", "Biking virtuel":"velo", "Rameur":"rameur", "Tapis de course":"tapis", "Tapis incliné (marche)":"tapis", "Battle ropes":"battle",
+  /* 2e planche (fond transparent, en WebP) */
+  "Développé couché à la machine":"s2-pecmachine.webp", "Élévations latérales à la machine":"s2-latmachine.webp", "Développé épaules à la machine":"s2-epaulesmachine.webp", "Oiseau à la machine (pec deck inversé)":"s2-oiseaumachine.webp", "Rowing assis à la machine guidée":"s2-rowmachine.webp", "Leg extension":"s2-legext.webp", "Hip thrust haltère au banc":"s2-hipdb.webp", "Goblet squat (haltère)":"s2-goblet.webp", "Step-up sur box (poids du corps)":"s2-stepup.webp", "Goblet squat kettlebell":"s2-gobletkb.webp", "Mollets haltères sur une marche":"s2-mollets.webp", "Mollets debout à la Smith machine":"s2-mollets.webp", "Adducteurs à la machine":"s2-adducteurs.webp", "Abduction à la machine":"s2-adducteurs.webp", "Leg curl assis":"s2-legcurlassis.webp", "Adduction à la poulie basse":"s2-addpoulie.webp", "Abduction à la poulie basse":"s2-abdpoulie.webp", "Gainage latéral":"s2-gainagelat.webp", "Mountain climbers":"s2-mountain.webp", "Relevés de jambes au sol":"s2-releves.webp", "Relevés de jambes à la chaise romaine":"s2-chaise.webp", "Marche latérale avec élastique":"s2-marchelat.webp", "Pont fessier une jambe, pieds sur banc":"s2-pont.webp", "Rowing aux sangles (TRX)":"s2-rowelastique.webp", "Pallof press à l'élastique":"s2-pallof.webp", "Pallof press à la poulie":"s2-pallof.webp", "Extension triceps haltère au-dessus de la tête":"s2-trioverhead.webp", "Développé incliné haltères":"s2-incline.webp", "Écarté haltères couché":"s2-ecarte.webp", "Développé couché haltères":"s2-couche.webp", "Élévations frontales haltères":"s2-frontales.webp", "Élévations frontales à la poulie basse":"s2-frontbarre.webp", "Curl barre EZ":"s2-curlez.webp", "Rowing barre buste penché":"s2-rowbarre.webp", "Dips assistés (machine)":"s2-dipsassist.webp", "Pull-over haltère couché":"s2-pulloverdb.webp", "Barre au front (barre EZ)":"s2-barrefront.webp", "Soulevé de terre roumain haltères":"s2-rdldb.webp"
 };
 function illustration(ill, name){
-  if (name && SPRITES[name]) return `<img src="ex/${SPRITES[name]}.jpg" alt="" loading="lazy" decoding="async">`;
+  if (name && SPRITES[name]) { const f = SPRITES[name]; return `<img src="ex/${f.includes(".") ? f : f+".jpg"}" alt="" loading="lazy" decoding="async">`; }
   if (!ill) return "";
   const key = ill.join("|"); if (illCache[key]) return illCache[key];
   const fn = POSES[ill[0]]; if (!fn) return "";

@@ -5,7 +5,7 @@ Ce dossier contient tout ce qu'il faut pour vendre l'app.
 | Élément | Où |
 | --- | --- |
 | Fiche Etsy (titre, description, mots-clés, prix, messages) | [`fiche-etsy.md`](fiche-etsy.md) |
-| Images de l'annonce (3000 × 2250) | [`images/`](images) |
+| Images de l'annonce (3000 × 2250), logo et bannière de la boutique | [`images/`](images) |
 | PDF livré aux acheteuses (lien + code) | `prive/Phase-Gym-acces.pdf`, **jamais dans Git** (ignoré par `.gitignore`) |
 | Livre PDF « Bouge avec ton cycle » (49 exercices, code couleur cycle et humeurs) | `prive/Phase-Gym-livre-exercices.pdf`, refait avec `node vente/outils/livre.mjs http://localhost:8766/phase/ vente/prive/Phase-Gym-livre-exercices.pdf` (contenu dans `outils/livre-donnees.mjs`) |
 | Outils pour refaire tout ça | [`outils/`](outils) |

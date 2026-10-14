@@ -539,7 +539,26 @@ const POSES = {
     arms:[[[88,60],[80,80],[90,94]], [[112,60],[120,80],[110,94]]], front:band([84,124],[116,124])})
 };
 const illCache = {};
-function illustration(ill){
+/* Dessins en couleur (dossier ex/) pour les versions d'exercices qui en ont un ; les autres gardent le dessin au trait. */
+const SPRITES = {
+  "Tirage vertical":"tirage", "Tirage vertical à la machine guidée":"tirage2", "Tractions assistées (machine)":"traction",
+  "Presse à cuisses":"presse", "Presse à cuisses guidée (à charge sélective)":"presse", "Mollets à la presse":"presse",
+  "Rowing assis à la poulie":"rowmachine", "Rowing assis à la machine guidée":"rowmachine", "Rowing haltère un bras":"row1", "Rowing haltères buste penché":"rowbanc",
+  "Kickback à la poulie":"kickcable", "Kickback à la Smith machine (pied sur la barre)":"kickmachine", "Kickback au sol avec élastique":"kickfloor",
+  "Développé couché à la machine":"pecdeck", "Développé incliné à la machine":"pecdeck", "Pec deck (butterfly)":"fly",
+  "Leg curl allongé":"legcurl", "Développé militaire haltères":"ohpseat", "Développé Arnold haltères":"ohpseat",
+  "Squat à la barre":"squatbarre", "Squat à la Smith machine":"smithsquat", "Soulevé de terre roumain (barre)":"rdl",
+  "Fentes marchées haltères":"fente", "Fentes arrière haltères":"fente", "Fentes arrière kettlebell":"fente", "Fentes bulgares haltères":"bulgare",
+  "Extension triceps à la poulie":"triceps", "Pull-over à la poulie haute (bras tendus)":"pullover",
+  "Curl biceps haltères":"curl2", "Curl marteau haltères":"curl", "Élévations latérales haltères":"latraise", "Face pull à la poulie":"facepull",
+  "Planche sur les avant-bras":"planche", "Hip thrust à la barre":"hipthrust", "Kettlebell swing":"kbswing", "Swing haltère":"kbswing",
+  "Squat sumo kettlebell":"kbsumo", "Squat sumo haltère":"kbsumo", "Extension lombaire au banc à 45°":"lombaires", "Extension au banc à 45° avec disque":"lombaires",
+  "Step-up sur box haltères":"stepup", "Step-up sur box (poids du corps)":"stepup", "Dips entre deux bancs":"dipsbanc",
+  "Crunch au sol":"crunch", "Pompes (sur un banc si besoin)":"pompes", "Mountain climbers":"pompes", "Russian twist (médecine-ball)":"twist",
+  "Vélo droit":"velo", "Biking virtuel":"velo", "Rameur":"rameur", "Tapis de course":"tapis", "Tapis incliné (marche)":"tapis", "Battle ropes":"battle"
+};
+function illustration(ill, name){
+  if (name && SPRITES[name]) return `<img src="ex/${SPRITES[name]}.jpg" alt="" loading="lazy" decoding="async">`;
   if (!ill) return "";
   const key = ill.join("|"); if (illCache[key]) return illCache[key];
   const fn = POSES[ill[0]]; if (!fn) return "";
@@ -1064,7 +1083,7 @@ function viewToday(){
    On choisit ses exercices (bibliothèque, exos déjà faits, ou un nom libre), on note les séries, et la séance
    rejoint l'historique et la progression des charges, comme une séance proposée par l'app. Le brouillon est
    gardé dans S.logDraft : on peut quitter l'app au milieu et reprendre. */
-const CARDIO = ["Tapis de course","Tapis incliné (marche)","Vélo droit","Vélo semi-allongé","Rameur","Elliptique","Escalier (stair climber)","Ascent trainer","Corde à sauter","Biking virtuel","Cours collectif"];
+const CARDIO = ["Tapis de course","Tapis incliné (marche)","Vélo droit","Vélo semi-allongé","Rameur","Elliptique","Escalier (stair climber)","Ascent trainer","Corde à sauter","Battle ropes","Biking virtuel","Cours collectif"];
 const ZONE_FILTERS = [["all","Tout"],["mine","Mes exos"],["fessiers","Fessiers"],["jambes","Jambes"],["dos","Dos"],["pecs","Pectoraux"],["epaules","Épaules"],["bras","Bras"],["abdos","Abdos"],["cardio","Cardio"]];
 function variantInfo(name){
   for (const [id,L] of Object.entries(LIB)) { const v = L.v.find(x=>x.n===name); if (v) return {id, v, z:L.z, timed:!!L.timed}; }
@@ -1116,7 +1135,7 @@ function viewLog(){
     ${ci && !S.profile.hormonal ? `<div class="row">${phaseChip(ci,false)}</div>` : ""}</div>`;
   if (!d.items.length) h += `<div class="card"><p class="muted small">Ajoute les exercices que tu as faits : dans la liste de l'app, parmi ceux que tu fais d'habitude, ou avec un nom à toi. Pour chacun, note tes séries (charge et répétitions).</p></div>`;
   d.items.forEach((it,i)=>{
-    const img = it.ill ? illustration(it.ill) : "";
+    const img = illustration(it.ill, it.name);
     h += `<div class="card" style="gap:12px"><div class="ex-head ${img?"":"noimg"}" style="${img?"":"grid-template-columns:minmax(0,1fr)"}">${img?`<div class="ill">${img}</div>`:""}<div class="stack" style="gap:4px;min-width:0"><div class="name" style="font-weight:500">${esc(it.name)}</div>
       <div class="detail note">${it.cardio?"Cardio":it.timed?"Gainage : durée en secondes":it.w?"kg "+esc(loadLabel(it.eq)||"de charge"):"Poids du corps"}</div>
       <div class="row" style="gap:6px">${i>0?`<button class="linkbtn" data-act="log-up" data-v="${i}">Monter</button>`:""}<button class="linkbtn" data-act="log-del" data-v="${i}" style="color:#E5484D">Retirer</button></div></div></div>`;
@@ -1165,7 +1184,7 @@ function pickerResults(){
   let h = "";
   if (q) h += `<button class="pill block" data-act="log-add-custom"><span>Ajouter « ${esc(ui.logQ.trim())} »</span><span class="plus">${PLUS}</span></button>`;
   h += `<div class="card" style="padding:6px 20px">`;
-  h += list.length ? list.map(o=>{ const img = o.inf ? illustration(o.inf.v.ill) : "", has = inDraft.has(o.n);
+  h += list.length ? list.map(o=>{ const img = illustration(o.inf?.v.ill, o.n), has = inDraft.has(o.n);
       return `<button class="pickrow" data-act="log-add" data-v="${esc(o.n)}" data-kind="${o.kind||""}" ${has?'aria-pressed="true"':""}>${img?`<span class="ill sm">${img}</span>`:`<span class="ill sm noimg">${o.kind==="cardio"?"♥":"+"}</span>`}<span class="pk"><b>${esc(o.n)}</b><span>${esc(zl(o))}${has?" · déjà ajouté":""}</span></span><span class="plusc">${has?CHECK:PLUS}</span></button>`; }).join("")
     : `<p class="muted small" style="padding:14px 0">${f==="mine"?"Tu n'as pas encore d'exercice enregistré.":"Rien ne correspond."}</p>`;
   h += `</div>`;
@@ -1357,7 +1376,7 @@ function viewBuildPick(){
     <p class="small muted">Dans l'ordre où tu veux les faire. Pour ${b.dur} min, compte environ <b>${rec}</b> exercices (${nMus} choisi${nMus>1?"s":""}).</p>
     <div class="chips hscroll">${tabs.map(([kk,t])=>`<button class="chip" style="flex:none" data-act="b-filter" data-v="${kk}" aria-pressed="${f===kk}">${t}</button>`).join("")}</div>
     <div class="card" style="padding:6px 20px">`;
-  h += list.length ? list.map(o=>{ const i = sel.indexOf(o.n), img = o.inf ? illustration(o.inf.v.ill) : "";
+  h += list.length ? list.map(o=>{ const i = sel.indexOf(o.n), img = illustration(o.inf?.v.ill, o.n);
     return `<button class="pickrow" data-act="b-toggle" data-v="${esc(o.n)}" data-kind="${o.kind||""}" ${i>=0?'aria-pressed="true"':""}>${img?`<span class="ill sm">${img}</span>`:`<span class="ill sm noimg">${o.kind==="cardio"?"♥":"+"}</span>`}<span class="pk"><b>${esc(o.n)}</b><span>${o.kind==="cardio"?"Cardio":o.inf?esc(o.inf.z.map(z=>ZONES[z]).join(", ")):"Ton exercice"}</span></span><span class="plusc">${i>=0?`<b class="dotnum" style="font-size:.95rem">${i+1}</b>`:PLUS}</span></button>`; }).join("")
     : `<p class="muted small" style="padding:14px 0">Rien ici pour l'instant.</p>`;
   h += `</div><div class="row"><button class="ob" data-act="b-fill" ${nMus>=rec?"disabled":""}>🎲 Compléter au hasard</button>${sel.length?`<button class="linkbtn" data-act="b-clear">Tout enlever</button>`:""}</div>
@@ -1369,7 +1388,7 @@ function viewBuildRecap(){
   if (!b.items.length && b.mode==="random") b.items = rollItems(b);
   let nMain = 0;
   const rows = b.items.map((x,i)=>{
-    const inf = variantInfo(x.n), img = inf ? illustration(inf.v.ill) : "";
+    const inf = variantInfo(x.n), img = illustration(inf?.v.ill, x.n);
     let scheme;
     if (x.kind==="cardio") scheme = `<span class="row" style="gap:6px"><input type="number" inputmode="numeric" min="3" max="90" value="${x.min||10}" data-bmin="${i}" style="width:72px;padding:6px 8px;height:36px" aria-label="Minutes"> min</span>`;
     else if (inf?.timed) scheme = esc(TIMED_DETAIL[inf.id]);
@@ -1426,7 +1445,7 @@ function banBtn(k, it){
   return `<button class="linkbtn ban-btn" data-act="ban" data-v="${k}">Je n'aime pas cet exercice</button>`;
 }
 function exItem(k, it){
-  const lg = S.today.log[k]||{}, done = exDone(k, it), img = illustration(it.ill);
+  const lg = S.today.log[k]||{}, done = exDone(k, it), img = illustration(it.ill, it.name);
   const name = (it.prefix?`<span class="muted">${it.prefix} · </span>`:"")+esc(it.name)+(it.tagNew?'<span class="tag">Nouveau</span>':"")+(it.up?'<span class="tag">Charge en hausse</span>':"");
   let h = `<div class="ex ${done?"done":""}">`;
   const detail = it.sets && !it.timed ? `${it.sets} séries × ${it.lo}–${it.hi} reps${it.rest?` · repos ${fmtRest(it.rest)}`:""}${it.rpe?` · RPE ${it.rpe}`:""}` : esc(it.detail||"");

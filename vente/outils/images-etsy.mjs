@@ -15,7 +15,8 @@ const b = await pw.chromium.launch();
 const p0 = await b.newPage({ viewport: { width: 390, height: 844 } });
 await p0.goto(APP + "?demo"); await p0.waitForTimeout(600);
 await p0.click("[data-act=log-start]"); await p0.click("[data-act=log-pick]"); await p0.waitForTimeout(400);
-const ills = await p0.$$eval(".pickrow", (rows) => rows.map((r) => ({ svg: r.querySelector(".ill:not(.noimg)")?.innerHTML || "", n: r.querySelector("b").textContent })).filter((x) => x.svg));
+const ills = (await p0.$$eval(".pickrow", (rows) => rows.map((r) => ({ svg: r.querySelector(".ill:not(.noimg)")?.innerHTML || "", n: r.querySelector("b").textContent })).filter((x) => x.svg)))
+  .map((x) => ({ ...x, svg: x.svg.replace(/src="ex\//g, `src="${APP}ex/`).replace(/ loading="lazy"/g, "") }));
 await p0.close();
 const pickIll = (names) => names.map((n) => ills.find((x) => x.n === n)).filter(Boolean);
 
@@ -47,7 +48,8 @@ li::before{content:"";width:14px;height:14px;border-radius:50%;background:var(--
 .logo{width:96px;height:96px;border-radius:26px}
 .foot{position:absolute;left:100px;bottom:56px;font-size:20px;opacity:.6}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.cell{background:#F2F0EB;border-radius:22px;aspect-ratio:5/4;overflow:hidden}
+.cell{background:#1b191b;border-radius:22px;aspect-ratio:5/4;overflow:hidden}
+.cell img{width:100%;height:100%;object-fit:cover;display:block}
 .cell svg{width:100%;height:100%;display:block}
 .cap{font-size:15px;opacity:.75;margin-top:6px;line-height:1.2}
 .steps{display:grid;grid-template-columns:1fr 1fr;gap:22px}
@@ -82,7 +84,7 @@ const slides = {
     <div class="chips"><span class="chip">Force</span><span class="chip">Muscle</span><span class="chip">Tonus</span><span class="chip">Circuit</span><span class="chip">Aléatoire 🎲</span></div>
     </div><div class="phones">${phone("d-steps-zones", 0, 170, 280, -6, 1)}${phone("d-random", 470, 170, 280, 6, 1)}${phone("d-recap", 220, 80, 320, 0, 2)}</div></div>`,
   "05-exercices": () => {
-    const sel = pickIll(["Hip thrust à la barre", "Presse à cuisses", "Leg extension", "Adducteurs à la machine", "Leg curl assis", "Hack squat", "Fentes bulgares haltères", "Kettlebell swing", "Tirage vertical", "Tractions assistées (machine)", "Rowing assis à la poulie", "Pec deck (butterfly)", "Développé incliné haltères", "Élévations latérales haltères", "Curl biceps haltères", "Crunch à la machine"]);
+    const sel = pickIll(["Hip thrust à la barre", "Presse à cuisses", "Tirage vertical", "Squat à la barre", "Soulevé de terre roumain (barre)", "Squat à la Smith machine", "Fentes bulgares haltères", "Kettlebell swing", "Rowing assis à la poulie", "Pec deck (butterfly)", "Leg curl allongé", "Développé militaire haltères", "Élévations latérales haltères", "Curl biceps haltères", "Extension triceps à la poulie", "Step-up sur box haltères"]);
     return `<div class="bg"></div>${HT}<div class="wrap"><div class="txt" style="flex-basis:500px">
     <span class="kick">La bibliothèque</span><h2><span class="dot">110+</span> exercices et machines</h2>
     <p class="lead">Tout ce qu'on trouve dans une grande salle de sport : chaque exercice est dessiné.</p>

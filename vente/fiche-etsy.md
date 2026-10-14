@@ -10,7 +10,7 @@ Tout ce qu'il faut copier-coller dans *Etsy › Gestionnaire de boutique › Ann
 | Qui l'a fait ? | **Moi** |
 | Qu'est-ce que c'est ? | **Un produit fini** |
 | Quand a-t-il été fabriqué ? | **2020 – 2026** |
-| Usage de l'IA | **Cocher** la case qui indique qu'une IA générative a été utilisée (le code de l'app a été écrit avec l'aide de Claude). Etsy retire les annonces non déclarées. |
+| Usage de l'IA | **Cocher** la case qui indique qu'une IA générative a été utilisée (le code de l'app a été écrit avec l'aide de Claude, et les illustrations en couleur des exercices ont été générées avec ChatGPT). Etsy retire les annonces non déclarées. |
 | Catégorie | Tape « planner » ou « agenda » et choisis la catégorie numérique proposée la plus proche (planners / agendas numériques). |
 | Fichier à joindre | `Phase-Gym-acces.pdf` (le PDF avec le lien et le code, envoyé à part, jamais dans le dépôt) |
 | Quantité | 999 (renouvellement automatique) |

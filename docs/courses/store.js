@@ -22,6 +22,9 @@ function mapError(err) {
   const m = err.message || "";
   if (!navigator.onLine || /fetch|network|load failed|timed? ?out/i.test(m)) return storeError("network", m);
   if (err.code === "42P01" || err.code === "PGRST205" || err.code === "PGRST202" || /does not exist|could not find/i.test(m)) return storeError("setup", m);
+  if (/access code required/i.test(m)) return storeError("need_access", m);
+  if (/access code already used/i.test(m)) return storeError("used_access", m);
+  if (/unknown access code/i.test(m)) return storeError("bad_access", m);
   if (err.code === "42501" || /row-level security|not a member/i.test(m)) return storeError("denied", m);
   return storeError(err.code || "internal", m);
 }
@@ -100,6 +103,20 @@ async function openSupabase() {
     },
     async createHousehold(name, kind) {
       return must(await sb.rpc("courses_create_household", { hname: name, hkind: kind }));
+    },
+    // Code d'accès (achat) : nécessaire pour créer une liste. Tant que supabase/courses.sql n'est pas relancé,
+    // la fonction n'existe pas : on laisse alors tout le monde créer, comme avant.
+    async hasAccess() {
+      const { data, error } = await sb.rpc("courses_has_access");
+      if (error) {
+        const e = mapError(error);
+        if (e.code === "setup") return true;
+        throw e;
+      }
+      return !!data;
+    },
+    async redeem(code) {
+      must(await sb.rpc("courses_redeem", { code }));
     },
     async join(code) {
       return must(await sb.rpc("courses_join", { code }));
@@ -238,7 +255,18 @@ function openDemo() {
     async members(hid) {
       return st.members.filter((m) => m.household === hid).map((m) => ({ ...m, ...(st.profiles[m.uid] || { name: "", emoji: "🙂" }) }));
     },
+    // Démonstration : le code d'accès est DEMO-2026.
+    async hasAccess() {
+      return !!st.access || Object.values(st.households).some((h) => h.created_by === uid);
+    },
+    async redeem(code) {
+      const c = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (c !== "DEMO2026") throw storeError("bad_access");
+      st.access = true;
+      save();
+    },
     async createHousehold(name, kind) {
+      if (!(await this.hasAccess())) throw storeError("need_access");
       const code = Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, "X");
       st.households[code] = { id: code, name, kind, created_by: uid };
       // Une deuxième personne fictive pour voir la liste partagée.

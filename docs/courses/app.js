@@ -194,6 +194,9 @@ function errText(e) {
   if (e.code === "setup") return "La base n'est pas prête : il faut lancer supabase/courses.sql dans Supabase (voir le README).";
   if (e.code === "denied") return "Tu n'as pas accès à cette liste.";
   if (e.code === "bad_code") return "Ce code ne correspond à aucun compte. Vérifie les lettres et les chiffres.";
+  if (e.code === "need_access") return "Il faut un code d'accès pour créer une liste. Tu peux aussi rejoindre gratuitement une liste qu'on t'a partagée.";
+  if (e.code === "bad_access") return "Ce code d'accès n'existe pas. Vérifie-le, ou écris à la boutique où tu l'as acheté.";
+  if (e.code === "used_access") return "Ce code d'accès a déjà été utilisé.";
   if (e.code === "short_code") return "Le code fait 16 caractères, par exemple ABCD-EFGH-JKLM-NPQR.";
   return "Une erreur est survenue, réessaie.";
 }
@@ -214,6 +217,7 @@ const S = {
   shop: "",
   kfilter: "all",
   period: "month",
+  access: null, // peut créer une liste (code d'accès utilisé, ou liste déjà créée) ; null = pas encore su
   catMode: loadJSON("courses:catMode", "auto"), // « auto » : rayon deviné ; « ask » : on le choisit à chaque ajout
   screen: "loading",
   onb: { kind: null, mode: null }, // choix faits à la première ouverture
@@ -657,8 +661,15 @@ function createForm(prefix, kind) {
       <h2>Créer la liste</h2>
       <div class="field"><span>Pour qui&nbsp;?</span>${kindChips(k.id)}</div>
       <div class="field"><label for="${prefix}Name">Nom de la liste</label><input id="${prefix}Name" maxlength="40" placeholder="${esc(k.ph)}"></div>
+      ${
+        S.access === false
+          ? `<div class="field access"><label for="${prefix}Access">Code d'accès</label>
+        <input id="${prefix}Access" class="code-in" maxlength="9" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD-1234">
+        <p class="hint">Le code reçu après ton achat. Il sert une seule fois ; inviter ta famille, ta coloc ou tes amis reste gratuit.${S.store?.mode === "demo" ? " (Démonstration : DEMO-2026)" : ""}</p></div>`
+          : ""
+      }
       <p class="err" id="${prefix}CErr"></p>
-      <button class="btn wide" type="submit">Créer et inviter</button>
+      <button class="btn wide" type="submit">${S.access === false ? "Activer et créer" : "Créer et inviter"}</button>
     </form>`;
 }
 function joinForm(prefix) {
@@ -685,8 +696,18 @@ function bindHouseholdForms(prefix) {
       const kind = picked(kp) || "autre";
       const name = $(`#${prefix}Name`).value.trim() || $(`#${prefix}Name`).placeholder;
       const btn = e.target.querySelector("button[type=submit]");
+      const accessIn = $(`#${prefix}Access`);
+      if (accessIn && accessIn.value.replace(/[^A-Za-z0-9]/g, "").length !== 8) {
+        $(`#${prefix}CErr`).textContent = "Entre le code d'accès reçu après ton achat (8 caractères, par exemple ABCD-1234).";
+        accessIn.focus();
+        return;
+      }
       btn.disabled = true;
       try {
+        if (accessIn) {
+          await S.store.redeem(accessIn.value);
+          S.access = true;
+        }
         const code = await S.store.createHousehold(name, kind);
         await refreshHouseholds();
         setView("list");
@@ -1849,6 +1870,8 @@ function debounce(fn, ms) {
 async function afterProfile() {
   const pending = loadJSON("courses:join", null);
   await refreshHouseholds();
+  // Créer une liste demande un code d'accès (rejoindre reste gratuit).
+  S.access = await S.store.hasAccess().catch(() => true);
   if (pending) {
     localStorage.removeItem("courses:join");
     if (S.households.some((h) => h.id === pending)) {

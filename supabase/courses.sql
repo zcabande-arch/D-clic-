@@ -7,6 +7,7 @@
 --   courses_members    : qui fait partie de quel foyer
 --   courses_items      : les articles, sur la liste de courses (done = false) ou dans la cuisine (done = true)
 --   courses_purchases  : les achats (quoi, quel rayon, prix éventuel, par qui), pour le bilan
+--   courses_access_codes / courses_licenses : codes d'accès vendus, et qui en a utilisé un
 
 create table if not exists public.courses_profiles (
   uid        uuid        primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -170,6 +171,96 @@ grant select on public.courses_households, public.courses_members to authenticat
 
 -- ---------- créer, rejoindre, renommer, quitter un foyer ----------
 
+-- ---------- codes d'accès (vente) ----------
+-- Créer une liste demande un code d'accès, utilisable une seule fois. Rejoindre une liste reste gratuit.
+-- Les codes ne sont lisibles par personne depuis l'application : on les crée et on les distribue
+-- depuis Supabase › SQL Editor (voir le README) :
+--   select courses_next_code('Etsy commande 1234');   -- un code à envoyer à un acheteur
+--   select * from courses_access_codes order by created_at desc;   -- suivi des codes
+
+create table if not exists public.courses_access_codes (
+  code       text        primary key check (code ~ '^[A-Z0-9]{4}-[A-Z0-9]{4}$'),
+  note       text,
+  sent_at    timestamptz,
+  used_by    uuid        references auth.users (id) on delete set null,
+  used_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.courses_access_codes enable row level security;
+
+create table if not exists public.courses_licenses (
+  uid        uuid        primary key references auth.users (id) on delete cascade,
+  code       text,
+  created_at timestamptz not null default now()
+);
+alter table public.courses_licenses enable row level security;
+drop policy if exists courses_licenses_select on public.courses_licenses;
+create policy courses_licenses_select on public.courses_licenses for select to authenticated
+  using (uid = auth.uid());
+grant select on public.courses_licenses to authenticated;
+
+-- Accès : un code utilisé, ou une liste déjà créée avant l'arrivée des codes.
+create or replace function public.courses_has_access() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from courses_licenses where uid = auth.uid())
+      or exists (select 1 from courses_households where created_by = auth.uid());
+$$;
+
+create or replace function public.courses_redeem(code text) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid();
+  c text := upper(regexp_replace(coalesce(code, ''), '[^A-Za-z0-9]', '', 'g'));
+begin
+  if me is null then raise exception 'not authenticated'; end if;
+  if courses_has_access() then return true; end if;
+  c := substr(c, 1, 4) || '-' || substr(c, 5, 4);
+  update courses_access_codes set used_by = me, used_at = now() where courses_access_codes.code = c and used_by is null;
+  if not found then
+    if exists (select 1 from courses_access_codes where courses_access_codes.code = c) then raise exception 'access code already used'; end if;
+    raise exception 'unknown access code';
+  end if;
+  insert into courses_licenses (uid, code) values (me, c) on conflict (uid) do nothing;
+  return true;
+end;
+$$;
+
+-- Pour la vendeuse ou le vendeur, depuis le SQL Editor uniquement (pas depuis l'application).
+create or replace function public.courses_new_codes(n int default 10) returns setof text
+language plpgsql security definer set search_path = public as $$
+declare
+  alpha text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  c text;
+  made int := 0;
+begin
+  while made < least(greatest(n, 1), 500) loop
+    c := '';
+    for i in 1..8 loop
+      c := c || substr(alpha, 1 + floor(random() * length(alpha))::int, 1);
+      if i = 4 then c := c || '-'; end if;
+    end loop;
+    insert into courses_access_codes (code) values (c) on conflict do nothing;
+    if found then made := made + 1; return next c; end if;
+  end loop;
+end;
+$$;
+
+-- Donne un code pas encore envoyé (en crée un s'il n'y en a plus) et note à qui il part.
+create or replace function public.courses_next_code(note text default null) returns text
+language plpgsql security definer set search_path = public as $$
+declare c text;
+begin
+  select code into c from courses_access_codes where sent_at is null and used_by is null order by created_at limit 1 for update skip locked;
+  if c is null then select courses_new_codes(1) into c; end if;
+  update courses_access_codes set sent_at = now(), note = courses_next_code.note where code = c;
+  return c;
+end;
+$$;
+
+revoke all on function public.courses_new_codes(int), public.courses_next_code(text) from public, anon, authenticated;
+revoke all on function public.courses_has_access(), public.courses_redeem(text) from public, anon;
+grant execute on function public.courses_has_access(), public.courses_redeem(text) to authenticated;
+
 create or replace function public.courses_create_household(hname text, hkind text) returns text
 language plpgsql security definer set search_path = public as $$
 declare
@@ -179,6 +270,7 @@ declare
 begin
   if me is null then raise exception 'not authenticated'; end if;
   if (select count(*) from courses_members where uid = me) >= 20 then raise exception 'too many households'; end if;
+  if not courses_has_access() then raise exception 'access code required'; end if;
   loop
     code := '';
     for i in 1..6 loop

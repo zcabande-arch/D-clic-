@@ -138,6 +138,20 @@ Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/phase/*
 **Vente sur Etsy :** l'app complète demande un code d'accès (fourni dans le PDF vendu) ; la démo **…/phase/?demo** reste libre.
 Fiche Etsy, images, PDF et outils : voir [`vente/LISEZMOI.md`](vente/LISEZMOI.md). Le PDF contenant le code n'est jamais dans le dépôt.
 
+### Vendre Take Out : les codes d'accès
+
+Créer une liste demande un **code d'accès** (`ABCD-1234`), utilisable une seule fois. Rejoindre une liste reste gratuit :
+l'acheteur invite sa famille, sa coloc ou ses amis sans qu'ils aient à payer. Les comptes qui avaient déjà créé une liste gardent leur accès.
+
+Tout se fait dans Supabase › *SQL Editor* :
+
+- **Envoyer un code à un acheteur** (à chaque commande) : `select courses_next_code('Etsy commande 1234');`
+  donne un code jamais envoyé et note la commande. Copie-le dans un message à l'acheteur.
+- **Préparer des codes à l'avance** : `select courses_new_codes(20);`
+- **Suivre les codes** (envoyés, utilisés) : `select * from courses_access_codes order by created_at desc;`
+
+Les codes ne sont visibles par personne depuis l'application. En démonstration (`?demo`), le code est `DEMO-2026`.
+
 ## Version avec serveur (auto-hébergée)
 
 Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.

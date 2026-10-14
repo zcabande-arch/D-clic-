@@ -187,6 +187,11 @@ create table if not exists public.courses_access_codes (
   created_at timestamptz not null default now()
 );
 alter table public.courses_access_codes enable row level security;
+-- Code commun (« shared ») : le même pour tous les acheteurs, imprimé dans le PDF livré par Etsy.
+-- Il sert autant de fois que nécessaire tant qu'il est actif ; « uses » compte les activations.
+alter table public.courses_access_codes add column if not exists shared boolean not null default false;
+alter table public.courses_access_codes add column if not exists active boolean not null default true;
+alter table public.courses_access_codes add column if not exists uses int not null default 0;
 
 create table if not exists public.courses_licenses (
   uid        uuid        primary key references auth.users (id) on delete cascade,
@@ -215,10 +220,17 @@ begin
   if me is null then raise exception 'not authenticated'; end if;
   if courses_has_access() then return true; end if;
   c := substr(c, 1, 4) || '-' || substr(c, 5, 4);
-  update courses_access_codes set used_by = me, used_at = now() where courses_access_codes.code = c and used_by is null;
+  -- Code commun actif : on compte l'activation, sans le consommer.
+  update courses_access_codes set uses = uses + 1 where courses_access_codes.code = c and shared and active;
   if not found then
-    if exists (select 1 from courses_access_codes where courses_access_codes.code = c) then raise exception 'access code already used'; end if;
-    raise exception 'unknown access code';
+    -- Code individuel : une seule fois.
+    update courses_access_codes set used_by = me, used_at = now(), uses = 1
+     where courses_access_codes.code = c and not shared and active and used_by is null;
+    if not found then
+      if exists (select 1 from courses_access_codes where courses_access_codes.code = c and shared) then raise exception 'access code expired'; end if;
+      if exists (select 1 from courses_access_codes where courses_access_codes.code = c) then raise exception 'access code already used'; end if;
+      raise exception 'unknown access code';
+    end if;
   end if;
   insert into courses_licenses (uid, code) values (me, c) on conflict (uid) do nothing;
   return true;
@@ -250,14 +262,27 @@ create or replace function public.courses_next_code(note text default null) retu
 language plpgsql security definer set search_path = public as $$
 declare c text;
 begin
-  select code into c from courses_access_codes where sent_at is null and used_by is null order by created_at limit 1 for update skip locked;
+  select code into c from courses_access_codes where sent_at is null and used_by is null and not shared and active order by created_at limit 1 for update skip locked;
   if c is null then select courses_new_codes(1) into c; end if;
   update courses_access_codes set sent_at = now(), note = courses_next_code.note where code = c;
   return c;
 end;
 $$;
 
-revoke all on function public.courses_new_codes(int), public.courses_next_code(text) from public, anon, authenticated;
+-- Change le code commun (s'il circule trop) : l'ancien ne marche plus, ceux qui l'ont utilisé gardent l'accès.
+--   select courses_set_shared_code('ABCD-1234');
+create or replace function public.courses_set_shared_code(new_code text) returns text
+language plpgsql security definer set search_path = public as $$
+declare c text := upper(btrim(new_code));
+begin
+  update courses_access_codes set active = false where shared and code <> c;
+  insert into courses_access_codes (code, shared, active, note) values (c, true, true, 'code commun')
+    on conflict (code) do update set shared = true, active = true;
+  return c;
+end;
+$$;
+
+revoke all on function public.courses_new_codes(int), public.courses_next_code(text), public.courses_set_shared_code(text) from public, anon, authenticated;
 revoke all on function public.courses_has_access(), public.courses_redeem(text) from public, anon;
 grant execute on function public.courses_has_access(), public.courses_redeem(text) to authenticated;
 

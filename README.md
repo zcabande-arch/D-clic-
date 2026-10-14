@@ -140,17 +140,17 @@ Fiche Etsy, images, PDF et outils : voir [`vente/LISEZMOI.md`](vente/LISEZMOI.md
 
 ### Vendre Take Out : les codes d'accès
 
-Créer une liste demande un **code d'accès** (`ABCD-1234`), utilisable une seule fois. Rejoindre une liste reste gratuit :
+Créer une liste demande un **code d'accès** (`ABCD-1234`). Rejoindre une liste reste gratuit :
 l'acheteur invite sa famille, sa coloc ou ses amis sans qu'ils aient à payer. Les comptes qui avaient déjà créé une liste gardent leur accès.
 
-Tout se fait dans Supabase › *SQL Editor* :
+- **Code commun** (celui qu'on imprime dans le PDF livré par Etsy) : le même pour tous les acheteurs, utilisable autant de fois qu'il le faut.
+  Pour l'installer ou le changer s'il circule trop : `select courses_set_shared_code('ABCD-1234');`
+  L'ancien cesse de marcher ; ceux qui l'ont déjà utilisé gardent leur accès. Pensez alors à mettre à jour le PDF.
+- **Codes individuels** (à usage unique, par exemple pour offrir l'app) : `select courses_next_code('cadeau pour Léa');`
+- **Suivi** : `select code, shared, active, uses, note, used_at from courses_access_codes order by created_at desc;`
 
-- **Envoyer un code à un acheteur** (à chaque commande) : `select courses_next_code('Etsy commande 1234');`
-  donne un code jamais envoyé et note la commande. Copie-le dans un message à l'acheteur.
-- **Préparer des codes à l'avance** : `select courses_new_codes(20);`
-- **Suivre les codes** (envoyés, utilisés) : `select * from courses_access_codes order by created_at desc;`
-
-Les codes ne sont visibles par personne depuis l'application. En démonstration (`?demo`), le code est `DEMO-2026`.
+Tout se fait dans Supabase › *SQL Editor*. Les codes ne sont visibles par personne depuis l'application.
+En démonstration (`?demo`), le code est `DEMO-2026`.
 
 ## Version avec serveur (auto-hébergée)
 

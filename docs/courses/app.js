@@ -197,6 +197,7 @@ function errText(e) {
   if (e.code === "need_access") return "Il faut un code d'accès pour créer une liste. Tu peux aussi rejoindre gratuitement une liste qu'on t'a partagée.";
   if (e.code === "bad_access") return "Ce code d'accès n'existe pas. Vérifie-le, ou écris à la boutique où tu l'as acheté.";
   if (e.code === "used_access") return "Ce code d'accès a déjà été utilisé.";
+  if (e.code === "old_access") return "Ce code d'accès n'est plus valable. Écris à la boutique pour recevoir le nouveau.";
   if (e.code === "short_code") return "Le code fait 16 caractères, par exemple ABCD-EFGH-JKLM-NPQR.";
   return "Une erreur est survenue, réessaie.";
 }
@@ -666,7 +667,7 @@ function createForm(prefix, kind) {
         S.access === false
           ? `<div class="field access"><label for="${prefix}Access">Code d'accès</label>
         <input id="${prefix}Access" class="code-in" maxlength="9" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="ABCD-1234">
-        <p class="hint">Le code reçu après ton achat. Il sert une seule fois ; inviter ta famille, ta coloc ou tes amis reste gratuit. <a href="legal.html#conditions">Conditions de vente</a>.${S.store?.mode === "demo" ? " (Démonstration : DEMO-2026)" : ""}</p></div>`
+        <p class="hint">Le code se trouve dans le PDF reçu après ton achat. Inviter ta famille, ta coloc ou tes amis reste gratuit. <a href="legal.html#conditions">Conditions de vente</a>.${S.store?.mode === "demo" ? " (Démonstration : DEMO-2026)" : ""}</p></div>`
           : ""
       }
       <p class="err" id="${prefix}CErr"></p>

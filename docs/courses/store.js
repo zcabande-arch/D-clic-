@@ -24,6 +24,7 @@ function mapError(err) {
   if (err.code === "42P01" || err.code === "PGRST205" || err.code === "PGRST202" || /does not exist|could not find/i.test(m)) return storeError("setup", m);
   if (/access code required/i.test(m)) return storeError("need_access", m);
   if (/access code already used/i.test(m)) return storeError("used_access", m);
+  if (/access code expired/i.test(m)) return storeError("old_access", m);
   if (/unknown access code/i.test(m)) return storeError("bad_access", m);
   if (err.code === "42501" || /row-level security|not a member/i.test(m)) return storeError("denied", m);
   return storeError(err.code || "internal", m);

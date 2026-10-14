@@ -52,7 +52,7 @@ const PRANK = { urgent: 0, bientot: 1, plustard: 2 };
 const VIEWS = ["list", "kitchen", "spend", "us"];
 
 // Illustrations au trait (voir illus/LICENCE.txt) : dessins découpés (.webp) ou redessinés dans le même style (.svg).
-const SVG_ILLS = new Set(["pain", "surgeles", "snacks", "hygiene", "maison", "bebe", "autre", "liste", "famille", "coloc", "couple", "amis", "invite", "email", "cle", "ok", "fete"]);
+const SVG_ILLS = new Set(["conserves", "hygiene", "maison", "bebe", "autre", "liste", "famille", "coloc", "couple", "amis", "invite", "email", "cle", "ok", "fete"]);
 const ill = (name, cls = "ill") => `<img class="${cls}" src="illus/${name}.${SVG_ILLS.has(name) ? "svg" : "webp"}" alt="" aria-hidden="true" draggable="false">`;
 // Petite frise de dessins pour les écrans vides.
 const doodles = (...names) => `<div class="doodles" aria-hidden="true">${names.map((n, i) => ill(n, `ill d${i}`)).join("")}</div>`;
@@ -490,7 +490,7 @@ function renderError(app) {
 function renderWelcome(app) {
   app.innerHTML = `<div class="intro">
     <div class="brand">${logo("logo sm")}<b>Take Out</b></div>
-    <div class="hero">${ill("mains", "hero-ill")}</div>
+    <div class="hero">${ill("hero", "hero-ill")}</div>
     <h1 class="serif">Bienvenue&nbsp;!</h1>
     <p class="lead">La liste de courses partagée de ton foyer&nbsp;: ce qu'il faut acheter, ce qu'il y a déjà dans la cuisine, et ce que vous dépensez.</p>
     <h2 class="q">C'est pour qui&nbsp;?</h2>
@@ -600,7 +600,7 @@ async function renderProfileSetup(app) {
       : "D'abord, qui es-tu&nbsp;? Les autres verront ton prénom à côté de ce que tu ajoutes.";
   app.innerHTML = `<div class="intro">
     ${!invited ? `<button class="round dashed back" id="pBack" aria-label="Retour">←</button>` : ""}
-    ${invited ? ill("invite", "ill xl") : k ? kindIll(k.id, "ill xl") : ill("mains", "ill xl")}
+    ${invited ? ill("invite", "ill xl") : k ? kindIll(k.id, "ill xl") : ill("hero", "hero-ill")}
     <h1 class="serif">Ton profil</h1>
     <p class="lead">${lead}</p>
     <form class="card" id="pForm" autocomplete="off">
@@ -855,7 +855,7 @@ function listHtml(todo, stock) {
   const shown = todo.filter((i) => !S.shop || i.shop === S.shop || !i.shop);
   const low = stock.filter((i) => i.low);
   const others = S.members.filter((m) => m.uid !== S.uid);
-  let html = `<header class="head with-ill">${ill("mains", "head-ill")}<h1 class="serif">Liste de courses</h1><p class="date">${esc(today())}</p></header>
+  let html = `<header class="head with-ill">${ill("tete-liste", "head-ill")}<h1 class="serif">Liste de courses</h1><p class="date">${esc(today())}</p></header>
     ${quickForm("list", "Il manque quoi ?")}`;
   if (shops.length)
     html += `<div class="bar" role="group" aria-label="Filtrer par magasin"><button class="fchip" data-shop="" aria-pressed="${!S.shop}">Partout</button>${shops
@@ -869,7 +869,7 @@ function listHtml(todo, stock) {
     html += `<button class="note-card invite" id="inviteHint" style="--tint:#F8D3E3">${STAR}${ill("invite", "ill md")}<span><b>Invite les autres</b><span>Envoie le lien à ta famille, ta coloc, ta moitié ou tes amis pour partager cette liste.</span></span></button>`;
   html += `<main id="list">`;
   if (!shown.length)
-    html += `<div class="empty">${S.shop ? ill("ok", "ill xl") : doodles("fraise", "olive", "fourchette", "couteau")}<p>${S.shop ? "Rien de plus à prendre ici." : "Tout est acheté&nbsp;! Ajoute un article dès que quelque chose se termine."}</p></div>`;
+    html += `<div class="empty">${S.shop ? ill("ok", "ill xl") : doodles("fraise", "banane", "pomme", "carotte")}<p>${S.shop ? "Rien de plus à prendre ici." : "Tout est acheté&nbsp;! Ajoute un article dès que quelque chose se termine."}</p></div>`;
   for (const [c, g] of groupByCat(shown)) {
     g.sort((a, b) => (PRANK[a.prio] ?? 1) - (PRANK[b.prio] ?? 1) || String(a.created_at).localeCompare(String(b.created_at)));
     html += aisle(c, g.length, g.map(listItemHtml).join(""));
@@ -900,7 +900,7 @@ function kitchenHtml(stock) {
   const low = stock.filter((i) => i.low).length;
   if (S.kfilter === "low" && !low) S.kfilter = "all";
   const shown = stock.filter((i) => S.kfilter !== "low" || i.low);
-  let html = `<header class="head with-ill">${ill("cuisine", "head-ill")}<h1 class="serif">Dans notre cuisine</h1><p class="date">${
+  let html = `<header class="head with-ill">${ill("tete-cuisine", "head-ill")}<h1 class="serif">Dans notre cuisine</h1><p class="date">${
     stock.length ? `${stock.length} produit${stock.length > 1 ? "s" : ""} à la maison${low ? ` · ${low} presque fini${low > 1 ? "s" : ""}` : ""}` : "Ce que vous avez déjà à la maison"
   }</p></header>
     ${quickForm("kitchen", "On a quoi ?")}`;
@@ -910,7 +910,7 @@ function kitchenHtml(stock) {
     }" ${low ? "" : "disabled"}>Presque fini${low ? " · " + low : ""}</button></div>`;
   html += `<main id="list">`;
   if (!stock.length)
-    html += `<div class="empty">${doodles("huile", "ail", "citron")}<p>La cuisine est vide pour l'instant.</p><p class="hint">Quand tu coches un article sur la liste de courses, il arrive ici. Tu peux aussi ajouter ce que vous avez déjà&nbsp;: quand un produit est fini, un toucher le remet sur la liste.</p></div>`;
+    html += `<div class="empty">${doodles("oeufs", "beurre", "fromage")}<p>La cuisine est vide pour l'instant.</p><p class="hint">Quand tu coches un article sur la liste de courses, il arrive ici. Tu peux aussi ajouter ce que vous avez déjà&nbsp;: quand un produit est fini, un toucher le remet sur la liste.</p></div>`;
   for (const [c, g] of groupByCat(shown)) {
     g.sort((a, b) => (b.low ? 1 : 0) - (a.low ? 1 : 0) || a.name.localeCompare(b.name, "fr"));
     html += aisle(c, g.length, g.map(kitchenItemHtml).join(""));
@@ -1037,7 +1037,7 @@ function spendHtml() {
   if (!count) {
     return (
       html +
-      `<div class="empty">${doodles("fruits", "epices", "viande")}${donut([], 0, `<b>0</b><span>article</span>`)}
+      `<div class="empty">${doodles("brocoli", "saumon", "pain")}${donut([], 0, `<b>0</b><span>article</span>`)}
       <p>${all.length ? "Aucun achat sur cette période." : "Coche les articles de la liste quand tu les achètes&nbsp;: la part de chaque type de nourriture s'affichera ici, en cercle."}</p></div>`
     );
   }

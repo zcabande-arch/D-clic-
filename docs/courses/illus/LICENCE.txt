@@ -1,4 +1,5 @@
-Illustrations au trait de Courses.
-- Les fichiers .webp sont découpés dans des images fournies pour le projet
-  (dessins de nourriture colorés, mains avec fourchette et couteau, main qui assaisonne un bol).
+Illustrations de Take Out.
+- Les fichiers .webp sont découpés dans une planche d'icônes fournie pour le projet
+  (« Grocery shopping app – diverse food icons »).
 - Les fichiers .svg sont dessinés pour l'application dans le même style.
+Avant de vendre l'application, vérifier que la planche d'icônes peut être utilisée commercialement.

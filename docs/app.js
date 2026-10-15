@@ -310,9 +310,18 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     c.width=c.height=200;c.getContext("2d").drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,200,200);
     return c.toDataURL("image/jpeg",.8);
   }
-  function pickFile(target,camera){
+  // Sur Android, « photo ou vidéo » dans un même champ ouvre la galerie au lieu de l'appareil photo :
+  // on demande d'abord quoi prendre, puis on ouvre l'appareil dans le bon mode.
+  const isAndroid=/Android/i.test(navigator.userAgent);
+  function pickFile(target,camera,kind){
+    if(target==="shot"&&isAndroid&&!kind){
+      const close=()=>$("#dlgActions").close();
+      const btn=(label,k)=>el("button",{class:"btn ghost act",type:"button",onclick:()=>{close();pickFile(target,camera,k);}},label);
+      $("#acBody").replaceChildren(btn("📷 Prendre une photo","image"),btn("🎥 Filmer une vidéo (15 s max)","video"));
+      $("#dlgActions").showModal();return;
+    }
     S.fileTarget=target;const f=$("#fileIn");
-    f.setAttribute("accept",target==="shot"?"image/*,video/*":"image/*");
+    f.setAttribute("accept",target!=="shot"?"image/*":kind==="image"?"image/*":kind==="video"?"video/*":"image/*,video/*");
     if(camera)f.setAttribute("capture",camera);else f.removeAttribute("capture");
     f.click();
   }

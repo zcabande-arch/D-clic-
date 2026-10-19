@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mons en fête</title>
+<meta name="description" content="Le comité des fêtes de Mons : calendrier des événements, planning des bénévoles, publications Insta et échéances.">
+<meta name="theme-color" content="#ececec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mons en fête">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+<div class="wrap">
+  <div class="topbar">
+    <div class="left">
+      <div class="round light" aria-hidden="true"><div class="logo"></div></div>
+      <button class="pill-count" id="count" data-who="1"><i>✓</i><span>…</span></button>
+    </div>
+    <div class="right">
+      <button class="round dark" id="addtop" hidden data-add="event" aria-label="Ajouter un événement"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+  </div>
+
+  <div class="hello">Bienvenue au comité des fêtes de</div>
+  <h1><span class="g">Mons</span> en fête</h1>
+
+  <div class="offline" id="offline" hidden>Pas de connexion : les changements ne sont pas enregistrés.</div>
+  <button class="hero" id="next" hidden></button>
+
+  <section id="p-login" hidden></section>
+  <section id="p-cal" hidden></section>
+  <section id="p-plan" hidden></section>
+  <section id="p-todo" hidden></section>
+  <section id="p-events" hidden></section>
+  <section id="p-insta" hidden></section>
+  <section id="p-team" hidden></section>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<nav class="tabbar" role="tablist" id="tabbar" hidden></nav>
+
+<dialog id="dlg"><form id="dlg-form" method="dialog"></form></dialog>
+<div class="toast" id="toast" hidden role="status"></div>
+</body>
+</html>

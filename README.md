@@ -152,6 +152,31 @@ l'acheteur invite sa famille, sa coloc ou ses amis sans qu'ils aient à payer. L
 Tout se fait dans Supabase › *SQL Editor*. Les codes ne sont visibles par personne depuis l'application.
 En démonstration (`?demo`), le code est `DEMO-2026`.
 
+## Mons en fête : l'app du comité des fêtes
+
+Le dossier `docs/mons/` contient une cinquième application, **Mons en fête**, pour le comité des fêtes de Mons.
+Elle utilise le même projet Supabase et le même hébergement que Déclic.
+
+- **Connexion par code** : chaque personne a un profil et un code à 6 caractères, qu'elle entre une fois sur son téléphone.
+  Sans code, on ne voit rien.
+- **Admins** (par exemple Zoé et Maxime) : six onglets. *Calendrier* (événements, posts, échéances, filtres), *Planning* (créneaux
+  par événement, nombre de places, qui est inscrit, qui est là ou pas), *Publications* (posts Insta par format : Post, Reel, Story, Carrousel),
+  *À faire* (en retard, 2 semaines, 45 jours), *Événements* (date, heure, lieu, prix, statut, autre date possible, affiche reçue,
+  avancement) et *Profils* (créer un bénévole, voir son code, le rendre admin, le supprimer).
+- **Bénévoles** : *Calendrier*, *Planning* et *Événements*. Ils s'inscrivent aux créneaux (« Je m'inscris », dans la limite des places)
+  et disent s'ils sont là ou pas ; seuls les admins voient les réponses. Ils ne voient ni les échéances, ni les posts, ni les codes.
+- **En direct** : ce qu'un admin ou un bénévole change apparaît tout de suite sur les autres téléphones.
+
+### Mise en route (une seule fois)
+
+1. **Base** : dans Supabase › *SQL Editor › New query*, colle tout le contenu de [`supabase/mons.sql`](supabase/mons.sql) et touche *Run*
+   (il peut être relancé sans risque).
+2. L'application est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/mons/**. À la première ouverture, elle propose
+   de créer le premier profil admin et affiche son code (à noter). Ensuite, onglet *Profils* › *+ Profil* pour les autres admins et les bénévoles :
+   on leur envoie leur code et l'adresse, ils l'ouvrent dans Safari (ou Chrome) et l'ajoutent à l'écran d'accueil.
+
+Pour l'essayer sans toucher à la base : **…/mons/?demo** (données gardées dans le navigateur ; codes `DEMO26` pour un admin, `BENE26` pour une bénévole).
+
 ## Version avec serveur (auto-hébergée)
 
 Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.

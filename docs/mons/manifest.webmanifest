@@ -1,0 +1,18 @@
+{
+  "name": "Mons en fête",
+  "short_name": "Mons en fête",
+  "description": "Le comité des fêtes de Mons : calendrier, planning des bénévoles, publications et échéances.",
+  "lang": "fr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ececec",
+  "theme_color": "#a62a2a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

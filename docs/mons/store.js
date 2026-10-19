@@ -1,6 +1,6 @@
 // Accès aux données de Mons en fête : Supabase (tables de supabase/mons.sql) ou, avec « ?demo » dans l'adresse,
 // une version de démonstration gardée dans ce navigateur. Les deux exposent la même API.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, MONS_NOTIFY_URL } from "../config.js";
 
 function storeError(code, message) {
   const e = new Error(message || code);
@@ -16,6 +16,7 @@ function mapError(err) {
   if (/unknown code/i.test(m)) return storeError("bad_code", m);
   if (/slot full/i.test(m)) return storeError("full", m);
   if (/already set up/i.test(m)) return storeError("already", m);
+  if (/too soon/i.test(m)) return storeError("too_soon", m);
   if (err.code === "42501" || /row-level security|permission denied/i.test(m)) return storeError("denied", m);
   return storeError(err.code || "internal", m);
 }
@@ -96,6 +97,40 @@ async function openSupabase() {
     },
     async deleteProfil(id) {
       must(await sb.from("mons_profils").delete().eq("id", id));
+    },
+    // Rappels par notification (supabase/mons-rappels.sql et la fonction Edge mons-rappels).
+    async pushKey() {
+      let r;
+      try {
+        r = await fetch(MONS_NOTIFY_URL);
+      } catch (e) {
+        throw mapError(e);
+      }
+      if (!r.ok) throw storeError("push_setup");
+      return (await r.json()).publicKey;
+    },
+    async savePush(sub) {
+      must(await sb.from("mons_push").upsert({ endpoint: sub.endpoint, uid: session.user.id, sub }, { onConflict: "endpoint" }));
+    },
+    async deletePush(endpoint) {
+      must(await sb.from("mons_push").delete().eq("endpoint", endpoint));
+    },
+    async notifStatus() {
+      const rows = must(await sb.rpc("mons_notif_status")) || [];
+      return Object.fromEntries(rows.map((r) => [r.profil_id, r.devices]));
+    },
+    async sendRappel(event, who) {
+      const token = (await sb.auth.getSession()).data.session?.access_token || "";
+      let r;
+      try {
+        r = await fetch(MONS_NOTIFY_URL, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ type: "rappel", event, who }) });
+      } catch (e) {
+        throw mapError(e);
+      }
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 429) throw storeError("too_soon");
+      if (!r.ok) throw storeError(j.error ? "push_" + j.error : "push_setup", j.detail || j.error);
+      return j;
     },
     // Un changement quelconque (par un autre appareil) : l'app recharge tout, les données sont petites.
     subscribe(onChange, onStatus) {
@@ -277,6 +312,18 @@ function openDemo() {
       db.presence = db.presence.filter((x) => x.profil_id !== id);
       if (db.session === id) db.session = null;
       save();
+    },
+    async pushKey() {
+      throw storeError("demo");
+    },
+    async savePush() {},
+    async deletePush() {},
+    async notifStatus() {
+      return { "zoe-demo": 1, "lea-demo": 1 };
+    },
+    async sendRappel(event, who) {
+      if (!admin()) deny();
+      return { personnes: who === "tous" ? 3 : 1, appareils: who === "tous" ? 3 : 1, sansNotif: 1, demo: true };
     },
     subscribe(onChange, onStatus) {
       listeners.add(onChange);

@@ -9,7 +9,7 @@ const todayISO = () => iso(new Date());
 const S = {
   events: [], tasks: [], posts: [], planning: [], presence: [], profils: [], inscriptions: [],
   ready: false, error: null, open: new Set(), tab: "cal", fmt: "Tous", show: "Tout",
-  month: todayISO().slice(0, 7), sel: todayISO(), me: null, admin: false, setup: false, planEv: null, instaPast: false, loginErr: "",
+  month: todayISO().slice(0, 7), sel: todayISO(), me: null, admin: false, setup: false, planEv: null, instaPast: false, loginErr: "", push: "off", notif: {},
 };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -40,6 +40,8 @@ const ICONS = {
   insta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>',
   todo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
   team: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17c.6-1.8 2-2.8 3.5-2.8s2.9 1 3.5 2.8M15 9h3M15 13h3"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  bellOn: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" fill="none"/></svg>',
   events: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>',
 };
 const TABS = () =>
@@ -224,6 +226,11 @@ function renderTop() {
     el.innerHTML = `<i>★</i><span>${esc(S.me.nom)} · changer</span>`;
   }
   $("#addtop").hidden = !S.admin;
+  const bell = $("#bell");
+  bell.hidden = !S.me;
+  bell.innerHTML = S.push === "on" ? ICONS.bellOn : ICONS.bell;
+  bell.style.color = S.push === "on" ? "var(--brand)" : "";
+  bell.setAttribute("aria-label", S.push === "on" ? "Rappels activés" : "Activer les rappels");
   const foot = $("#foot");
   foot.innerHTML = S.me
     ? `${store?.mode === "demo" ? `Démo : données gardées dans ce navigateur · <button data-resetdemo="1">tout remettre à zéro</button> · ` : ""}<button data-logout="1">Se déconnecter</button>`
@@ -330,7 +337,7 @@ function shiftMonth(n) {
 
 /* ---- Planning événement ---- */
 function renderPlan() {
-  const head = `<div class="sec-title"><h2>Planning <span class="g">événement</span></h2>${A(`<div class="actions"><button class="btn white small" data-export="1">Exporter Excel</button><button class="btn small" data-add="slot" data-ev="${esc(S.planEv || "")}">+ Créneau</button></div>`)}</div>`;
+  const head = `<div class="sec-title"><h2>Planning <span class="g">événement</span></h2>${A(`<div class="actions"><button class="btn white small" data-rappel="1">🔔 Rappel</button><button class="btn white small" data-export="1">Exporter Excel</button><button class="btn small" data-add="slot" data-ev="${esc(S.planEv || "")}">+ Créneau</button></div>`)}</div>`;
   const msg = stateMsg();
   if (msg) return ($("#p-plan").innerHTML = head + msg);
   const evs = sortedEvents();
@@ -368,8 +375,151 @@ function renderPlan() {
     <div class="plan-head" style="background:${tileFor(e)}"><b>${esc(e.title)}</b><small>${when}${e.heure ? " · " + esc(e.heure) : ""}${e.lieu ? " · " + esc(e.lieu) : ""}</small>
       <small>${slots.length} poste${slots.length > 1 ? "s" : ""} · ${filled} pourvu${filled > 1 ? "s" : ""}</small></div>
     <div class="plan-cols"><div class="list">${list}</div>
-      <aside class="panel">${presSeg(e.id)}${presBox(e.id)}
+      <aside class="panel">${presSeg(e.id)}${pushNudge()}${presBox(e.id)}
         ${S.admin ? `<p style="margin:0;font-size:12.5px;color:var(--muted)">Seuls les admins voient qui est là ou pas.</p>` : `<p style="margin:0;font-size:12.5px;color:var(--muted)">Ta réponse n'est vue que par les admins du comité.</p>`}</aside></div>`;
+}
+
+/* ---- Rappels par notification ---- */
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+async function pushReg() {
+  if (!("serviceWorker" in navigator)) return null;
+  return (await navigator.serviceWorker.getRegistration()) || navigator.serviceWorker.register("sw.js");
+}
+async function pushState() {
+  if (store?.mode === "demo") return "demo";
+  if (isIOS() && !standalone()) return "install";
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  try {
+    const reg = await pushReg();
+    return reg && (await reg.pushManager.getSubscription()) ? "on" : "off";
+  } catch (e) {
+    return "off";
+  }
+}
+const b64ToU8 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+// À chaque ouverture (et après connexion) : l'abonnement existant est rattaché au compte de l'appareil.
+async function syncPush() {
+  S.push = await pushState();
+  renderTop();
+  if (S.push !== "on" || !S.me) return;
+  try {
+    const sub = await (await pushReg()).pushManager.getSubscription();
+    if (sub) await store.savePush(sub.toJSON());
+  } catch (e) {}
+}
+async function unbindPush() {
+  try {
+    const sub = S.push === "on" && (await (await pushReg()).pushManager.getSubscription());
+    if (sub) await store.deletePush(sub.endpoint);
+  } catch (e) {}
+}
+async function enablePush() {
+  const dlg = $("#dlg");
+  try {
+    if ((await Notification.requestPermission()) !== "granted") {
+      S.push = await pushState();
+      renderTop();
+      return openBell();
+    }
+    const reg = await pushReg();
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(await store.pushKey()) });
+    await store.savePush(sub.toJSON());
+    S.push = "on";
+    dlg.close();
+    toast("Rappels activés 🔔");
+    render();
+  } catch (e) {
+    toast(e.code === "push_setup" || e.code === "setup" ? "Les rappels ne sont pas encore installés par le comité" : e.code === "network" ? "Pas de connexion, réessaie" : "Impossible d'activer les rappels");
+  }
+}
+async function disablePush() {
+  try {
+    const sub = await (await pushReg()).pushManager.getSubscription();
+    if (sub) {
+      await store.deletePush(sub.endpoint).catch(() => {});
+      await sub.unsubscribe();
+    }
+  } catch (e) {}
+  S.push = await pushState();
+  $("#dlg").close();
+  toast("Rappels désactivés");
+  render();
+}
+function openBell() {
+  const f = $("#dlg-form");
+  const what = `<p style="margin:0;color:var(--muted)">Tu reçois une notification 14 jours, 7 jours et 2 jours avant chaque événement si tu n'as pas encore dit si tu es là, ou s'il reste des postes et que tu n'es inscrit·e nulle part. Le comité peut aussi t'envoyer un rappel.</p>`;
+  const bodies = {
+    off: `${what}`,
+    on: `<p style="margin:0;font-weight:700;color:var(--ok)">✓ Les rappels sont activés sur cet appareil.</p>${what}`,
+    install: `<p style="margin:0">Sur iPhone et iPad, les rappels ne marchent qu'avec l'app <b>ajoutée à l'écran d'accueil</b> (iOS 16.4 ou plus récent) : dans Safari, touche Partager › « Sur l'écran d'accueil », puis ouvre l'app depuis son icône et touche à nouveau 🔔.</p><p style="margin:0"><a href="guide-installation.pdf" target="_blank" style="color:var(--brand);font-weight:700">Voir le guide en images</a></p>`,
+    denied: `<p style="margin:0">Les notifications sont bloquées pour l'app. ${isIOS() ? "Va dans Réglages › Notifications › Mons en fête et active « Autoriser les notifications »." : "Autorise-les dans les réglages du navigateur (cadenas à côté de l'adresse › Notifications), puis réessaie."}</p>`,
+    unsupported: `<p style="margin:0">Ce navigateur ne peut pas recevoir de notifications. Sur Android, utilise Chrome ; sur iPhone, ajoute l'app à l'écran d'accueil.</p>`,
+    demo: `<p style="margin:0">Les rappels ne marchent pas en démonstration : ouvre la vraie app pour les activer.</p>${what}`,
+  };
+  const btn = S.push === "on" ? `<button type="button" class="btn white" data-pushoff="1">Désactiver</button>` : S.push === "off" ? `<button type="button" class="btn" data-pushon="1">Activer les rappels</button>` : "";
+  f.innerHTML = `<h2>🔔 Rappels</h2>${bodies[S.push] || bodies.off}
+    <div class="dlg-foot"><div></div><div class="actions"><button type="button" class="btn white" id="f-cancel">Fermer</button>${btn}</div></div>`;
+  f.onsubmit = (ev) => ev.preventDefault();
+  $("#f-cancel").onclick = () => $("#dlg").close();
+  $("#dlg").showModal();
+}
+function pushNudge() {
+  if (S.push !== "off" && S.push !== "install") return "";
+  return `<div class="empty" style="text-align:left;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>🔔 Active les rappels pour ne rien rater.</span><button class="btn small" data-bell="1">Activer</button></div>`;
+}
+// Même règle que la fonction Edge : qui recevrait quel rappel pour cet événement.
+function rappelPlan(ev) {
+  const norm = (x) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const slots = S.planning.filter((s) => s.eventId === ev.id);
+  const attribues = (s) => String(s.personnes || "").split(",").map(norm).filter(Boolean);
+  const inscrits = (s) => S.inscriptions.filter((x) => x.slot_id === s.id);
+  const open = slots.filter((s) => !s.places || inscrits(s).length + attribues(s).length < Number(s.places));
+  const out = { presence: [], inscription: [], general: [] };
+  for (const p of S.profils) {
+    const pres = S.presence.find((x) => x.profil_id === p.id && x.event_id === ev.id)?.valeur;
+    const tient = slots.some((s) => inscrits(s).some((x) => x.profil_id === p.id) || attribues(s).includes(norm(p.nom)));
+    if (!pres) out.presence.push(p);
+    else if (pres === "oui" && !tient && open.length) out.inscription.push(p);
+    else if (pres === "oui") out.general.push(p);
+  }
+  return out;
+}
+function openRappel() {
+  const e = evById(S.planEv);
+  if (!e) return toast("Choisis d'abord un événement");
+  const r = rappelPlan(e);
+  const names = (arr) => arr.map((p) => esc(p.nom) + (S.notif[p.id] ? " 🔔" : "")).join(", ") || "personne";
+  const reach = (arr) => arr.filter((p) => S.notif[p.id]).length;
+  const manquants = [...r.presence, ...r.inscription];
+  const f = $("#dlg-form");
+  f.innerHTML = `<h2>🔔 Rappel · ${esc(e.title)}</h2>
+    <div class="pres-box"><div><small>Pas encore répondu</small><b>${r.presence.length}</b><div style="font-size:13px;color:var(--muted)">${names(r.presence)}</div></div>
+    <div><small>Viennent, pas inscrits</small><b>${r.inscription.length}</b><div style="font-size:13px;color:var(--muted)">${names(r.inscription)}</div></div></div>
+    <p style="margin:0;font-size:13.5px;color:var(--muted)">🔔 = a activé les rappels. Seules ces personnes reçoivent la notification : pour les autres, envoie un message. Des rappels partent aussi tout seuls à J-14, J-7 et J-2.</p>
+    <div class="dlg-foot"><div></div><div class="actions"><button type="button" class="btn white" id="f-cancel">Annuler</button>
+      <button type="button" class="btn white" id="f-tous">À tout le monde (${reach(manquants) + reach(r.general)})</button>
+      <button type="button" class="btn" id="f-manq" ${manquants.length ? "" : "disabled"}>Aux retardataires (${reach(manquants)})</button></div></div>`;
+  f.onsubmit = (ev) => ev.preventDefault();
+  const dlg = $("#dlg");
+  $("#f-cancel").onclick = () => dlg.close();
+  const go = async (who) => {
+    f.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    try {
+      const res = await store.sendRappel(e.id, who);
+      dlg.close();
+      toast(res.personnes ? `Rappel envoyé à ${res.personnes} personne${res.personnes > 1 ? "s" : ""}` : "Personne à prévenir n'a activé les rappels");
+    } catch (err) {
+      f.querySelectorAll("button").forEach((x) => (x.disabled = false));
+      toast(err.code === "too_soon" ? "Un rappel vient déjà de partir pour cet événement (attends une heure)" : err.code === "network" ? "Pas de connexion, réessaie" : err.code?.startsWith("push_") ? "Les rappels ne sont pas encore installés (fonction mons-rappels)" : errMsg(err));
+    }
+  };
+  $("#f-tous").onclick = () => go("tous");
+  $("#f-manq").onclick = () => go("manquants");
+  dlg.showModal();
 }
 
 /* ---- Export Excel (admins) : qui fait quoi, par événement et par bénévole, et les présences ---- */
@@ -480,13 +630,15 @@ function renderTeam() {
   const msg = stateMsg();
   if (msg) return (el.innerHTML = head + msg);
   const ps = [...S.profils].sort((a, b) => (b.is_admin - a.is_admin) || a.nom.localeCompare(b.nom, "fr"));
+  const nOn = ps.filter((p) => S.notif[p.id]).length;
   el.innerHTML =
     head +
+    `<p style="margin:-4px 0 14px;font-size:13.5px;font-weight:700">🔔 ${nOn} profil${nOn > 1 ? "s" : ""} sur ${ps.length} reçoi${nOn > 1 ? "vent" : "t"} les rappels</p>` +
     `<div class="team">${ps
       .map((p) => {
         const n = S.inscriptions.filter((x) => x.profil_id === p.id).length;
         const me = p.id === S.me.id;
-        return `<div class="member"><span class="av" style="background:${avColor(p.nom)}">${esc(initials(p.nom))}</span><div style="min-width:0"><b>${esc(p.nom)}${me ? ' <span class="admin-tag">toi</span>' : ""}${p.is_admin ? ' <span class="admin-tag">admin</span>' : ""}</b><small>${n} créneau${n > 1 ? "x" : ""} · code</small> <span class="codebox">${esc(p.code || "—")}</span></div>
+        return `<div class="member"><span class="av" style="background:${avColor(p.nom)}">${esc(initials(p.nom))}</span><div style="min-width:0"><b>${esc(p.nom)}${me ? ' <span class="admin-tag">toi</span>' : ""}${p.is_admin ? ' <span class="admin-tag">admin</span>' : ""}</b><small>${S.notif[p.id] ? "🔔 rappels activés · " : "rappels pas activés · "}${n} créneau${n > 1 ? "x" : ""} · code</small> <span class="codebox">${esc(p.code || "—")}</span></div>
       <div class="actions" style="justify-content:flex-end;flex-direction:column;align-items:flex-end">${me ? "" : `<button class="edit" data-admin="${esc(p.id)}">${p.is_admin ? "retirer admin" : "rendre admin"}</button><button class="edit" data-delprof="${esc(p.id)}">supprimer</button>`}</div></div>`;
       })
       .join("")}</div>`;
@@ -786,6 +938,7 @@ function confirmLogout() {
   f.onsubmit = async (ev) => {
     ev.preventDefault();
     try {
+      await unbindPush();
       await store.logout();
       dlg.close();
       await refreshMe();
@@ -825,6 +978,10 @@ document.addEventListener("click", (e) => {
     return renderLogin();
   }
   if (b.dataset.export) return exportExcel();
+  if (b.dataset.bell) return openBell();
+  if (b.dataset.pushon) return enablePush();
+  if (b.dataset.pushoff) return disablePush();
+  if (b.dataset.rappel) return S.admin ? openRappel() : null;
   if (b.dataset.logout) return confirmLogout();
   if (b.dataset.resetdemo) {
     store.reset?.();
@@ -899,6 +1056,7 @@ async function reload() {
   try {
     const d = await store.loadAll(S.admin);
     Object.assign(S, d);
+    if (S.admin) S.notif = await store.notifStatus().catch(() => S.notif);
     S.error = null;
     S.ready = true;
   } catch (e) {
@@ -921,6 +1079,7 @@ async function refreshMe() {
     return render();
   }
   await reload();
+  syncPush();
 }
 async function start() {
   S.error = null;
@@ -957,6 +1116,17 @@ try {
   const t = localStorage.getItem("mons-tab");
   if (t) S.want = t;
 } catch (e) {}
+// Ouverte depuis une notification : ?tab=plan&ev=… (on retire ces paramètres de l'adresse).
+{
+  const q = new URLSearchParams(location.search);
+  if (q.get("tab")) S.want = q.get("tab");
+  if (q.get("ev")) S.planEv = q.get("ev");
+  if (q.has("tab") || q.has("ev")) {
+    q.delete("tab");
+    q.delete("ev");
+    history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q.toString().replace(/=$/, "").replace(/=&/g, "&") : ""));
+  }
+}
 start();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});

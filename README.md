@@ -166,6 +166,10 @@ Elle utilise le même projet Supabase et le même hébergement que Déclic.
 - **Bénévoles** : *Calendrier*, *Planning* et *Événements*. Ils s'inscrivent aux créneaux (« Je m'inscris », dans la limite des places)
   et disent s'ils sont là ou pas ; seuls les admins voient les réponses. Ils ne voient ni les échéances, ni les posts, ni les codes.
 - **En direct** : ce qu'un admin ou un bénévole change apparaît tout de suite sur les autres téléphones.
+- **Rappels par notification** : chacun touche 🔔 en haut de l'app (sur iPhone, l'app doit être ajoutée à l'écran d'accueil, iOS 16.4+).
+  À J-14, J-7 et J-2 de chaque événement, vers 18h, ceux qui n'ont pas dit s'ils sont là reçoivent « Tu seras là ? », et ceux qui viennent
+  sans être inscrits nulle part « Il reste des postes à pourvoir ». Un admin peut aussi envoyer un rappel tout de suite (*Planning* › *🔔 Rappel*),
+  aux retardataires ou à tout le monde ; l'onglet *Profils* montre qui a activé les rappels. Toucher la notification ouvre le planning de l'événement.
 - **Export Excel** (admins, onglet *Planning* › *Exporter Excel*) : un fichier `.xlsx` avec trois onglets, *Planning* (chaque poste de chaque événement, qui le tient, places restantes),
   *Par bénévole* (qui fait quoi, quand) et *Présences* (qui est là ou pas). Sur iPhone et iPad, il s'ouvre dans la feuille de partage (Enregistrer dans Fichiers, Excel, Mail…).
 
@@ -176,6 +180,10 @@ Elle utilise le même projet Supabase et le même hébergement que Déclic.
 2. L'application est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/mons/**. À la première ouverture, elle propose
    de créer le premier profil admin et affiche son code (à noter). Ensuite, onglet *Profils* › *+ Profil* pour les autres admins et les bénévoles :
    on leur envoie leur code et l'adresse, ils l'ouvrent dans Safari (ou Chrome) et l'ajoutent à l'écran d'accueil.
+
+**Rappels (une seule fois)** : dans Supabase › *Edge Functions* › *Deploy a new function* › *Via Editor*, nomme la fonction `mons-rappels`,
+colle le contenu de [`supabase/functions/mons-rappels/index.ts`](supabase/functions/mons-rappels/index.ts), déploie-la, puis dans ses réglages
+désactive *Verify JWT*. Ensuite, dans *SQL Editor*, lance [`supabase/mons-rappels.sql`](supabase/mons-rappels.sql). Les clés d'envoi sont celles de Déclic.
 
 Pour l'essayer sans toucher à la base : **…/mons/?demo** (données gardées dans le navigateur ; codes `DEMO26` pour un admin, `BENE26` pour une bénévole).
 

@@ -1,5 +1,5 @@
 // Service worker de Mons en fête : l'app s'ouvre même sans réseau.
-const SHELL = "mons-shell-v1";
+const SHELL = "mons-shell-v2";
 const LIBS = "mons-libs-v1";
 const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "./store.js", "../config.js", "./manifest.webmanifest", "./icons/logo.png", "./icons/icon-192.png"];
 

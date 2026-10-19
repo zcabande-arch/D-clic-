@@ -166,6 +166,8 @@ Elle utilise le même projet Supabase et le même hébergement que Déclic.
 - **Bénévoles** : *Calendrier*, *Planning* et *Événements*. Ils s'inscrivent aux créneaux (« Je m'inscris », dans la limite des places)
   et disent s'ils sont là ou pas ; seuls les admins voient les réponses. Ils ne voient ni les échéances, ni les posts, ni les codes.
 - **En direct** : ce qu'un admin ou un bénévole change apparaît tout de suite sur les autres téléphones.
+- **Export Excel** (admins, onglet *Planning* › *Exporter Excel*) : un fichier `.xlsx` avec trois onglets, *Planning* (chaque poste de chaque événement, qui le tient, places restantes),
+  *Par bénévole* (qui fait quoi, quand) et *Présences* (qui est là ou pas). Sur iPhone et iPad, il s'ouvre dans la feuille de partage (Enregistrer dans Fichiers, Excel, Mail…).
 
 ### Mise en route (une seule fois)
 

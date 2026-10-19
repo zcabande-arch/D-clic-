@@ -330,7 +330,7 @@ function shiftMonth(n) {
 
 /* ---- Planning événement ---- */
 function renderPlan() {
-  const head = `<div class="sec-title"><h2>Planning <span class="g">événement</span></h2>${A(`<button class="btn small" data-add="slot" data-ev="${esc(S.planEv || "")}">+ Créneau</button>`)}</div>`;
+  const head = `<div class="sec-title"><h2>Planning <span class="g">événement</span></h2>${A(`<div class="actions"><button class="btn white small" data-export="1">Exporter Excel</button><button class="btn small" data-add="slot" data-ev="${esc(S.planEv || "")}">+ Créneau</button></div>`)}</div>`;
   const msg = stateMsg();
   if (msg) return ($("#p-plan").innerHTML = head + msg);
   const evs = sortedEvents();
@@ -370,6 +370,73 @@ function renderPlan() {
     <div class="plan-cols"><div class="list">${list}</div>
       <aside class="panel">${presSeg(e.id)}${presBox(e.id)}
         ${S.admin ? `<p style="margin:0;font-size:12.5px;color:var(--muted)">Seuls les admins voient qui est là ou pas.</p>` : `<p style="margin:0;font-size:12.5px;color:var(--muted)">Ta réponse n'est vue que par les admins du comité.</p>`}</aside></div>`;
+}
+
+/* ---- Export Excel (admins) : qui fait quoi, par événement et par bénévole, et les présences ---- */
+async function exportExcel() {
+  if (!S.admin) return;
+  toast("Préparation du fichier…");
+  let XLSX;
+  try {
+    XLSX = await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+  } catch (e) {
+    return toast("Pas de connexion, réessaie");
+  }
+  const evs = sortedEvents();
+  const dateFr = (s) => (s ? fr(s, { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "");
+  const quand = (e) => (e.endDate ? `${dateFr(e.date)} → ${dateFr(e.endDate)}` : dateFr(e.date));
+  const slotsOf = (e) => S.planning.filter((p) => p.eventId === e.id).sort((a, b) => (a.ordre ?? 99) - (b.ordre ?? 99) || String(a.heure).localeCompare(String(b.heure)));
+  const attribues = (s) => (s.personnes || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const inscrits = (s) => S.inscriptions.filter((x) => x.slot_id === s.id).map((x) => nomOf(x.profil_id));
+
+  const planning = [["Événement", "Date", "Heure", "Poste / mission", "Qui", "Nb de personnes", "Places", "Reste à pourvoir", "Notes"]];
+  const parPersonne = [];
+  for (const e of evs)
+    for (const s of slotsOf(e)) {
+      const ppl = [...new Set([...attribues(s), ...inscrits(s)])];
+      const reste = s.places ? Math.max(0, s.places - ppl.length) : ppl.length ? "" : "À pourvoir";
+      planning.push([e.title, quand(e), s.heure || e.heure || "", s.role || "", ppl.join(", "), ppl.length, s.places || "illimité", reste, s.notes || ""]);
+      for (const n of ppl) parPersonne.push([n, e.title, quand(e), s.heure || e.heure || "", s.role || "", attribues(s).includes(n) ? "Attribué par le comité" : "Inscrit dans l'app"]);
+    }
+  parPersonne.sort((a, b) => a[0].localeCompare(b[0], "fr") || (evs.findIndex((e) => e.title === a[1]) - evs.findIndex((e) => e.title === b[1])));
+  parPersonne.unshift(["Bénévole", "Événement", "Date", "Heure", "Poste / mission", "Comment"]);
+
+  const presences = [["Événement", "Date", "Bénévole", "Réponse"]];
+  for (const e of evs)
+    S.presence
+      .filter((p) => p.event_id === e.id)
+      .map((p) => [e.title, quand(e), nomOf(p.profil_id), p.valeur === "oui" ? "Là" : "Pas là"])
+      .sort((a, b) => a[3].localeCompare(b[3]) || a[2].localeCompare(b[2], "fr"))
+      .forEach((r) => presences.push(r));
+
+  const wb = XLSX.utils.book_new();
+  const add = (rows, name, widths) => {
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = widths.map((w) => ({ wch: w }));
+    ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, rows.length - 1), c: rows[0].length - 1 } }) };
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  };
+  add(planning, "Planning", [24, 30, 8, 34, 34, 10, 9, 14, 40]);
+  add(parPersonne, "Par bénévole", [20, 24, 30, 8, 34, 22]);
+  add(presences, "Présences", [24, 30, 20, 10]);
+  const name = `Planning Mons en fête ${todayISO()}.xlsx`;
+  const blob = new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const file = new File([blob], name, { type: blob.type });
+  // Sur iPhone / iPad : la feuille de partage (Enregistrer dans Fichiers, Excel, mail…). Ailleurs : téléchargement.
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      return await navigator.share({ files: [file], title: name });
+    } catch (e) {
+      if (e.name === "AbortError") return;
+    }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
 /* ---- Publications Insta ---- */
@@ -757,6 +824,7 @@ document.addEventListener("click", (e) => {
     S.loginErr = "";
     return renderLogin();
   }
+  if (b.dataset.export) return exportExcel();
   if (b.dataset.logout) return confirmLogout();
   if (b.dataset.resetdemo) {
     store.reset?.();

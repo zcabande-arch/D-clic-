@@ -400,10 +400,19 @@ async function pushState() {
 }
 const b64ToU8 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
 // À chaque ouverture (et après connexion) : l'abonnement existant est rattaché au compte de l'appareil.
+let askedThisOpen = false;
 async function syncPush() {
   S.push = await pushState();
   renderTop();
-  if (S.push !== "on" || !S.me) return;
+  if (!S.me) return;
+  // À l'ouverture : autorisation déjà donnée → abonnement sans rien demander ; sinon, on propose d'activer
+  // (iOS n'affiche la demande d'autorisation qu'après un toucher, d'où la fenêtre avec le bouton « Activer »).
+  if (S.push === "off" && !askedThisOpen) {
+    askedThisOpen = true;
+    if (Notification.permission === "granted") return subscribePush(false);
+    if (Notification.permission === "default" && !$("#dlg").open) return openBell(true);
+  }
+  if (S.push !== "on") return;
   try {
     const sub = await (await pushReg()).pushManager.getSubscription();
     if (sub) await store.savePush(sub.toJSON());
@@ -416,24 +425,29 @@ async function unbindPush() {
   } catch (e) {}
 }
 async function enablePush() {
+  if ((await Notification.requestPermission()) !== "granted") {
+    S.push = await pushState();
+    renderTop();
+    return openBell();
+  }
+  return subscribePush(true);
+}
+async function subscribePush(loud) {
   const dlg = $("#dlg");
   try {
-    if ((await Notification.requestPermission()) !== "granted") {
-      S.push = await pushState();
-      renderTop();
-      return openBell();
-    }
     const reg = await pushReg();
     await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(await store.pushKey()) });
     await store.savePush(sub.toJSON());
     S.push = "on";
-    dlg.close();
-    toast("Rappels activés 🔔");
+    if (loud) {
+      dlg.close();
+      toast("Rappels activés 🔔");
+    }
     render();
   } catch (e) {
-    toast(e.code === "push_setup" || e.code === "setup" ? "Les rappels ne sont pas encore installés par le comité" : e.code === "network" ? "Pas de connexion, réessaie" : "Impossible d'activer les rappels");
+    if (loud) toast(e.code === "push_setup" || e.code === "setup" ? "Les rappels ne sont pas encore installés par le comité" : e.code === "network" ? "Pas de connexion, réessaie" : "Impossible d'activer les rappels");
   }
 }
 async function disablePush() {
@@ -449,7 +463,7 @@ async function disablePush() {
   toast("Rappels désactivés");
   render();
 }
-function openBell() {
+function openBell(auto) {
   const f = $("#dlg-form");
   const what = `<p style="margin:0;color:var(--muted)">Tu reçois une notification 14 jours, 7 jours et 2 jours avant chaque événement si tu n'as pas encore dit si tu es là, ou s'il reste des postes et que tu n'es inscrit·e nulle part. Le comité peut aussi t'envoyer un rappel.</p>`;
   const bodies = {
@@ -461,8 +475,8 @@ function openBell() {
     demo: `<p style="margin:0">Les rappels ne marchent pas en démonstration : ouvre la vraie app pour les activer.</p>${what}`,
   };
   const btn = S.push === "on" ? `<button type="button" class="btn white" data-pushoff="1">Désactiver</button>` : S.push === "off" ? `<button type="button" class="btn" data-pushon="1">Activer les rappels</button>` : "";
-  f.innerHTML = `<h2>🔔 Rappels</h2>${bodies[S.push] || bodies.off}
-    <div class="dlg-foot"><div></div><div class="actions"><button type="button" class="btn white" id="f-cancel">Fermer</button>${btn}</div></div>`;
+  f.innerHTML = `<h2>🔔 ${auto ? "Activer les rappels ?" : "Rappels"}</h2>${bodies[S.push] || bodies.off}
+    <div class="dlg-foot"><div></div><div class="actions"><button type="button" class="btn white" id="f-cancel">${auto ? "Plus tard" : "Fermer"}</button>${btn}</div></div>`;
   f.onsubmit = (ev) => ev.preventDefault();
   $("#f-cancel").onclick = () => $("#dlg").close();
   $("#dlg").showModal();

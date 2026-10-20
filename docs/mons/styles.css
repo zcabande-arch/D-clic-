@@ -235,4 +235,5 @@ textarea{min-height:80px;resize:vertical}
 .foot button{background:none;border:0;color:inherit;font:inherit;text-decoration:underline;cursor:pointer;padding:0}
 .newcode{font:800 34px var(--font);letter-spacing:.25em;text-align:center;background:var(--chip);border-radius:18px;padding:14px;user-select:all}
 .offline{background:var(--late-soft);color:var(--late);border-radius:14px;padding:8px 14px;font-size:13px;font-weight:700;margin-top:14px;text-align:center}
+a.btn{text-decoration:none}
 [hidden]{display:none!important}

@@ -9,7 +9,7 @@ const todayISO = () => iso(new Date());
 const S = {
   events: [], tasks: [], posts: [], planning: [], presence: [], profils: [], inscriptions: [],
   ready: false, error: null, open: new Set(), tab: "cal", fmt: "Tous", show: "Tout",
-  month: todayISO().slice(0, 7), sel: todayISO(), me: null, admin: false, setup: false, planEv: null, instaPast: false, loginErr: "", push: "off", notif: {},
+  month: todayISO().slice(0, 7), sel: todayISO(), me: null, admin: false, setup: false, planEv: null, instaPast: false, loginErr: "", push: "off", notif: {}, calToken: null,
 };
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -536,6 +536,48 @@ function openRappel() {
   dlg.showModal();
 }
 
+/* ---- Calendrier à s'abonner (Calendrier d'Apple, Google Agenda…) ---- */
+const calLink = () => `${store.calUrl}?t=${S.calToken}`;
+function openCal() {
+  const f = $("#dlg-form");
+  if (!S.calToken) {
+    f.innerHTML = `<h2>📅 Calendrier</h2><p style="margin:0;color:var(--muted)">Le calendrier n'est pas encore installé par le comité (supabase/mons-calendrier.sql et la fonction mons-calendrier).</p>
+      <div class="dlg-foot"><div></div><div class="actions"><button type="button" class="btn white" id="f-cancel">Fermer</button></div></div>`;
+  } else {
+    const https = calLink();
+    const webcal = https.replace(/^https?:/, "webcal:");
+    const android = /Android/i.test(navigator.userAgent);
+    const apple = `<a class="btn" href="${esc(webcal)}">S'abonner dans Calendrier (iPhone, iPad, Mac)</a>`;
+    const google = `<a class="btn ${android ? "" : "white"}" href="https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}" target="_blank" rel="noopener">Ajouter à Google Agenda</a>`;
+    f.innerHTML = `<h2>📅 Dans mon calendrier</h2>
+      <p style="margin:0;color:var(--muted)">Les événements du comité${S.admin ? ", tes postes, les échéances et les posts à publier" : " et tes postes (avec une alerte 2 h avant)"} apparaissent dans ton calendrier. Ils se mettent à jour tout seuls : nouvelle date, changement d'heure, nouvelle inscription (toutes les quelques heures).</p>
+      <div class="actions" style="flex-direction:column;align-items:stretch">${android ? google + apple : apple + google}<button type="button" class="btn white" data-calcopy="1">Copier le lien</button></div>
+      <p style="margin:0;font-size:12.5px;color:var(--muted)">Sur Android, si Google Agenda ne propose pas l'ajout : sur un ordinateur, ouvre calendar.google.com › Autres agendas › + › « À partir de l'URL », et colle le lien. Ce lien est personnel : s'il a circulé, <button type="button" class="edit" data-calnew="1">crée un nouveau lien</button> (l'ancien cessera de marcher).</p>
+      <div class="dlg-foot"><div></div><div class="actions"><button type="button" class="btn white" id="f-cancel">Fermer</button></div></div>`;
+  }
+  f.onsubmit = (ev) => ev.preventDefault();
+  $("#f-cancel").onclick = () => $("#dlg").close();
+  $("#dlg").showModal();
+}
+async function copyCal() {
+  try {
+    await navigator.clipboard.writeText(calLink());
+    toast("Lien copié");
+  } catch (e) {
+    prompt("Copie ce lien :", calLink());
+  }
+}
+async function newCal() {
+  try {
+    S.calToken = await store.calToken(true);
+    toast("Nouveau lien créé : abonne-toi à nouveau");
+    renderEvents();
+    openCal();
+  } catch (e) {
+    toast(errMsg(e));
+  }
+}
+
 /* ---- Export Excel (admins) : qui fait quoi, par événement et par bénévole, et les présences ---- */
 async function exportExcel() {
   if (!S.admin) return;
@@ -732,7 +774,7 @@ function renderTodo() {
 
 /* ---- Événements ---- */
 function renderEvents() {
-  const head = `<div class="sec-title"><h2>Événements</h2>${A(`<button class="btn small" data-add="event">+ Événement</button>`)}</div>`;
+  const head = `<div class="sec-title"><h2>Événements</h2><div class="actions"><button class="btn white small" data-cal="1">📅 Dans mon calendrier</button>${A(`<button class="btn small" data-add="event">+ Événement</button>`)}</div></div>`;
   const msg = stateMsg();
   if (msg) return ($("#p-events").innerHTML = head + msg);
   const t = todayISO();
@@ -774,7 +816,7 @@ function renderEvents() {
           ${e.details ? `<div style="grid-column:1/-1"><dt>Infos</dt><dd>${esc(e.details)}</dd></div>` : ""}
         </dl>
         ${presSeg(e.id)}
-        <div class="actions">${A(`<button class="btn black small" data-edit="event" data-id="${esc(e.id)}">Modifier l'événement</button>`)}<button class="btn white small" data-plan="${esc(e.id)}">Planning</button><button class="btn white small" data-goto="${e.date}">Calendrier</button></div>
+        <div class="actions">${A(`<button class="btn black small" data-edit="event" data-id="${esc(e.id)}">Modifier l'événement</button>`)}<button class="btn white small" data-plan="${esc(e.id)}">Planning</button><button class="btn white small" data-goto="${e.date}">Calendrier</button>${S.calToken ? `<a class="btn white small" href="${esc(calLink())}&e=${encodeURIComponent(e.id)}" target="_blank" rel="noopener">📅 Ajouter à mon agenda</a>` : ""}</div>
         ${A(`<div class="subh"><h4>Échéances</h4><button class="btn white small" data-add="task" data-ev="${esc(e.id)}">+ Échéance</button></div>
         <div class="list">${tk.map((x) => rowHTML("task", x, false)).join("") || `<div class="empty">Aucune échéance.</div>`}</div>
         <div class="subh"><h4>Posts Insta</h4><button class="btn white small" data-add="post" data-ev="${esc(e.id)}">+ Post</button></div>
@@ -954,6 +996,7 @@ function confirmLogout() {
     try {
       await unbindPush();
       await store.logout();
+      S.calToken = null;
       dlg.close();
       await refreshMe();
     } catch (e) {
@@ -993,6 +1036,9 @@ document.addEventListener("click", (e) => {
   }
   if (b.dataset.export) return exportExcel();
   if (b.dataset.bell) return openBell();
+  if (b.dataset.cal) return openCal();
+  if (b.dataset.calcopy) return copyCal();
+  if (b.dataset.calnew) return newCal();
   if (b.dataset.pushon) return enablePush();
   if (b.dataset.pushoff) return disablePush();
   if (b.dataset.rappel) return S.admin ? openRappel() : null;
@@ -1071,6 +1117,7 @@ async function reload() {
     const d = await store.loadAll(S.admin);
     Object.assign(S, d);
     if (S.admin) S.notif = await store.notifStatus().catch(() => S.notif);
+    if (!S.calToken) S.calToken = await store.calToken().catch(() => null);
     S.error = null;
     S.ready = true;
   } catch (e) {

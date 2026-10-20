@@ -1,6 +1,6 @@
 // Accès aux données de Mons en fête : Supabase (tables de supabase/mons.sql) ou, avec « ?demo » dans l'adresse,
 // une version de démonstration gardée dans ce navigateur. Les deux exposent la même API.
-import { SUPABASE_URL, SUPABASE_ANON_KEY, MONS_NOTIFY_URL } from "../config.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, MONS_NOTIFY_URL, MONS_CAL_URL } from "../config.js";
 
 function storeError(code, message) {
   const e = new Error(message || code);
@@ -97,6 +97,11 @@ async function openSupabase() {
     },
     async deleteProfil(id) {
       must(await sb.from("mons_profils").delete().eq("id", id));
+    },
+    // Calendrier à s'abonner (supabase/mons-calendrier.sql et la fonction Edge mons-calendrier).
+    calUrl: MONS_CAL_URL,
+    async calToken(nouveau = false) {
+      return must(await sb.rpc("mons_cal_token", { nouveau }));
     },
     // Rappels par notification (supabase/mons-rappels.sql et la fonction Edge mons-rappels).
     async pushKey() {
@@ -312,6 +317,10 @@ function openDemo() {
       db.presence = db.presence.filter((x) => x.profil_id !== id);
       if (db.session === id) db.session = null;
       save();
+    },
+    calUrl: MONS_CAL_URL,
+    async calToken() {
+      return "0".repeat(32);
     },
     async pushKey() {
       throw storeError("demo");

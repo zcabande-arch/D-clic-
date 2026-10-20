@@ -1,0 +1,26 @@
+# Diagnostic temporaire : vérifie que les fonctions et les tables de Mons en fête répondent (lecture seule).
+name: Diagnostic Mons en fête
+
+on:
+  push:
+    paths: [".github/workflows/diagnostic-mons.yml"]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Interroger Supabase
+        env:
+          U: https://alxensbjhfpktfnobvix.supabase.co
+          K: sb_publishable_9nKf0FeovnRuD1gbrEnMZw_PTsRivaF
+        run: |
+          show() { echo "::group::$1"; curl -sS -i --max-time 20 "${@:2}" | head -c 1500; echo; echo "::endgroup::"; }
+          show "calendrier https (faux lien)" "$U/functions/v1/mons-calendrier?t=00000000000000000000000000000000"
+          show "calendrier http (faux lien)" "http://alxensbjhfpktfnobvix.supabase.co/functions/v1/mons-calendrier?t=00000000000000000000000000000000"
+          show "rappels GET" "$U/functions/v1/mons-rappels"
+          show "colonne cal_token" "$U/rest/v1/mons_profils?select=cal_token&limit=1" -H "apikey: $K"
+          show "fonction mons_cal_token" -X POST "$U/rest/v1/rpc/mons_cal_token" -H "apikey: $K" -H "Content-Type: application/json" -d '{}'

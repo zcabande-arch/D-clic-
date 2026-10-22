@@ -914,12 +914,12 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // ---------- musique sur une photo ----------
   // Recherche dans le catalogue Apple (gratuit, sans compte) : titre, artiste, pochette, extrait de 30 s.
   // On n'affiche que des liens https vers les services de musique, jamais une adresse quelconque venue d'un autre membre.
-  const MUSIC_HOST=/^https:\/\/([a-z0-9-]+\.)*(mzstatic\.com|apple\.com|spotify\.com|scdn\.co|spotifycdn\.com)\//i;
+  const MUSIC_HOST=/^https:\/\/([a-z0-9-]+\.)*(mzstatic\.com|apple\.com|spotify\.com|scdn\.co|spotifycdn\.com|deezer\.com|dzcdn\.net)\//i;
   const safeUrl=u=>typeof u==="string"&&MUSIC_HOST.test(u)?u:"";
   function cleanMusic(m){
     if(!m||typeof m!=="object")return null;
     const title=String(m.title||"").trim().slice(0,80);if(!title)return null;
-    const out={title,artist:String(m.artist||"").trim().slice(0,60),art:safeUrl(m.art),preview:safeUrl(m.preview),url:safeUrl(m.url),spotify:safeUrl(m.spotify)};
+    const out={title,artist:String(m.artist||"").trim().slice(0,60),art:safeUrl(m.art),preview:safeUrl(m.preview),url:safeUrl(m.url),spotify:safeUrl(m.spotify),deezer:safeUrl(m.deezer)};
     for(const k of Object.keys(out))if(!out[k])delete out[k];
     return out;
   }
@@ -930,9 +930,23 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     window[cb]=d=>{done();res(d);};sc.onerror=()=>{done();rej(new Error("jsonp"));};
     sc.src=u+(u.includes("?")?"&":"?")+"callback="+cb;document.head.append(sc);
   });}
-  function itunes(path){const u="https://itunes.apple.com/"+path;return fetch(u).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).catch(()=>jsonp(u));}
+  const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
+  function itunes(path){const u="https://itunes.apple.com/"+path;return withTimeout(fetch(u).then(r=>{if(!r.ok)throw new Error("itunes "+r.status);return r.json();}),6000).catch(()=>jsonp(u));}
   const fromItunes=r=>cleanMusic({title:r.trackName,artist:r.artistName,art:(r.artworkUrl100||"").replace(/100x100bb/,"300x300bb"),preview:r.previewUrl,url:r.trackViewUrl});
-  async function searchMusic(q){const d=await itunes(`search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=12&country=FR`);return (d.results||[]).map(fromItunes).filter(Boolean);}
+  const fromDeezer=r=>cleanMusic({title:r.title,artist:r.artist&&r.artist.name,art:r.album&&(r.album.cover_medium||r.album.cover),preview:r.preview,deezer:r.link});
+  // Plusieurs sources, la première qui répond gagne : Apple, puis Deezer, puis notre fonction Supabase (si déployée).
+  async function searchMusic(q){
+    const errs=[];const enc=encodeURIComponent(q);
+    try{const d=await withTimeout(fetch(`https://itunes.apple.com/search?term=${enc}&media=music&entity=song&limit=12&country=FR`).then(r=>{if(!r.ok)throw new Error("Apple "+r.status);return r.json();}),6000);
+      const l=(d.results||[]).map(fromItunes).filter(Boolean);if(l.length)return l;}catch(e){errs.push("Apple : "+e.message);}
+    try{const d=await jsonp(`https://api.deezer.com/search?q=${enc}&limit=12&output=jsonp`);
+      const l=(d.data||[]).map(fromDeezer).filter(Boolean);if(l.length)return l;}catch(e){errs.push("Deezer : "+e.message);}
+    try{const r=await withTimeout(fetch(NOTIFY_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"music-search",q})}),9000);
+      const d=await r.json();if(Array.isArray(d.results)){const l=d.results.map(cleanMusic).filter(Boolean);if(l.length)return l;}else errs.push("serveur : "+(d.error||r.status));}catch(e){errs.push("serveur : "+e.message);}
+    try{const d=await jsonp(`https://itunes.apple.com/search?term=${enc}&media=music&entity=song&limit=12&country=FR`);return (d.results||[]).map(fromItunes).filter(Boolean);}
+    catch(e){errs.push("Apple (2) : "+e.message);}
+    throw new Error(errs.join(" · "));
+  }
   // Lien collé : Apple Music → le morceau exact ; Spotify → on cherche son titre et on garde le lien Spotify.
   async function musicLink(text){
     const am=text.match(/music\.apple\.com\/\S*[?&]i=(\d+)/)||text.match(/music\.apple\.com\/\S*\/song\/[^/\s]+\/(\d+)/);
@@ -977,6 +991,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       m.preview?el("button",{class:"btn ghost act",type:"button",onclick:()=>{close();togglePreview(m,"x:"+m.preview);}},"▶ Écouter l’extrait (30 s)"):null,
       go("Ouvrir dans Spotify",m.spotify||`https://open.spotify.com/search/${q}`),
       go("Ouvrir dans Apple Music",m.url||`https://music.apple.com/fr/search?term=${q}`),
+      m.deezer?go("Ouvrir dans Deezer",m.deezer):null,
       go("▶ Chercher sur YouTube",`https://www.youtube.com/results?search_query=${q}`)].filter(Boolean));
     $("#dlgActions").showModal();
   }
@@ -1009,7 +1024,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
         if(id!==muSeq)return;
         $("#muHint").textContent=list.length?(link?"Choisis la bonne version :":"Touche un morceau pour l’ajouter. ▶ pour écouter."):(link?"Lien non reconnu. Tape plutôt le titre.":"Aucun résultat.");
         showMusicResults(list);
-      }catch(e){if(id===muSeq){$("#muHint").textContent="La recherche n’a pas marché. Vérifie ta connexion.";}}
+      }catch(e){if(id===muSeq){$("#muHint").textContent="La recherche n’a pas marché. Vérifie ta connexion. ["+String(e.message||e).slice(0,160)+"]";}}
     },350);
   });
   $("#dlgMusic").addEventListener("close",()=>{if(playingKey&&playingKey.startsWith("r:"))stopPreview();});

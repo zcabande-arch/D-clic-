@@ -8,6 +8,7 @@
 // - POST {type:tick}  → rappel « c'est l'heure » au début de chaque déclic (8h → 20h, heure locale),
 //                       le résumé de la journée à 21h, et une fois par jour, effacement des photos de plus de KEEP_DAYS jours
 // - POST {type:recovery-create} (avec le jeton de l'utilisateur) → crée son code de récupération
+// - POST {type:music-search, q} → recherche de morceaux (Apple, sinon Deezer), en secours de l'app
 // Chaque personne choisit dans son profil (data.notif) les notifications qu'elle reçoit et les groupes qu'elle coupe.
 // Elle ne fait pas confiance au contenu des requêtes : elle relit tout dans la base, et chaque
 // photo n'est notifiée qu'une fois. La déployer avec « Verify JWT » désactivé.
@@ -411,6 +412,32 @@ async function onRecoveryCreate(req: Request) {
   return json({ code: norm.match(/.{4}/g)!.join("-") });
 }
 
+// ---------- recherche de musique (pour l'étiquette ♪ des photos) ----------
+// Faite ici en secours, si le téléphone n'arrive pas à interroger Apple ou Deezer lui-même.
+async function onMusicSearch(q: unknown) {
+  const term = typeof q === "string" ? q.trim().slice(0, 80) : "";
+  if (term.length < 2) return json({ results: [] });
+  const enc = encodeURIComponent(term);
+  try {
+    const r = await fetch(`https://itunes.apple.com/search?term=${enc}&media=music&entity=song&limit=12&country=FR`);
+    if (r.ok) {
+      const d = await r.json();
+      // deno-lint-ignore no-explicit-any
+      const results = (d.results || []).map((t: any) => ({
+        title: t.trackName, artist: t.artistName, art: String(t.artworkUrl100 || "").replace(/100x100bb/, "300x300bb"),
+        preview: t.previewUrl, url: t.trackViewUrl,
+      }));
+      if (results.length) return json({ results });
+    }
+  } catch (_) { /* on essaie Deezer */ }
+  const r = await fetch(`https://api.deezer.com/search?q=${enc}&limit=12`);
+  const d = await r.json();
+  // deno-lint-ignore no-explicit-any
+  return json({ results: (d.data || []).map((t: any) => ({
+    title: t.title, artist: t.artist?.name, art: t.album?.cover_medium, preview: t.preview, deezer: t.link,
+  })) });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -423,6 +450,7 @@ Deno.serve(async (req) => {
     if (body.type === "message") return await onMessage(body.coll, body.id);
     if (body.type === "tick") return await onTick();
     if (body.type === "recovery-create") return await onRecoveryCreate(req);
+    if (body.type === "music-search") return await onMusicSearch(body.q);
     return json({ error: "unknown type" }, 400);
   } catch (e) {
     console.error(e);

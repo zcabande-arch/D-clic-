@@ -291,17 +291,28 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
 
   // ---------- images ----------
   function loadImage(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>{URL.revokeObjectURL(u);res(i)};i.onerror=rej;i.src=u;});}
-  // limit = longueur maximale de la data URL (≈ 1,37 × le poids réel) : ~60 à 70 Ko par photo, ~40 Ko par photo de réponse.
+  // limit = longueur maximale de la data URL (≈ 1,37 × le poids réel) : ~250 Ko par photo, ~110 Ko par photo de réponse.
   // flip = retourner horizontalement (effet miroir des selfies).
-  async function compress(file,max=900,limit=100000,flip=false){
-    const img=await loadImage(file);let q=.72,out="";
-    for(let t=0;t<8;t++){
+  // La réduction se fait par moitiés successives, en lissage « haute qualité », pour garder une image nette.
+  function drawScaled(img,w,h,flip){
+    let src=img,sw=img.width,sh=img.height;
+    while(sw/2>=w*1.1&&sh/2>=h*1.1){
+      const c=document.createElement("canvas");c.width=Math.round(sw/2);c.height=Math.round(sh/2);
+      const x=c.getContext("2d");x.imageSmoothingEnabled=true;x.imageSmoothingQuality="high";x.drawImage(src,0,0,c.width,c.height);
+      src=c;sw=c.width;sh=c.height;
+    }
+    const c=document.createElement("canvas");c.width=w;c.height=h;
+    const x=c.getContext("2d");x.imageSmoothingEnabled=true;x.imageSmoothingQuality="high";
+    if(flip){x.translate(w,0);x.scale(-1,1);}
+    x.drawImage(src,0,0,w,h);return c;
+  }
+  async function compress(file,max=1440,limit=340000,flip=false){
+    const img=await loadImage(file);let q=.86,out="";
+    for(let t=0;t<10;t++){
       const sc=Math.min(1,max/Math.max(img.width,img.height));
-      const c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
-      const x=c.getContext("2d");if(flip){x.translate(c.width,0);x.scale(-1,1);}
-      x.drawImage(img,0,0,c.width,c.height);
+      const c=drawScaled(img,Math.round(img.width*sc),Math.round(img.height*sc),flip);
       out=c.toDataURL("image/jpeg",q); if(out.length<limit)return out;
-      if(q>.55)q-=.1;else max=Math.round(max*.8);
+      if(q>.72)q-=.05;else max=Math.round(max*.85);
     }
     return out;
   }
@@ -345,7 +356,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
         S.pendingShot=await compress(f,undefined,undefined,S.shotFlip);$("#sPrev").src=S.pendingShot;updateFlipBtn();$("#sCap").value="";const sl=slotNow();$("#sTitle").textContent=sl.phase==="open"?`Ta photo de ${sl.hour}h`:"Ta photo";openDlg("#dlgShot");}
       else if(S.fileTarget==="theme"){const g=S.groups.find(x=>x.id===S.current);if(!g)return;toast("Envoi de la photo…");const url=await S.db.uploadImage(await compress(f,1400,280000));await setTheme(g,{image:url});}
       else if(S.fileTarget==="apptheme"){toast("Envoi de la photo…");const url=await S.db.uploadImage(await compress(f,1400,280000));await setAppTheme({image:url});}
-      else if(S.fileTarget==="reply"){S.pendingReplyImg=await compress(f,700,60000);const p=$("#rPrev");p.src=S.pendingReplyImg;p.style.display="block";}
+      else if(S.fileTarget==="reply"){S.pendingReplyImg=await compress(f,1080,150000);const p=$("#rPrev");p.src=S.pendingReplyImg;p.style.display="block";}
     }catch(err){toast("Cette image n’a pas pu être lue.");}
   });
 
@@ -900,7 +911,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // « ⇆ Retourner » corrige ; pour les selfies, le choix est retenu pour les suivants.
   // ---------- vidéos courtes (à la place d'une photo) ----------
   const VIDEO_MAX_S=15;            // durée maximale
-  const VIDEO_KEEP_BYTES=6e6;      // en dessous, la vidéo est envoyée telle quelle
+  const VIDEO_KEEP_BYTES=8e6;      // en dessous, la vidéo est envoyée telle quelle (qualité d'origine)
   const VIDEO_UP_MAX=24e6;         // taille maximale envoyée (le stockage accepte 25 Mo)
   const VIDEO_SRC_MAX=400e6;       // au-delà, inutile d'essayer de la lire
   const isVideoFile=f=>/^video\//.test(f.type||"")||/\.(mov|mp4|m4v|webm)$/i.test(f.name||"");
@@ -927,14 +938,14 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(!isFinite(v.duration)||!v.duration)await seekVideo(v,1e7);
       const dur=isFinite(v.duration)?v.duration:0;
       await seekVideo(v,Math.min(.1,dur/2||0));
-      const sc=Math.min(1,900/Math.max(v.videoWidth,v.videoHeight));
+      const sc=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight));
       const c=document.createElement("canvas");c.width=Math.round(v.videoWidth*sc)||2;c.height=Math.round(v.videoHeight*sc)||2;
-      c.getContext("2d").drawImage(v,0,0,c.width,c.height);
-      return {file,v,url,dur,poster:c.toDataURL("image/jpeg",.75),drop,blob:null};
+      const x=c.getContext("2d");x.imageSmoothingQuality="high";x.drawImage(v,0,0,c.width,c.height);
+      return {file,v,url,dur,poster:c.toDataURL("image/jpeg",.82),drop,blob:null};
     }catch(e){drop();throw e;}
   }
   function seekVideo(v,t){return new Promise(res=>{if(Math.abs(v.currentTime-t)<.01)return res();const to=setTimeout(res,3000);v.addEventListener("seeked",()=>{clearTimeout(to);res();},{once:true});v.currentTime=t;});}
-  // Choisit ce qui part : la vidéo d'origine si elle est légère, sinon une version réduite (720 px).
+  // Choisit ce qui part : la vidéo d'origine si elle est légère, sinon une version 720p (1280 px de long), 3 Mbit/s.
   function prepareVideo(vid,onProgress){
     if(vid.blob)return Promise.resolve(vid.blob);
     const f=vid.file,type=f.type||(/\.mov$/i.test(f.name)?"video/quicktime":"video/mp4");
@@ -953,9 +964,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(typeof MediaRecorder==="undefined"||!HTMLCanvasElement.prototype.captureStream)return Promise.resolve(null);
     const mime=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4;codecs=avc1,mp4a"].find(m=>{try{return MediaRecorder.isTypeSupported(m);}catch(e){return false;}});
     if(!mime)return Promise.resolve(null);
-    const v=vid.v,sc=Math.min(1,720/Math.max(v.videoWidth,v.videoHeight));
+    const v=vid.v,sc=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight));
     const c=document.createElement("canvas");c.width=Math.max(2,Math.round(v.videoWidth*sc/2)*2);c.height=Math.max(2,Math.round(v.videoHeight*sc/2)*2);
-    const x=c.getContext("2d");x.drawImage(v,0,0,c.width,c.height);
+    const x=c.getContext("2d");x.imageSmoothingQuality="high";x.drawImage(v,0,0,c.width,c.height);
     const stream=c.captureStream(30);
     let ac=null;
     try{
@@ -965,7 +976,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       if(ac.state==="suspended")ac.resume().catch(()=>{});
     }catch(e){ac=null;}
     if(!ac)return Promise.resolve(null);   // sans le son, mieux vaut garder la vidéo d'origine
-    const rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:1600000,audioBitsPerSecond:96000});
+    const rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:3000000,audioBitsPerSecond:128000});
     const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
     v.muted=false;v.currentTime=0;
     const playing=v.play();

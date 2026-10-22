@@ -90,7 +90,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
     if(dir){void img.offsetWidth;img.classList.add(dir>0?"from-down":"from-up");}
     const many=LB.list.length>1;
     $("#lbInfo").hidden=!it.uid&&!many;
-    $("#lbWho").textContent=it.uid?`${it.uid===S.uid?"Toi":pName(it.uid)} · ${it.hour}h`+(it.caption?` · ${it.caption}`:""):"";
+    $("#lbWho").textContent=it.uid?`${it.uid===S.uid?"Toi":pName(it.uid)} · ${it.hour}h`+(it.caption?` · ${it.caption}`:"")+(it.music&&it.music.title?` · ♪ ${String(it.music.title).slice(0,40)}`:""):"";
     $("#lbCount").textContent=many?`${LB.i+1}/${LB.list.length}`:"";
   }
   function stopLbVideo(){const vd=$("#lbVid");try{vd.pause();}catch(e){}if(vd.getAttribute("src")){vd.removeAttribute("src");vd.load();}}
@@ -338,6 +338,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   }
   $("#fileIn").addEventListener("change",async e=>{
     const f=e.target.files[0];e.target.value="";if(!f)return;
+    if(S.fileTarget==="shot"){S.shotMusic=null;renderShotMusic();}
     try{
       if(S.fileTarget==="avatar"){S.draftAvatar=await squareAvatar(f);render();}
       else if(S.fileTarget==="shot"&&isVideoFile(f)){
@@ -586,6 +587,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
       el("div",{class:"meta"},el("span",{class:"who",text:mine?"Toi":pName(p.uid)}),el("time",{text:hm(p.ts)}),late?el("span",{class:"late",text:`+${p.lateMin} min`}):null),
       el("button",{class:"pic"+(veil?" veiled":""),"aria-label":veil?"Photo masquée":"Agrandir la photo de "+pName(p.uid),onclick:e=>{if(!veil)picTap(p,e.currentTarget);}},el("img",{src:p.img,alt:"",loading:"lazy",draggable:"false"}),p.video&&!veil?el("span",{class:"playbadge","aria-hidden":"true"},"▶"):null,p.video&&!veil&&p.dur?el("span",{class:"durbadge",text:`${Math.round(p.dur)} s`}):null));
     if(veil){bubble.append(el("p",{class:"veilnote",text:"Envoie ta photo pour la voir."}));return el("div",{class:"msg"},avEl(p.uid,32),bubble);}
+    const mus=cleanMusic(p.music);if(mus)bubble.append(musicChip(mus,"p:"+p.id));
     if(p.caption)bubble.append(el("p",{class:"caption",text:p.caption}));
     // reactions
     const rs=S.reacts.filter(r=>r.photoId===p.id);
@@ -909,6 +911,110 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
   // ---------- selfies : effet miroir ----------
   // L'iPhone montre le selfie en miroir pendant la prise, puis l'enregistre dans l'autre sens.
   // « ⇆ Retourner » corrige ; pour les selfies, le choix est retenu pour les suivants.
+  // ---------- musique sur une photo ----------
+  // Recherche dans le catalogue Apple (gratuit, sans compte) : titre, artiste, pochette, extrait de 30 s.
+  // On n'affiche que des liens https vers les services de musique, jamais une adresse quelconque venue d'un autre membre.
+  const MUSIC_HOST=/^https:\/\/([a-z0-9-]+\.)*(mzstatic\.com|apple\.com|spotify\.com|scdn\.co|spotifycdn\.com)\//i;
+  const safeUrl=u=>typeof u==="string"&&MUSIC_HOST.test(u)?u:"";
+  function cleanMusic(m){
+    if(!m||typeof m!=="object")return null;
+    const title=String(m.title||"").trim().slice(0,80);if(!title)return null;
+    const out={title,artist:String(m.artist||"").trim().slice(0,60),art:safeUrl(m.art),preview:safeUrl(m.preview),url:safeUrl(m.url),spotify:safeUrl(m.spotify)};
+    for(const k of Object.keys(out))if(!out[k])delete out[k];
+    return out;
+  }
+  function jsonp(u){return new Promise((res,rej)=>{
+    const cb="__itn"+Math.random().toString(36).slice(2),sc=document.createElement("script");
+    const done=()=>{clearTimeout(t);delete window[cb];sc.remove();};
+    const t=setTimeout(()=>{done();rej(new Error("timeout"));},8000);
+    window[cb]=d=>{done();res(d);};sc.onerror=()=>{done();rej(new Error("jsonp"));};
+    sc.src=u+(u.includes("?")?"&":"?")+"callback="+cb;document.head.append(sc);
+  });}
+  function itunes(path){const u="https://itunes.apple.com/"+path;return fetch(u).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).catch(()=>jsonp(u));}
+  const fromItunes=r=>cleanMusic({title:r.trackName,artist:r.artistName,art:(r.artworkUrl100||"").replace(/100x100bb/,"300x300bb"),preview:r.previewUrl,url:r.trackViewUrl});
+  async function searchMusic(q){const d=await itunes(`search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=12&country=FR`);return (d.results||[]).map(fromItunes).filter(Boolean);}
+  // Lien collé : Apple Music → le morceau exact ; Spotify → on cherche son titre et on garde le lien Spotify.
+  async function musicLink(text){
+    const am=text.match(/music\.apple\.com\/\S*[?&]i=(\d+)/)||text.match(/music\.apple\.com\/\S*\/song\/[^/\s]+\/(\d+)/);
+    if(am){const d=await itunes(`lookup?id=${am[1]}&country=FR`);const r=(d.results||[]).find(x=>x.wrapperType==="track");return {list:r?[fromItunes(r)].filter(Boolean):[]};}
+    const sp=text.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]+)/);
+    if(sp){
+      const spotify=`https://open.spotify.com/track/${sp[1]}`;let title="",art="";
+      try{const o=await (await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(spotify)}`)).json();title=o.title||"";art=o.thumbnail_url||"";}catch(e){}
+      let list=[];if(title){try{list=await searchMusic(title);}catch(e){}}
+      list=list.map(m=>({...m,spotify}));
+      if(title)list.unshift(cleanMusic({title,art,spotify}));
+      return {list:list.filter(Boolean),spotify,title};
+    }
+    return null;
+  }
+  // Un seul lecteur pour tous les extraits.
+  const player=new Audio();player.preload="none";let playingKey=null;
+  function syncPlayButtons(){document.querySelectorAll("[data-mkey]").forEach(b=>b.classList.toggle("playing",b.dataset.mkey===playingKey&&!player.paused));}
+  ["play","pause","ended"].forEach(ev=>player.addEventListener(ev,syncPlayButtons));
+  function togglePreview(m,key){
+    if(!m.preview){openMusicLinks(m);return;}
+    if(playingKey===key&&!player.paused){player.pause();return;}
+    if(playingKey!==key){player.src=m.preview;playingKey=key;}
+    player.play().catch(()=>toast("L’extrait n’a pas pu être lu."));syncPlayButtons();
+  }
+  function stopPreview(){try{player.pause();}catch(e){}}
+  function musicChip(m,key,onRemove){
+    const play=el("button",{class:"mplay"+(playingKey===key&&!player.paused?" playing":""),type:"button","data-mkey":key,"aria-label":m.preview?"Écouter l’extrait de "+m.title:"Ouvrir "+m.title,onclick:e=>{e.stopPropagation();togglePreview(m,key);}},
+      m.art?el("img",{src:m.art,alt:"",loading:"lazy"}):el("span",{class:"mnote",text:"♪"}),
+      el("span",{class:"mtxt"},el("b",{text:m.title}),m.artist?el("span",{text:m.artist}):null),
+      m.preview?el("span",{class:"micon","aria-hidden":"true"}):null);
+    const side=onRemove?el("button",{class:"mside",type:"button","aria-label":"Retirer la musique",onclick:e=>{e.stopPropagation();onRemove();}},"✕")
+      :el("button",{class:"mside",type:"button","aria-label":"Écouter le morceau en entier",onclick:e=>{e.stopPropagation();openMusicLinks(m);}},"↗");
+    return el("div",{class:"musicchip"},play,side);
+  }
+  function openMusicLinks(m){
+    const q=encodeURIComponent(m.title+(m.artist?" "+m.artist:""));
+    const close=()=>$("#dlgActions").close();
+    const go=(label,url)=>el("button",{class:"btn ghost act",type:"button",onclick:()=>{close();window.open(url,"_blank","noopener");}},label);
+    $("#acBody").replaceChildren(...[
+      el("div",{class:"mhead"},m.art?el("img",{src:m.art,alt:""}):null,el("div",{},el("b",{text:m.title}),m.artist?el("span",{text:m.artist}):null)),
+      m.preview?el("button",{class:"btn ghost act",type:"button",onclick:()=>{close();togglePreview(m,"x:"+m.preview);}},"▶ Écouter l’extrait (30 s)"):null,
+      go("Ouvrir dans Spotify",m.spotify||`https://open.spotify.com/search/${q}`),
+      go("Ouvrir dans Apple Music",m.url||`https://music.apple.com/fr/search?term=${q}`),
+      go("▶ Chercher sur YouTube",`https://www.youtube.com/results?search_query=${q}`)].filter(Boolean));
+    $("#dlgActions").showModal();
+  }
+  function renderShotMusic(){
+    const box=$("#sMusic");
+    box.replaceChildren(S.shotMusic?musicChip(S.shotMusic,"shot",()=>{stopPreview();S.shotMusic=null;renderShotMusic();})
+      :el("button",{class:"btn ghost small addmusic",type:"button",onclick:openMusicPicker},"🎵 Ajouter une musique"));
+  }
+  let muSeq=0,muTimer=null;
+  function openMusicPicker(){
+    $("#muQ").value="";$("#muList").replaceChildren();$("#muHint").textContent="Tape le nom d’un morceau ou d’un artiste.";
+    $("#dlgMusic").showModal();setTimeout(()=>$("#muQ").focus(),50);
+  }
+  function showMusicResults(list){
+    $("#muList").replaceChildren(...list.map((m,i)=>el("div",{class:"murow"},
+      el("button",{class:"mupick",type:"button",onclick:()=>{stopPreview();S.shotMusic=m;$("#dlgMusic").close();renderShotMusic();}},
+        m.art?el("img",{src:m.art,alt:""}):el("span",{class:"mnote",text:"♪"}),
+        el("span",{class:"mtxt"},el("b",{text:m.title}),el("span",{text:m.artist||(m.spotify?"Spotify":"")}))),
+      m.preview?el("button",{class:"mplay mini",type:"button","data-mkey":"r:"+m.preview,"aria-label":"Écouter l’extrait",onclick:()=>togglePreview(m,"r:"+m.preview)},el("span",{class:"micon","aria-hidden":"true"})):null)));
+    syncPlayButtons();
+  }
+  $("#muQ").addEventListener("input",()=>{
+    clearTimeout(muTimer);const q=$("#muQ").value.trim();
+    if(q.length<2){$("#muList").replaceChildren();return;}
+    muTimer=setTimeout(async()=>{
+      const id=++muSeq;$("#muHint").textContent="Recherche…";
+      try{
+        const link=/https?:\/\//.test(q)?await musicLink(q):null;
+        const list=link?link.list:await searchMusic(q);
+        if(id!==muSeq)return;
+        $("#muHint").textContent=list.length?(link?"Choisis la bonne version :":"Touche un morceau pour l’ajouter. ▶ pour écouter."):(link?"Lien non reconnu. Tape plutôt le titre.":"Aucun résultat.");
+        showMusicResults(list);
+      }catch(e){if(id===muSeq){$("#muHint").textContent="La recherche n’a pas marché. Vérifie ta connexion.";}}
+    },350);
+  });
+  $("#dlgMusic").addEventListener("close",()=>{if(playingKey&&playingKey.startsWith("r:"))stopPreview();});
+  $("#dlgShot").addEventListener("close",()=>{if(playingKey==="shot")stopPreview();});
+
   // ---------- vidéos courtes (à la place d'une photo) ----------
   const VIDEO_MAX_S=15;            // durée maximale
   const VIDEO_KEEP_BYTES=8e6;      // en dessous, la vidéo est envoyée telle quelle (qualité d'origine)
@@ -1027,13 +1133,13 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, NOTIFY_URL } from "./config.js";
         catch(e){throw Object.assign(e,{stage:"video",size:blob.size,vtype:blob.type});}
         extra={video:url,dur:Math.round(vid.dur*10)/10};
       }
-      await S.db.doc("groups/"+S.current).collection("photos").doc(`${d}_${pad(sl.hour)}_${S.uid}`).set({uid:S.uid,date:d,hour:sl.hour,ts:Date.now(),lateMin:sl.sinceMin,img:S.pendingShot,caption:$("#sCap").value.trim().slice(0,80),...extra});
+      await S.db.doc("groups/"+S.current).collection("photos").doc(`${d}_${pad(sl.hour)}_${S.uid}`).set({uid:S.uid,date:d,hour:sl.hour,ts:Date.now(),lateMin:sl.sinceMin,img:S.pendingShot,caption:$("#sCap").value.trim().slice(0,80),...extra,...(S.shotMusic?{music:S.shotMusic}:{})});
       const g=S.groups.find(x=>x.id===S.current);
       const before=scoreDay(S.uid,d,g).pts;
       const after=scoreDay(S.uid,d,g,{...slotsOf(S.uid,d),[sl.hour]:sl.sinceMin}).pts;
       S.backfilled[`${d}_${pad(sl.hour)}_${S.uid}`]=1;
       recordSlot(d,sl.hour,sl.sinceMin).catch(()=>{});
-      S.pendingShot=null;dropShotVideo();$("#dlgShot").close();S.scrollBottom=true;if(S.day!==d)setDay(d);
+      S.pendingShot=null;S.shotMusic=null;dropShotVideo();$("#dlgShot").close();S.scrollBottom=true;if(S.day!==d)setDay(d);
       toast(`${vid?"Vidéo":"Photo"} envoyée : +${after-before} pts`+(sl.sinceMin<=ON_TIME?" (à l’heure)":" (en retard)"));
     }catch(e){
       e=e||{};const msg=String(e.message||"");

@@ -56,6 +56,7 @@
 <dialog id="dlgShot">
   <h2 id="sTitle">Ta photo</h2>
   <div class="prevwrap"><img class="preview" id="sPrev" alt="Aperçu de ta photo"><button class="flipbtn" id="sFlip" type="button">⇆ Retourner</button><span class="vidtag" id="sVidTag" hidden></span></div>
+  <div id="sMusic" class="smusic"></div>
   <label for="sCap">Légende (facultatif)</label>
   <input type="text" id="sCap" maxlength="80" placeholder="Ce que tu fais, là, maintenant">
   <p class="err" id="sErr"></p>
@@ -70,6 +71,13 @@
   <img class="rprev" id="rPrev" alt="Photo jointe">
   <p class="err" id="rErr"></p>
   <div class="row"><button class="btn ghost small" id="rPhoto">Joindre une photo</button><span style="flex:1"></span><button class="btn ghost small" data-close>Annuler</button><button class="btn small" id="rGo">Envoyer</button></div>
+</dialog>
+
+<dialog id="dlgMusic" class="sheet">
+  <div class="sheethead"><h2>Ajouter une musique</h2><button class="btn ghost small" data-close>Fermer</button></div>
+  <input type="search" id="muQ" placeholder="Titre, artiste… ou lien Spotify / Apple Music" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Rechercher une musique">
+  <p class="hint" id="muHint">Tape le nom d’un morceau ou d’un artiste.</p>
+  <div id="muList" class="mulist"></div>
 </dialog>
 
 <dialog id="dlgInfo" class="sheet">

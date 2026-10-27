@@ -1,13 +1,13 @@
-// Mes Exos : fonction Edge qui lit les photos d'un cours avec Claude et renvoie une fiche d'exercices.
+// Mes Exos : fonction Edge qui lit les photos d'un cours avec Gemini (Google) et renvoie une fiche d'exercices.
 // - POST { images: [{ media_type, data }], nb, level, niveau, cycle, extra, eviter } avec le jeton de session Supabase
 //   (compte anonyme de l'app) → { matiere, titre, resume, notions, exercices: [{ difficulte, enonce, indice, corrige }] }
 // La consigne est écrite ici, pas par l'app : la fonction ne sert qu'à générer des exercices.
-// Quota par compte : supabase/exos.sql (table exos_usage). La clé Claude est le secret ANTHROPIC_API_KEY de la fonction.
+// Quota par compte : supabase/exos.sql (table exos_usage). La clé Gemini (gratuite, aistudio.google.com) est le secret
+// GEMINI_API_KEY de la fonction ; le secret facultatif GEMINI_MODEL change de modèle.
 // La déployer avec « Verify JWT » désactivé (le jeton est vérifié ici).
-import Anthropic from "npm:@anthropic-ai/sdk";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const MODEL = "claude-opus-5-5";
+const MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-flash-latest";
 const MAX_IMAGES = 5;
 const MAX_IMAGE_BYTES = 3_500_000; // en base64, une page réduite par l'app pèse bien moins
 const PER_DAY = 20;
@@ -16,7 +16,7 @@ const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
 });
-const claude = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") || "";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -25,32 +25,6 @@ const CORS = {
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
-
-const SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["matiere", "titre", "resume", "notions", "exercices"],
-  properties: {
-    matiere: { type: "string" },
-    titre: { type: "string" },
-    resume: { type: "string" },
-    notions: { type: "array", items: { type: "string" } },
-    exercices: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["difficulte", "enonce", "indice", "corrige"],
-        properties: {
-          difficulte: { type: "integer", enum: [1, 2, 3] },
-          enonce: { type: "string" },
-          indice: { type: "string" },
-          corrige: { type: "string" },
-        },
-      },
-    },
-  },
-};
 
 const LEVELS: Record<string, string> = {
   facile: "plutôt faciles (application directe du cours)",
@@ -81,7 +55,10 @@ function consigne(b: Record<string, unknown>) {
 
 Écris en français (ou dans la langue du cours si c'est un cours de langue). N'utilise PAS de LaTeX ni de Markdown : écris les formules en texte avec des symboles Unicode (², √, π, Δ, ≤, →, ∫, x₁…). Utilise des retours à la ligne pour structurer.
 « titre » est le chapitre, « resume » une ou deux phrases sur le cours, « notions » 3 à 6 notions clés, « difficulte » 1 (facile), 2 (moyen) ou 3 (difficile).
-Si les images ne sont pas un cours lisible, renvoie exercices: [] et explique pourquoi dans « resume ».`;
+Si les images ne sont pas un cours lisible, renvoie exercices: [] et explique pourquoi dans « resume ».
+
+Réponds uniquement avec un objet JSON de cette forme :
+{"matiere": string, "titre": string, "resume": string, "notions": [string, ...], "exercices": [{"difficulte": 1|2|3, "enonce": string, "indice": string, "corrige": string}]}`;
 }
 
 async function onGenerate(req: Request) {
@@ -104,42 +81,40 @@ async function onGenerate(req: Request) {
   if ((used.count ?? 0) >= PER_DAY) return json({ error: "quota" }, 429);
   await sb.from("exos_usage").insert({ uid });
 
-  let msg;
-  try {
-    const stream = claude.beta.messages.stream({
-      model: MODEL,
-      max_tokens: 32000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
-      messages: [
+  if (!GEMINI_KEY) return json({ error: "setup", detail: "GEMINI_API_KEY" }, 500);
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEY },
+    body: JSON.stringify({
+      contents: [
         {
           role: "user",
-          content: [
-            ...images.map((im: { media_type: string; data: string }) => ({
-              type: "image" as const,
-              source: { type: "base64" as const, media_type: im.media_type, data: im.data },
-            })),
-            { type: "text" as const, text: consigne(b) },
+          parts: [
+            ...images.map((im: { media_type: string; data: string }) => ({ inline_data: { mime_type: im.media_type, data: im.data } })),
+            { text: consigne(b) },
           ],
         },
       ],
-    // deno-lint-ignore no-explicit-any
-    } as any);
-    msg = await stream.finalMessage();
-  } catch (e) {
-    console.error(e);
-    if (e instanceof Anthropic.RateLimitError) return json({ error: "rate_limited" }, 429);
-    if (e instanceof Anthropic.BadRequestError) return json({ error: /image/i.test(e.message) ? "image_rejected" : "bad_request", detail: e.message }, 400);
-    if (e instanceof Anthropic.AuthenticationError) return json({ error: "setup", detail: "ANTHROPIC_API_KEY" }, 500);
-    if (e instanceof Anthropic.APIError) return json({ error: "claude", detail: e.message }, 502);
-    throw e;
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 32000 },
+    }),
+  });
+  const g = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    console.error(r.status, JSON.stringify(g));
+    const detail = g?.error?.message || String(r.status);
+    if (r.status === 429) return json({ error: "rate_limited", detail }, 429);
+    if (r.status === 401 || r.status === 403) return json({ error: "setup", detail }, 500);
+    if (r.status === 404) return json({ error: "setup", detail: `modèle ${MODEL} : ${detail}` }, 500);
+    if (r.status === 400) return json({ error: /image|inline/i.test(detail) ? "image_rejected" : "bad_request", detail }, 400);
+    return json({ error: "gemini", detail }, 502);
   }
-  if (msg.stop_reason === "refusal") return json({ error: "refused" }, 422);
-  if (msg.stop_reason === "max_tokens") return json({ error: "too_long" }, 502);
-  const text = msg.content.map((c: { type: string; text?: string }) => (c.type === "text" ? c.text : "")).join("");
+  if (g?.promptFeedback?.blockReason) return json({ error: "refused" }, 422);
+  const cand = g?.candidates?.[0];
+  if (cand?.finishReason === "SAFETY" || cand?.finishReason === "PROHIBITED_CONTENT") return json({ error: "refused" }, 422);
+  if (cand?.finishReason === "MAX_TOKENS") return json({ error: "too_long" }, 502);
+  const text = (cand?.content?.parts || []).map((p: { text?: string; thought?: boolean }) => (p.thought ? "" : p.text || "")).join("");
   try {
-    return json(JSON.parse(text));
+    return json(JSON.parse(text.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, "")));
   } catch {
     return json({ error: "invalid_json" }, 502);
   }

@@ -1,4 +1,4 @@
-// Mes Exos : photos d'un cours → fiche d'exercices (indice + corrigé), générée par Claude via la fonction Edge
+// Mes Exos : photos d'un cours → fiche d'exercices (indice + corrigé), générée par Gemini (Google) via la fonction Edge
 // supabase/functions/exos. Le compte est un compte anonyme Supabase, le même que pour les autres apps du projet.
 import { SUPABASE_URL, SUPABASE_ANON_KEY, EXOS_URL } from "../config.js";
 
@@ -180,7 +180,7 @@ async function generate(fresh){
   if(!files.length||ctl) return;
   ctl=new AbortController(); updateState();
   $("#stop").hidden=false;
-  setStatus('<span class="spinner"></span>Claude lit ton cours et prépare les exercices… (30 s à 1 min)');
+  setStatus('<span class="spinner"></span>Je lis ton cours et je prépare les exercices… (30 s à 1 min)');
   try{
     const images=await Promise.all(files.map(toJpeg));
     const data=await callExos({

@@ -61,6 +61,48 @@ Réponds uniquement avec un objet JSON de cette forme :
 {"matiere": string, "titre": string, "resume": string, "notions": [string, ...], "exercices": [{"difficulte": 1|2|3, "enonce": string, "indice": string, "corrige": string}]}`;
 }
 
+// Gemini renvoie parfois le JSON entouré de texte ou de ```, avec des \ de LaTeX, dans un tableau ou avec d'autres noms
+// de champs : on le lit avec tolérance et on remet la fiche dans la forme attendue par l'app.
+function parseLoose(text: string): unknown {
+  const t = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+  const tries = [t];
+  const a = t.indexOf("{"), z = t.lastIndexOf("}");
+  if (a >= 0 && z > a) tries.push(t.slice(a, z + 1));
+  for (const x of [...tries]) tries.push(x.replace(/\\(?!["\\/bfnrtu])/g, "\\\\"));
+  for (const x of tries) {
+    try {
+      return JSON.parse(x);
+    } catch { /* essai suivant */ }
+  }
+  return null;
+}
+// deno-lint-ignore no-explicit-any
+const txt = (x: any): string => Array.isArray(x) ? x.map(txt).join("\n") : x && typeof x === "object" ? Object.values(x).map(txt).join("\n") : String(x ?? "");
+// deno-lint-ignore no-explicit-any
+const pick = (o: any, ...keys: string[]) => { for (const k of keys) if (o?.[k] != null) return o[k]; };
+// deno-lint-ignore no-explicit-any
+function normalize(v: any) {
+  if (Array.isArray(v)) v = v.length === 1 && pick(v[0], "exercices", "exercises") ? v[0] : { exercices: v };
+  if (v && typeof v === "object" && !pick(v, "exercices", "exercises", "exos") && v.fiche) v = v.fiche;
+  if (!v || typeof v !== "object") return null;
+  const ex = pick(v, "exercices", "exercises", "exos");
+  if (!Array.isArray(ex)) return null;
+  const notions = pick(v, "notions", "notions_cles", "notionsCles");
+  return {
+    matiere: txt(pick(v, "matiere", "matière", "subject")),
+    titre: txt(pick(v, "titre", "chapitre", "title")),
+    resume: txt(pick(v, "resume", "résumé", "summary")),
+    notions: Array.isArray(notions) ? notions.map(txt) : [],
+    // deno-lint-ignore no-explicit-any
+    exercices: ex.map((e: any) => ({
+      difficulte: Math.max(1, Math.min(3, Number(pick(e, "difficulte", "difficulté", "niveau", "difficulty")) || 2)),
+      enonce: txt(pick(e, "enonce", "énoncé", "question", "consigne")),
+      indice: txt(pick(e, "indice", "hint", "aide")),
+      corrige: txt(pick(e, "corrige", "corrigé", "correction", "reponse", "réponse", "solution")),
+    })),
+  };
+}
+
 async function onGenerate(req: Request) {
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   const { data: u, error } = await sb.auth.getUser(token);
@@ -113,11 +155,12 @@ async function onGenerate(req: Request) {
   if (cand?.finishReason === "SAFETY" || cand?.finishReason === "PROHIBITED_CONTENT") return json({ error: "refused" }, 422);
   if (cand?.finishReason === "MAX_TOKENS") return json({ error: "too_long" }, 502);
   const text = (cand?.content?.parts || []).map((p: { text?: string; thought?: boolean }) => (p.thought ? "" : p.text || "")).join("");
-  try {
-    return json(JSON.parse(text.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, "")));
-  } catch {
-    return json({ error: "invalid_json" }, 502);
+  const fiche = normalize(parseLoose(text));
+  if (!fiche) {
+    console.error("réponse illisible", cand?.finishReason, text.slice(0, 3000));
+    return json({ error: "invalid_json", detail: text.slice(0, 300) }, 502);
   }
+  return json(fiche);
 }
 
 if (typeof Deno !== "undefined" && Deno.serve)

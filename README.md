@@ -193,6 +193,34 @@ désactive *Verify JWT*. Ensuite, dans *SQL Editor*, lance [`supabase/mons-rappe
 
 Pour l'essayer sans toucher à la base : **…/mons/?demo** (données gardées dans le navigateur ; codes `DEMO26` pour un admin, `BENE26` pour une bénévole).
 
+## Mes Exos : des exercices à partir d'une photo du cours
+
+Le dossier `docs/exos/` contient une sixième application, **Mes Exos** : on prend en photo les pages d'un cours
+(jusqu'à 5), et l'IA Gemini de Google rédige une fiche d'exercices sur ce chapitre, avec un indice et un corrigé détaillé pour chacun.
+
+- **Ton niveau** : à la première ouverture, quelques questions (collège, lycée et spécialités, études supérieures) pour adapter
+  les exercices au programme. Modifiable à tout moment.
+- **Réglages de la fiche** : 3 à 10 exercices, niveau facile / mixte / difficile, et une consigne libre (« type bac », « plutôt des QCM »…).
+- **Sur la fiche** : brouillon de réponse, indice, corrigé, « Autres exercices sur ce cours » (sans reprendre les mêmes),
+  export PDF à imprimer (lignes pour répondre, corrigés à part) et les 8 dernières fiches gardées sur le téléphone.
+
+Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/exos/** : ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
+
+### Mise en route (une seule fois)
+
+La génération passe par une fonction Edge de Supabase, qui garde la clé Gemini secrète et limite chaque appareil à 20 fiches par jour.
+La clé Gemini est gratuite (sans carte bancaire), avec un nombre de demandes limité par jour.
+
+1. **Clé Gemini** : sur <https://aistudio.google.com/apikey>, connecte-toi avec un compte Google et touche *Create API key*.
+   Dans Supabase › *Edge Functions › Secrets*, ajoute un secret `GEMINI_API_KEY` avec cette clé.
+2. **Base** : dans *SQL Editor › New query*, colle tout le contenu de [`supabase/exos.sql`](supabase/exos.sql) et touche *Run*.
+3. **Fonction** : dans *Edge Functions › Deploy a new function › Via Editor*, nomme la fonction `exos`, colle le contenu de
+   [`supabase/functions/exos/index.ts`](supabase/functions/exos/index.ts), déploie-la, puis dans ses réglages désactive *Verify JWT*
+   (la fonction vérifie elle-même le compte de l'app).
+
+Le modèle utilisé est le dernier Gemini Flash (`gemini-flash-latest`) ; pour en choisir un autre, ajoute un secret `GEMINI_MODEL`.
+La limite par appareil se règle avec `PER_DAY` en haut de la fonction.
+
 ## Version avec serveur (auto-hébergée)
 
 Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.

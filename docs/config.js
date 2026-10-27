@@ -8,3 +8,5 @@ export const NOTIFY_URL = "https://alxensbjhfpktfnobvix.supabase.co/functions/v1
 export const MONS_NOTIFY_URL = "https://alxensbjhfpktfnobvix.supabase.co/functions/v1/mons-rappels";
 // Fonction Edge du calendrier à s'abonner de Mons en fête (supabase/functions/mons-calendrier).
 export const MONS_CAL_URL = "https://alxensbjhfpktfnobvix.supabase.co/functions/v1/mons-calendrier";
+// Fonction Edge de Mes Exos, qui fait générer les exercices par Claude (supabase/functions/exos).
+export const EXOS_URL = "https://alxensbjhfpktfnobvix.supabase.co/functions/v1/exos";

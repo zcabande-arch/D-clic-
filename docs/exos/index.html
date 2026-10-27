@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mes Exos</title>
+<meta name="description" content="Prends ton cours en photo : des exercices sur ce chapitre, avec un indice et un corrigé pour chacun.">
+<meta name="theme-color" content="#f4f1fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141020" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mes Exos">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>Mes Exos</h1>
+    <p>Prends ton cours en photo. Tu reçois des exercices sur ce chapitre, avec un indice et un corrigé pour chacun.</p>
+    <svg class="crew" viewBox="0 0 360 120" aria-hidden="true">
+      <g class="blob"><path d="M10 120 C10 70 30 55 55 55 C80 55 100 70 100 120Z" fill="var(--teal)"/><circle cx="42" cy="88" r="6" fill="var(--face)"/><circle cx="68" cy="88" r="6" fill="var(--face)"/><path d="M49 100 q6 5 12 0" stroke="var(--face)" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+      <g class="blob"><rect x="88" y="40" width="80" height="80" rx="26" fill="var(--yellow)"/><circle cx="115" cy="76" r="6" fill="var(--face)"/><path d="M136 76 q6 -6 12 0" stroke="var(--face)" stroke-width="3.5" fill="none" stroke-linecap="round"/><ellipse cx="128" cy="94" rx="7" ry="5" fill="var(--face)"/></g>
+      <g class="blob"><circle cx="205" cy="82" r="40" fill="var(--pink)"/><circle cx="190" cy="78" r="8" fill="#fff"/><circle cx="220" cy="78" r="8" fill="#fff"/><circle cx="192" cy="79" r="4.5" fill="var(--face)"/><circle cx="222" cy="79" r="4.5" fill="var(--face)"/><path d="M198 96 q7 6 14 0" stroke="var(--face)" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+      <g class="blob"><path d="M252 120 L285 50 L318 120Z" fill="var(--coral)" stroke="var(--coral)" stroke-width="14" stroke-linejoin="round"/><circle cx="275" cy="96" r="5.5" fill="var(--face)"/><circle cx="296" cy="96" r="5.5" fill="var(--face)"/></g>
+      <g class="blob"><circle cx="345" cy="100" r="30" fill="var(--blue)"/><path d="M330 98 q5 -5 10 0 M350 98 q5 -5 10 0" stroke="var(--face)" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+    </svg>
+  </header>
+
+  <section class="panel" aria-label="Ton cours">
+    <div class="profile">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="22" r="17" fill="var(--teal)"/><circle cx="14" cy="21" r="3" fill="var(--face)"/><circle cx="26" cy="21" r="3" fill="var(--face)"/><path d="M16 28 q4 3 8 0" stroke="var(--face)" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      <div class="pt"><small>Ton niveau</small><strong id="profTxt">Pas encore renseigné</strong></div>
+      <button class="btn" type="button" id="profEdit">Modifier</button>
+    </div>
+    <h2>Ton cours</h2>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des photos du cours">
+      <strong>Ajoute les pages de ton cours</strong>
+      <small>Photo, capture d'écran ou scan · JPG, PNG, WebP</small>
+      <div class="btns">
+        <button class="btn" type="button" id="camBtn">Prendre une photo</button>
+        <button class="btn" type="button" id="galBtn">Choisir des images</button>
+      </div>
+      <input type="file" id="cam" accept="image/*" capture="environment" hidden>
+      <input type="file" id="gal" accept="image/*" multiple hidden>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+
+    <div class="opts">
+      <label class="f">Nombre d'exercices
+        <select id="nb"><option>3</option><option selected>5</option><option>8</option><option>10</option></select>
+      </label>
+      <div class="f">Niveau
+        <div class="seg" id="lvl" role="group" aria-label="Niveau">
+          <button type="button" data-v="facile" aria-pressed="false">Facile</button>
+          <button type="button" data-v="mixte" aria-pressed="true">Mixte</button>
+          <button type="button" data-v="difficile" aria-pressed="false">Difficile</button>
+        </div>
+      </div>
+    </div>
+    <label class="f">Consigne en plus (optionnel)
+      <input type="text" id="extra" placeholder="ex. type bac, plutôt des QCM, insiste sur les dérivées">
+    </label>
+
+    <div class="go">
+      <button class="btn primary" id="gen" type="button" disabled>Générer les exercices</button>
+      <div class="row"><span class="status" id="status" aria-live="polite">Ajoute au moins une photo.</span>
+      <button class="btn" id="stop" type="button" hidden>Arrêter</button></div>
+    </div>
+  </section>
+
+  <div class="onb" id="onb" hidden role="dialog" aria-modal="true" aria-labelledby="onbQ">
+  <div class="onb-in">
+    <div class="onb-bar"><button class="icon-btn" id="onbBack" type="button" aria-label="Retour">←</button><div class="dots" id="onbDots"></div><button class="skip" id="onbSkip" type="button">Passer</button></div>
+    <div class="onb-mascot" id="onbMascot"></div>
+    <h2 id="onbQ"></h2>
+    <p class="sub" id="onbSub"></p>
+    <div class="choices" id="onbChoices"></div>
+    <div class="onb-foot" id="onbFoot"></div>
+  </div>
+</div>
+
+  <section class="sheet" id="sheet" aria-live="polite"></section>
+  <section class="hist" id="hist" hidden></section>
+</div>
+</body>
+</html>

@@ -1,0 +1,53 @@
+// Service worker de Mes Exos : l'app (et les fiches déjà faites) s'ouvre même sans réseau ; générer demande le réseau.
+const SHELL = "exos-shell-v1";
+const LIBS = "exos-libs-v1";
+const SHELL_FILES = ["./", "./index.html", "./styles.css", "./app.js", "../config.js", "./manifest.webmanifest", "./icons/icon.svg", "./icons/icon-192.png"];
+
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("exos-") && k !== SHELL && k !== LIBS).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (e) => {
+  if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  // Police Figtree, Supabase, html2canvas et jsPDF (adresses versionnées) : le cache d'abord.
+  if (["fonts.googleapis.com", "fonts.gstatic.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"].includes(url.hostname)) {
+    e.respondWith(
+      caches.match(e.request).then(
+        (hit) =>
+          hit ||
+          fetch(e.request).then((res) => {
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(LIBS).then((c) => c.put(e.request, copy));
+            }
+            return res;
+          }),
+      ),
+    );
+    return;
+  }
+  if (url.origin !== location.origin) return;
+  // Interface : le réseau d'abord pour recevoir les mises à jour (GitHub Pages met 10 min en cache), sinon la copie gardée.
+  const fresh = e.request.mode === "navigate" ? fetch(e.request.url, { cache: "no-cache" }) : fetch(new Request(e.request, { cache: "no-cache" }));
+  e.respondWith(
+    fresh
+      .then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(SHELL).then((c) => c.put(e.request, copy));
+        }
+        return res;
+      })
+      .catch(async () => (await caches.match(e.request, { ignoreSearch: e.request.mode === "navigate" })) || (e.request.mode === "navigate" ? caches.match("./") : Response.error())),
+  );
+});

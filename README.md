@@ -193,6 +193,33 @@ désactive *Verify JWT*. Ensuite, dans *SQL Editor*, lance [`supabase/mons-rappe
 
 Pour l'essayer sans toucher à la base : **…/mons/?demo** (données gardées dans le navigateur ; codes `DEMO26` pour un admin, `BENE26` pour une bénévole).
 
+## Mes Exos : des exercices à partir d'une photo du cours
+
+Le dossier `docs/exos/` contient une sixième application, **Mes Exos** : on prend en photo les pages d'un cours
+(jusqu'à 5), et Claude rédige une fiche d'exercices sur ce chapitre, avec un indice et un corrigé détaillé pour chacun.
+
+- **Ton niveau** : à la première ouverture, quelques questions (collège, lycée et spécialités, études supérieures) pour adapter
+  les exercices au programme. Modifiable à tout moment.
+- **Réglages de la fiche** : 3 à 10 exercices, niveau facile / mixte / difficile, et une consigne libre (« type bac », « plutôt des QCM »…).
+- **Sur la fiche** : brouillon de réponse, indice, corrigé, « Autres exercices sur ce cours » (sans reprendre les mêmes),
+  export PDF à imprimer (lignes pour répondre, corrigés à part) et les 8 dernières fiches gardées sur le téléphone.
+
+Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/exos/** : ouvre-la dans Safari (ou Chrome) et ajoute-la à l'écran d'accueil.
+
+### Mise en route (une seule fois)
+
+La génération passe par une fonction Edge de Supabase, qui garde la clé Claude secrète et limite chaque appareil à 20 fiches par jour.
+
+1. **Clé Claude** : crée une clé sur <https://platform.claude.com> (*API Keys*). Dans Supabase › *Edge Functions › Secrets*,
+   ajoute un secret `ANTHROPIC_API_KEY` avec cette clé.
+2. **Base** : dans *SQL Editor › New query*, colle tout le contenu de [`supabase/exos.sql`](supabase/exos.sql) et touche *Run*.
+3. **Fonction** : dans *Edge Functions › Deploy a new function › Via Editor*, nomme la fonction `exos`, colle le contenu de
+   [`supabase/functions/exos/index.ts`](supabase/functions/exos/index.ts), déploie-la, puis dans ses réglages désactive *Verify JWT*
+   (la fonction vérifie elle-même le compte de l'app).
+
+Le modèle utilisé est Claude Opus 5.5 (constante `MODEL` en haut de la fonction). Compter environ 0,10 à 0,30 $ par fiche selon
+le nombre de pages et d'exercices ; la limite par appareil se règle avec `PER_DAY`.
+
 ## Version avec serveur (auto-hébergée)
 
 Le dossier `server/` et `public/` forment une version avec son propre serveur Node.js, qui ajoute les rappels push à chaque déclic.

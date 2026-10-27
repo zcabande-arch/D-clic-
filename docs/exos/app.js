@@ -151,7 +151,7 @@ function connect(){
   return connecting;
 }
 
-// Pages réduites à 1568 px de côté (au-delà, Claude les réduit de toute façon) et envoyées en JPEG.
+// Pages réduites à 1568 px de côté (assez pour lire un cours, et léger à envoyer) et envoyées en JPEG.
 async function toJpeg(file){
   let src;
   try{ src=await createImageBitmap(file,{imageOrientation:"from-image"}); }

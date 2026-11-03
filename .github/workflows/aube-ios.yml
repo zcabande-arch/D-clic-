@@ -1,0 +1,47 @@
+# Compile l'app iPhone « Aube » (ios/Aube) sur un Mac de GitHub, à chaque changement.
+# Résultats dans l'onglet Actions : le projet Xcode prêt à ouvrir et un .ipa non signé
+# (à installer avec Sideloadly ou AltStore, qui le signent avec ton identifiant Apple).
+name: App iPhone Aube
+
+on:
+  push:
+    paths: ["ios/Aube/**", ".github/workflows/aube-ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ios/Aube
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode le plus récent
+        run: |
+          ls /Applications | grep -i xcode
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: Générer le projet
+        run: brew install xcodegen && xcodegen
+      - name: Compiler (iPhone, sans signature)
+        run: |
+          xcodebuild -project Aube.xcodeproj -scheme Aube -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build | tail -n 80
+          test "${PIPESTATUS[0]}" = 0
+      - name: Paquets
+        run: |
+          mkdir -p out/Payload
+          cp -R build/Build/Products/Release-iphoneos/Aube.app out/Payload/
+          (cd out && zip -qr Aube-non-signe.ipa Payload)
+          zip -qr out/Aube-projet-xcode.zip Aube.xcodeproj Info.plist Sources Resources project.yml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aube-iPhone
+          path: |
+            ios/Aube/out/Aube-non-signe.ipa
+            ios/Aube/out/Aube-projet-xcode.zip

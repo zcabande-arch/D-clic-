@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#07060b">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Réveil Aube</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: single column of frosted-glass pills floating over a slow, blurred aurora of dusk reds and violets */
+:root{
+  --bg:#07060b; --glass:rgba(255,255,255,.06); --glass-2:rgba(255,255,255,.09); --line:rgba(255,255,255,.13); --fg:#f6f1f4; --muted:rgba(246,241,244,.58);
+  --red:#e0324a; --magenta:#b2387e; --violet:#6a4bd8; --ember:#ff7a45; --gold:#ffbf6b; --sky:#8fd3f5;
+  --deep:#7b6cf6; --light:#c9b8ff; --rem:#ff5d7a; --awake:#ffbf6b; --dusk:#c9b8ff;
+  --display:"Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body:"Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:dark;
+}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 100px;overflow-x:hidden}
+.aurora{position:fixed;inset:-20%;z-index:-1;pointer-events:none;filter:blur(70px) saturate(1.2);opacity:.85}
+.aurora i{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:drift 26s ease-in-out infinite alternate}
+.aurora i:nth-child(1){width:60vmax;height:60vmax;left:30%;top:10%;background:radial-gradient(circle,var(--red),transparent 65%)}
+.aurora i:nth-child(2){width:50vmax;height:50vmax;left:-5%;top:35%;background:radial-gradient(circle,var(--violet),transparent 65%);animation-duration:32s}
+.aurora i:nth-child(3){width:45vmax;height:45vmax;left:45%;top:50%;background:radial-gradient(circle,var(--magenta),transparent 65%);animation-duration:38s}
+.aurora::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 100%,transparent 30%,var(--bg) 85%)}
+@keyframes drift{to{transform:translate(-12%,8%) scale(1.15)}}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.wrap{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.glass{background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(24px) saturate(1.4);backdrop-filter:blur(24px) saturate(1.4)}
+header.top{display:flex;align-items:center;gap:12px;padding:8px 10px 8px 8px;border-radius:40px}
+.orb{width:42px;height:42px;border-radius:50%;flex:none;background:radial-gradient(circle at 35% 30%,#ffd29a,var(--ember) 45%,var(--red) 80%);box-shadow:0 0 22px rgba(255,90,70,.55)}
+.brand{font-weight:600;font-size:1rem;margin:0}
+.tag{color:var(--muted);font-size:.92rem;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bell{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;flex:none}
+.bell svg{width:22px;height:22px}
+.hero{display:flex;flex-direction:column;gap:10px;padding:18px 4px 4px}
+.hero h1{font-family:var(--display);font-weight:800;font-size:clamp(2.6rem,12vw,3.4rem);line-height:1;letter-spacing:-.03em;margin:0;text-wrap:balance}
+.hero p{margin:0;color:var(--muted);font-size:1.02rem;line-height:1.5;max-width:30ch}
+.panel{border-radius:34px;padding:22px;display:flex;flex-direction:column;gap:18px;background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(24px) saturate(1.4);backdrop-filter:blur(24px) saturate(1.4)}
+.wake{text-align:center;display:flex;flex-direction:column;gap:4px}
+.lab{font-size:.82rem;color:var(--muted);display:flex;gap:8px;align-items:center;justify-content:center}
+.wake input{font-family:var(--display);font-size:4rem;font-weight:800;letter-spacing:-.04em;background:none;border:0;text-align:center;width:100%;padding:0;line-height:1.1;font-variant-numeric:tabular-nums}
+.wake small{color:var(--muted);font-size:.85rem}
+.sl{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:16px}
+.sl .h{display:flex;justify-content:space-between;align-items:center;font-size:.95rem;font-weight:600}
+.sl .h span:last-child{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:6px;outline-offset:6px;background:linear-gradient(90deg,var(--c) var(--p,50%),rgba(255,255,255,.12) var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:46px;height:28px;border-radius:16px;background:rgba(255,255,255,.92);box-shadow:0 4px 14px rgba(0,0,0,.45)}
+input[type=range]::-moz-range-thumb{width:46px;height:28px;border-radius:16px;background:#fff;border:0}
+#rSun{--c:var(--light)} #rDawn{--c:var(--ember)} #rVol{--c:var(--sky)}
+select{width:100%;background:var(--glass-2);border:1px solid var(--line);border-radius:18px;padding:13px 14px;font-size:1rem;color:var(--fg);font-weight:500}
+.row2{display:flex;gap:10px}
+.row2>*{flex:1;min-width:0}
+.hint{font-size:.82rem;color:var(--muted);text-align:center;line-height:1.5;margin:0}
+.warn{color:var(--gold)}
+.go{background:rgba(255,255,255,.92);color:#16070c;border:0;border-radius:40px;padding:18px;font-weight:700;font-size:1.05rem;width:100%;box-shadow:0 10px 40px rgba(224,50,74,.35)}
+.ghost{background:var(--glass);border:1px solid var(--line);border-radius:40px;padding:14px;font-size:.95rem;font-weight:500;width:100%;-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.play{background:none;border:0;color:var(--sky);font-size:.85rem;font-weight:600;padding:0}
+h2{font-family:var(--display);font-weight:800;font-size:1.7rem;letter-spacing:-.02em;margin:0}
+h3{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:600}
+.cards{display:flex;flex-direction:column;gap:8px}
+.opt{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-radius:26px;background:var(--glass-2);border:1px solid transparent;text-align:left;width:100%}
+.opt b{font-family:var(--display);font-weight:800;font-size:1.7rem;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.opt span{color:var(--muted);font-size:.85rem;text-align:right}
+.opt.best{border-color:rgba(255,191,107,.55);background:linear-gradient(100deg,rgba(255,122,69,.18),rgba(255,255,255,.06))}
+.opt.best span{color:var(--gold)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--glass-2);border-radius:22px;padding:14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat b{font-family:var(--display);font-weight:800;font-size:1.4rem;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat span{font-size:.72rem;color:var(--muted)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.chart{width:100%;overflow-x:auto}
+.chart svg{display:block;width:100%;height:auto}
+.empty{color:var(--muted);font-size:.92rem;line-height:1.5}
+.night{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:.9rem}
+.night:last-child{border-bottom:0}
+.night b{font-variant-numeric:tabular-nums;font-weight:600}
+.night span{color:var(--muted);font-size:.82rem}
+.file{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.file label{background:var(--glass-2);border:1px dashed rgba(255,255,255,.3);border-radius:28px;padding:20px;text-align:center;cursor:pointer;font-weight:600}
+.file input{position:absolute;opacity:0;width:1px;height:1px}
+.steps{margin:0;padding-left:20px;color:var(--muted);font-size:.9rem;line-height:1.6}
+.bar{height:6px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--red),var(--gold));transition:width .2s}
+.ai{white-space:pre-wrap;font-size:.95rem;line-height:1.6}
+.events{display:flex;flex-direction:column;gap:8px;font-size:.86rem}
+.ev{display:flex;gap:10px;align-items:center}
+.ev time{font-variant-numeric:tabular-nums;color:var(--muted);width:42px;flex:none}
+.pill{font-size:.72rem;padding:3px 10px;border-radius:12px;background:var(--glass-2);font-weight:600}
+.pill.snore{color:var(--light)} .pill.noise{color:var(--gold)}
+
+nav{position:fixed;left:0;right:0;bottom:0;z-index:5;
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+nav div{max-width:460px;margin:0 auto;display:flex;gap:4px;padding:6px;border-radius:40px;background:rgba(20,12,20,.55);border:1px solid var(--line);-webkit-backdrop-filter:blur(24px) saturate(1.4);backdrop-filter:blur(24px) saturate(1.4)}
+nav button{flex:1;background:none;border:0;border-radius:30px;padding:9px 4px;font-size:.82rem;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button svg{width:21px;height:21px}
+nav button[aria-selected="true"]{color:var(--fg);background:rgba(255,255,255,.12)}
+
+.lamp{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  padding:calc(40px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(40px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  user-select:none;-webkit-user-select:none;touch-action:none}
+.lamp .clk{font-family:var(--display);font-weight:800;letter-spacing:-.04em;font-size:3.2rem;color:rgba(255,255,255,.18);font-variant-numeric:tabular-nums;transition:opacity 1s}
+.lamp .msg{font-size:.92rem;color:rgba(255,255,255,.35);text-align:center;min-height:1.3em}
+.hold{display:flex;flex-direction:column;align-items:center;gap:10px}
+.hold svg{width:84px;height:84px}
+.hold span{font-size:.82rem;color:rgba(255,255,255,.35)}
+.lamp.bright .clk,.lamp.bright .msg,.lamp.bright .hold span{color:rgba(60,25,8,.6)}
+.lamp.bright .hold circle{stroke:rgba(60,25,8,.45)}
+.sl.sw,.sw{flex-direction:row;display:flex;align-items:center;gap:14px;justify-content:space-between;font-size:.95rem;cursor:pointer}
+.sw small{color:var(--muted);font-size:.82rem;font-weight:400;line-height:1.4}
+.sw input{-webkit-appearance:none;appearance:none;flex:none;width:52px;height:32px;border-radius:16px;background:rgba(255,255,255,.16);position:relative;transition:background .2s;margin:0}
+.sw input::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;transition:transform .2s}
+.sw input:checked{background:var(--ember)}
+.sw input:checked::after{transform:translateX(20px)}
+.snz{background:rgba(255,255,255,.3);border:0;border-radius:30px;padding:12px 26px;color:rgba(60,25,8,.85);font-weight:700}
+@media (prefers-reduced-motion:reduce){.aurora i{animation:none}.bar i{transition:none}}
+</style>
+
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="wrap">
+  <header class="top glass">
+    <span class="orb" aria-hidden="true"></span>
+    <p class="brand">Aube</p>
+    <span class="tag">du crépuscule à l'aube</span>
+    <span class="bell glass" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a6 6 0 0 0-6 6v3.6L4.3 15a1 1 0 0 0 .9 1.5h13.6a1 1 0 0 0 .9-1.5L18 11.6V8a6 6 0 0 0-6-6Zm0 20a3 3 0 0 0 2.8-2H9.2a3 3 0 0 0 2.8 2Z"/></svg></span>
+  </header>
+  <div class="hero" id="hero"><h1>Bonne nuit.</h1><p id="heroTxt">Règle ton réveil, puis laisse la lumière et les sons faire le reste.</p></div>
+
+  <!-- NUIT -->
+  <section id="v-nuit" class="wrap" style="gap:16px">
+    <div class="panel">
+      <div class="wake">
+        <label class="lab" for="wakeT">Heure de réveil</label>
+        <input type="time" id="wakeT" value="07:00">
+        <small id="wakeInfo">—</small>
+      </div>
+      <div class="sl">
+        <div class="h"><span>Coucher progressif</span><span id="vSun">20 min</span></div>
+        <input type="range" id="rSun" min="0" max="60" step="5" value="20" aria-label="Durée du coucher">
+      </div>
+      <div class="sl">
+        <div class="h"><span>Lever de soleil</span><span id="vDawn">30 min</span></div>
+        <input type="range" id="rDawn" min="30" max="60" step="5" value="30" aria-label="Durée de l'aube">
+      </div>
+      <div class="sl">
+        <div class="h"><span>Volume à l'heure du réveil</span><span style="display:flex;gap:12px;align-items:center"><span id="vVol">80 %</span><button class="play" id="test" type="button">▶ Écouter</button></span></div>
+        <input type="range" id="rVol" min="10" max="100" step="5" value="80" aria-label="Volume">
+      </div>
+      <div class="sl">
+        <div class="row2">
+          <label style="display:flex;flex-direction:column;gap:8px;font-size:.85rem;font-weight:500">Pour s'endormir
+            <select id="sleepSnd"><option value="pluie">Pluie douce</option><option value="vagues">Vagues</option><option value="none">Silence</option></select></label>
+          <label style="display:flex;flex-direction:column;gap:8px;font-size:.85rem;font-weight:500">Pour se réveiller
+            <select id="wakeSnd"><option value="oiseaux">Oiseaux</option><option value="carillon">Carillon</option><option value="vagues">Vagues</option><option value="pluie">Pluie douce</option></select></label>
+        </div>
+      </div>
+      <label class="sl sw" id="screenRow" hidden><span><b style="font-weight:600">Voir la lumière de l'aube</b><br><small>Garde l'écran allumé toute la nuit. Sinon, verrouille-le : le son monte quand même.</small></span><input type="checkbox" id="screenOn"></label>
+      <p class="hint">Pièce sombre conseillée. <span id="dawnTxt">30 min</span> avant le réveil, une lueur rouge très faible apparaît, puis passe à l'orange et au blanc chaud. La musique monte en même temps, jusqu'au volume choisi.</p>
+    </div>
+    <p class="hint" id="lockHint"><span class="warn">Ne verrouille pas l'écran.</span> Branche ton téléphone et laisse cette page ouverte toute la nuit.</p>
+    <button class="go" id="start" type="button">Démarrer la nuit</button>
+    <div class="row2">
+      <button class="ghost" id="pvSun" type="button">Voir le coucher</button>
+      <button class="ghost" id="pvDawn" type="button">Voir l'aube</button>
+    </div>
+  </section>
+
+  <!-- SOMMEIL -->
+  <section id="v-sommeil" class="wrap" hidden style="gap:16px">
+    <div class="panel">
+      <h2>Calcul des cycles</h2>
+      <p class="empty" style="margin:0">Un cycle dure environ 90 minutes. Se réveiller à la fin d'un cycle, en sommeil léger, évite la sensation de lourdeur. On compte 15 minutes pour s'endormir.</p>
+      <h3>Si je me couche maintenant</h3>
+      <div class="cards" id="wakeOpts"></div>
+      <h3 id="bedTitle">Pour me lever à 07:00</h3>
+      <div class="cards" id="bedOpts"></div>
+    </div>
+    <div class="panel">
+      <h2>Prévision de ta nuit</h2>
+      <p class="empty" style="margin:0" id="planTxt"></p>
+      <div class="chart" id="planChart"></div>
+      <div class="legend"><span><i style="background:var(--awake)"></i>Éveil</span><span><i style="background:var(--rem)"></i>Paradoxal (rêves)</span><span><i style="background:var(--light)"></i>Léger</span><span><i style="background:var(--deep)"></i>Profond</span></div>
+    </div>
+    <div class="panel">
+      <h2>Tes nuits</h2>
+      <div id="journal"></div>
+    </div>
+  </section>
+
+  <!-- ÉCOUTE -->
+  <section id="v-ecoute" class="wrap" hidden style="gap:16px">
+    <div class="panel">
+      <h2>Écoute du sommeil</h2>
+      <p class="empty" style="margin:0">Enregistre ta nuit avec l'app Dictaphone, puis importe le fichier ici. L'analyse se fait sur ton téléphone, rien n'est envoyé.</p>
+      <ol class="steps">
+        <li>Ouvre Dictaphone, pose le téléphone près de l'oreiller, branché.</li>
+        <li>Lance l'enregistrement en te couchant, arrête-le au réveil.</li>
+        <li>Importe l'enregistrement ci-dessous.</li>
+      </ol>
+      <div class="file">
+        <label for="audio">Importer un enregistrement</label>
+        <input type="file" id="audio" accept="audio/*,.m4a,.mp3,.wav,.aac">
+        <div class="bar" id="bar" hidden><i></i></div>
+        <p class="hint" id="status">Fichiers de 3 h ou moins conseillés. Pour une nuit entière, coupe l'enregistrement en deux.</p>
+      </div>
+    </div>
+    <div id="result" hidden class="wrap" style="gap:16px">
+      <div class="panel">
+        <h2>Ce que la nuit a entendu</h2>
+        <div class="stats">
+          <div class="stat"><b id="sDur">—</b><span>enregistré</span></div>
+          <div class="stat"><b id="sCalm">—</b><span>de calme</span></div>
+          <div class="stat"><b id="sSnore">—</b><span>de ronflement</span></div>
+        </div>
+        <h3>Niveau sonore</h3>
+        <div class="chart" id="levelChart"></div>
+        <h3>Phases estimées</h3>
+        <div class="chart" id="stageChart"></div>
+        <div class="legend"><span><i style="background:var(--awake)"></i>Éveil</span><span><i style="background:var(--rem)"></i>Paradoxal</span><span><i style="background:var(--light)"></i>Léger</span><span><i style="background:var(--deep)"></i>Profond</span></div>
+        <p class="hint" style="text-align:left">Les phases sont estimées à partir des cycles de 90 min et des bruits entendus (mouvements, réveils). Un micro ne mesure pas l'activité du cerveau : c'est une approximation.</p>
+      </div>
+      <div class="panel">
+        <h3>Moments marquants</h3>
+        <div class="events" id="events"></div>
+      </div>
+      <div class="panel" id="aiBox" hidden>
+        <h2>Analyse</h2>
+        <button class="ghost" id="aiBtn" type="button">Analyser ma nuit avec Claude</button>
+        <div class="ai" id="aiOut"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<nav aria-label="Sections"><div role="tablist">
+  <button role="tab" aria-selected="true" data-v="nuit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>Nuit</button>
+  <button role="tab" aria-selected="false" data-v="sommeil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 18h18M5 18V9M10 18V5M15 18v-7M20 18v-4"/></svg>Sommeil</button>
+  <button role="tab" aria-selected="false" data-v="ecoute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12v0M8 8v8M12 5v14M16 9v6M20 11v2"/></svg>Écoute</button>
+</div></nav>
+
+<div class="lamp" id="lamp" hidden>
+  <div class="clk" id="lClk">23:00</div>
+  <div class="msg" id="lMsg"></div>
+  <div class="hold">
+    <button class="snz" id="snz" type="button" hidden>Encore 9 minutes</button>
+    <svg viewBox="0 0 84 84" id="holdBtn" role="button" aria-label="Maintenir pour quitter" tabindex="0">
+      <circle cx="42" cy="42" r="36" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="2"/>
+      <circle id="holdArc" cx="42" cy="42" r="36" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="3" stroke-dasharray="226" stroke-dashoffset="226" transform="rotate(-90 42 42)"/>
+    </svg>
+    <span>Maintenir pour quitter</span>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id), pad=n=>String(n).padStart(2,"0");
+const hhmm=d=>pad(d.getHours())+":"+pad(d.getMinutes());
+const dur=min=>{min=Math.round(min);const h=Math.floor(min/60),m=min%60;return h?h+" h "+pad(m):m+" min"};
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const ONSET=15, CYCLE=90;
+/* ---------- app iPhone : le son de la nuit et le réveil sont joués par l'app, même écran verrouillé ---------- */
+const NAT=window.AUBE_NATIVE||null;
+function nat(cmd,data){try{window.webkit.messageHandlers.aube.postMessage(Object.assign({cmd},data||{}))}catch(e){}}
+const webAudio=()=>!NAT||(N&&N.preview);
+window.aubeNativeEvent=e=>{if(e&&e.type==="stopped"&&N&&!N.preview)end(true,true)};
+
+/* ---------- settings ---------- */
+const S=store.get("aube-reglages",{wake:"07:00",sun:20,dawn:30,vol:80,sleepSnd:"pluie",wakeSnd:"oiseaux",screen:false});
+S.dawn=Math.min(60,Math.max(30,S.dawn));$("wakeT").value=S.wake;$("rSun").value=S.sun;$("rDawn").value=S.dawn;$("rVol").value=S.vol;$("sleepSnd").value=S.sleepSnd;$("wakeSnd").value=S.wakeSnd;$("screenOn").checked=!!S.screen;
+function nextWake(from=new Date()){const[h,m]=$("wakeT").value.split(":").map(Number);const d=new Date(from);d.setHours(h,m,0,0);if(d<=from)d.setDate(d.getDate()+1);return d}
+function syncUI(){
+  S.wake=$("wakeT").value||"07:00";S.sun=+$("rSun").value;S.dawn=+$("rDawn").value;S.vol=+$("rVol").value;S.sleepSnd=$("sleepSnd").value;S.wakeSnd=$("wakeSnd").value;S.screen=$("screenOn").checked;store.set("aube-reglages",S);
+  $("vSun").textContent=S.sun?S.sun+" min":"Désactivé";$("vDawn").textContent=S.dawn+" min";$("vVol").textContent=S.vol+" %";$("dawnTxt").textContent=S.dawn+" min";
+  if(NAT){$("screenRow").hidden=false;$("lockHint").innerHTML=S.screen?'Laisse l\'app ouverte, téléphone <b>branché</b>, écran tourné vers toi.':'<span class="warn">Tu peux verrouiller l\'écran.</span> Le son de l\'aube monte quand même et le réveil sonne. Monte le volume avant de dormir.'}
+  for(const id of["rSun","rDawn","rVol"]){const r=$(id);r.style.setProperty("--p",((r.value-r.min)/(r.max-r.min)*100)+"%")}
+  const n=new Date(),w=nextWake(n),slept=(w-n)/60000-ONSET,c=slept/CYCLE;
+  $("wakeInfo").textContent=`Dans ${dur((w-n)/60000)} · environ ${Math.max(0,c).toFixed(1).replace(".",",")} cycles`;
+  renderSleep();
+}
+["wakeT","rSun","rDawn","rVol","sleepSnd","wakeSnd","screenOn"].forEach(id=>$(id).addEventListener("input",syncUI));
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  ["nuit","sommeil","ecoute"].forEach(v=>$("v-"+v).hidden=v!==b.dataset.v);
+  const H={nuit:["Bonne nuit.","Règle ton réveil, puis laisse la lumière et les sons faire le reste."],sommeil:["Ton sommeil.","Tes cycles, tes phases et tes dernières nuits."],ecoute:["Écoute ta nuit.","Ronflements, bruits et moments calmes, analysés sur ton téléphone."]}[b.dataset.v];
+  document.querySelector("#hero h1").textContent=H[0];$("heroTxt").textContent=H[1];window.scrollTo(0,0)});
+
+/* ---------- audio engine (all synthesized) ---------- */
+let AC=null,master=null,voices=[];
+function ac(){try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch(e){}
+  if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=0;master.connect(AC.destination)}if(AC.state==="suspended")AC.resume();return AC}
+function noiseBuf(){const len=AC.sampleRate*4,b=AC.createBuffer(1,len,AC.sampleRate),d=b.getChannelData(0);let b0=0,b1=0,b2=0;
+  for(let i=0;i<len;i++){const w=Math.random()*2-1;b0=.99765*b0+w*.099;b1=.963*b1+w*.2965;b2=.57*b2+w*1.0526;d[i]=(b0+b1+b2+w*.1848)*.11}return b}
+function noiseVoice(type){const src=AC.createBufferSource();src.buffer=noiseBuf();src.loop=true;const f=AC.createBiquadFilter();f.type="lowpass";const g=AC.createGain();
+  src.connect(f).connect(g).connect(master);
+  if(type==="pluie"){f.frequency.value=2200;g.gain.value=.9}
+  else{f.frequency.value=650;g.gain.value=.5;const l=AC.createOscillator(),lg=AC.createGain();l.frequency.value=.09;lg.gain.value=.45;l.connect(lg).connect(g.gain);l.start();voices.push(l)}
+  src.start();voices.push(src)}
+let tid=null;
+function chirps(){const t=AC.currentTime;const n=2+Math.floor(Math.random()*4),base=2400+Math.random()*1800;
+  for(let i=0;i<n;i++){const o=AC.createOscillator(),g=AC.createGain(),s=t+i*(.09+Math.random()*.05);o.type="sine";
+    o.frequency.setValueAtTime(base,s);o.frequency.exponentialRampToValueAtTime(base*(1.2+Math.random()*.5),s+.07);
+    g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(.18,s+.015);g.gain.exponentialRampToValueAtTime(.001,s+.09);o.connect(g).connect(master);o.start(s);o.stop(s+.1)}
+  tid=setTimeout(chirps,500+Math.random()*1800)}
+const PENTA=[523.25,587.33,659.25,783.99,880,1046.5];
+function chimes(){const t=AC.currentTime,f=PENTA[Math.floor(Math.random()*PENTA.length)];
+  [1,2.01].forEach((m,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.type="sine";o.frequency.value=f*m;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(i?.05:.25,t+.01);g.gain.exponentialRampToValueAtTime(.001,t+3);o.connect(g).connect(master);o.start(t);o.stop(t+3.1)});
+  tid=setTimeout(chimes,700+Math.random()*900)}
+function playAmb(type){stopAmb();ac();
+  if(type==="pluie"||type==="vagues")noiseVoice(type);
+  else if(type==="oiseaux"){noiseVoice("vagues");voices.forEach(v=>{});chirps()}
+  else if(type==="carillon")chimes()}
+function stopAmb(){clearTimeout(tid);voices.forEach(v=>{try{v.stop()}catch(e){}});voices=[]}
+function setVol(v,ramp=.3){if(!AC)return;master.gain.cancelScheduledValues(AC.currentTime);master.gain.setTargetAtTime(v,AC.currentTime,ramp)}
+let testing=null;
+$("test").onclick=()=>{if(testing){clearTimeout(testing);testing=null;setVol(0);setTimeout(stopAmb,400);$("test").textContent="▶ Écouter";return}
+  playAmb($("wakeSnd").value);setVol(S.vol/100*.9);$("test").textContent="■ Arrêter";testing=setTimeout(()=>$("test").click(),8000)};
+
+/* ---------- light ramps ---------- */
+const DAWN=[[0,[0,0,0]],[.12,[14,2,2]],[.3,[60,10,6]],[.48,[150,40,16]],[.64,[215,92,38]],[.78,[245,150,80]],[.9,[255,206,150]],[1,[255,242,226]]];
+const DUSK=[[0,[120,30,40]],[.5,[60,12,20]],[1,[0,0,0]]];
+function ramp(stops,p){p=Math.max(0,Math.min(1,p));for(let i=1;i<stops.length;i++){const[a,ca]=stops[i-1],[b,cb]=stops[i];if(p<=b){const k=(p-a)/(b-a);return`rgb(${ca.map((c,j)=>Math.round(c+(cb[j]-c)*k)).join(",")})`}}return`rgb(${stops.at(-1)[1].join(",")})`}
+
+/* ---------- night session ---------- */
+let N=null,wake=null,loopT=null;
+async function lockWake(){try{if("wakeLock" in navigator)wake=await navigator.wakeLock.request("screen")}catch(e){wake=null}}
+document.addEventListener("visibilitychange",()=>{if(N&&document.visibilityState==="visible")lockWake()});
+function begin(plan,resume){N=plan;$("lamp").hidden=false;$("snz").hidden=true;N.phase="";
+  if(NAT&&!N.preview){if(!resume)nat("start",{plan:{t0:N.t0,sunEnd:N.sunEnd,dawnStart:N.dawnStart,wake:N.wake,sleepSnd:N.sleepSnd,wakeSnd:N.wakeSnd,vol:S.vol/100,keepScreenOn:!!S.screen}})}
+  else{ac();lockWake();if(N.sleepSnd!=="none"&&N.sunEnd>N.t0){playAmb(N.sleepSnd);setVol(S.vol/100*.5,1)}}
+  clearInterval(loopT);loopT=setInterval(step,N.preview?100:1000);step()}
+function step(){if(!N)return;const now=Date.now(),L=$("lamp");let phase,bg,msg="";
+  if(now<N.sunEnd){phase="coucher";const p=(now-N.t0)/(N.sunEnd-N.t0);bg=ramp(DUSK,p);msg=N.preview?"Coucher (aperçu accéléré)":"Le jour descend doucement";
+    if(N.sleepSnd!=="none"&&webAudio())setVol(S.vol/100*.5*(1-p),.5)}
+  else if(now<N.dawnStart){phase="nuit";bg="#000";msg=""}
+  else if(now<N.wake){phase="aube";const p=(now-N.dawnStart)/(N.wake-N.dawnStart);bg=ramp(DAWN,p);msg=N.preview?"Aube (aperçu accéléré)":""}
+  else{phase="reveil";bg=ramp(DAWN,1);msg="Bonjour";}
+  if(phase!==N.phase&&!webAudio()){if(phase==="reveil")$("snz").hidden=false;N.phase=phase}
+  if(phase!==N.phase){
+    if(phase==="nuit"){setVol(0,2);setTimeout(()=>{if(N&&N.phase==="nuit")stopAmb()},4000)}
+    if(phase==="aube"){playAmb(N.wakeSnd);const t=AC.currentTime,secs=Math.max(2,(N.wake-now)/1000);
+      master.gain.cancelScheduledValues(t);master.gain.setValueAtTime(.002,t);master.gain.exponentialRampToValueAtTime(S.vol/100*.9,t+secs);N.dawnSound=true}
+    if(phase==="reveil"){if(!N.dawnSound){playAmb(N.wakeSnd);master.gain.cancelScheduledValues(AC.currentTime);master.gain.setValueAtTime(.002,AC.currentTime);
+      master.gain.exponentialRampToValueAtTime(S.vol/100*.9,AC.currentTime+(N.preview?4:60))}$("snz").hidden=N.preview;try{navigator.vibrate&&navigator.vibrate([300,200,300])}catch(e){}}
+    N.phase=phase}
+  if(N.preview&&now>N.end)return end(false);
+  L.style.background=bg;L.classList.toggle("bright",phase==="reveil"||(phase==="aube"&&(now-N.dawnStart)/(N.wake-N.dawnStart)>.6));
+  $("lClk").textContent=hhmm(new Date(N.preview?N.fake(now):now));$("lClk").style.opacity=phase==="nuit"?.5:1;$("lMsg").textContent=msg}
+function end(save=true,fromNative=false){clearInterval(loopT);setVol(0,.3);setTimeout(stopAmb,500);
+  if(NAT&&N&&!N.preview&&!fromNative)nat("stop");
+  if(save&&N&&!N.preview&&Date.now()-N.t0>60*60000){const j=store.get("aube-nuits",[]);j.unshift({start:N.t0,end:Date.now(),wake:N.wake});store.set("aube-nuits",j.slice(0,30))}
+  N=null;$("lamp").hidden=true;try{wake&&wake.release()}catch(e){}wake=null;renderSleep()}
+$("start").onclick=()=>{const t0=Date.now(),w=nextWake().getTime();const sunEnd=Math.min(t0+S.sun*60000,w);const dawnStart=Math.max(sunEnd,w-S.dawn*60000);
+  begin({t0,sunEnd,dawnStart,wake:w,sleepSnd:S.sleepSnd,wakeSnd:S.wakeSnd})};
+$("pvSun").onclick=()=>{const t0=Date.now();begin({preview:true,t0,sunEnd:t0+15000,dawnStart:t0+17000,wake:t0+999999,end:t0+17000,sleepSnd:S.sleepSnd,wakeSnd:S.wakeSnd,fake:n=>Date.now()})};
+$("pvDawn").onclick=()=>{const t0=Date.now(),w=nextWake().getTime();begin({preview:true,t0,sunEnd:t0,dawnStart:t0,wake:t0+20000,end:t0+30000,sleepSnd:"none",wakeSnd:S.wakeSnd,
+  fake:n=>w-S.dawn*60000+(Math.min(n,t0+20000)-t0)/20000*S.dawn*60000+Math.max(0,n-t0-20000)})};
+$("snz").onclick=()=>{if(!N)return;setVol(0,.3);setTimeout(stopAmb,400);const w=Date.now()+9*60000;if(NAT&&!N.preview)nat("snooze",{wake:w});N.dawnStart=Date.now();N.sunEnd=Date.now();N.wake=w;N.dawnSound=false;setTimeout(()=>{if(N){N.phase="";step()}},600);$("snz").hidden=true};
+/* hold to quit */
+let holdStart=0,holdRaf=0;const arc=$("holdArc"),HOLD=1500;
+function holdTick(){const p=Math.min(1,(performance.now()-holdStart)/HOLD);arc.setAttribute("stroke-dashoffset",226*(1-p));if(p>=1){holdStop();end(true);return}holdRaf=requestAnimationFrame(holdTick)}
+function holdStop(){cancelAnimationFrame(holdRaf);arc.setAttribute("stroke-dashoffset",226)}
+const hb=$("holdBtn");hb.addEventListener("pointerdown",e=>{e.preventDefault();holdStart=performance.now();holdTick()});
+["pointerup","pointerleave","pointercancel"].forEach(t=>hb.addEventListener(t,holdStop));
+hb.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")end(true)});
+
+/* ---------- sleep model ---------- */
+// stages: 0 éveil, 1 paradoxal, 2 léger, 3 profond. returns [{a,b,s}] in minutes from bedtime
+function model(totalMin){const out=[];let t=0;const push=(s,len)=>{len=Math.min(len,totalMin-t);if(len>0){out.push({a:t,b:t+len,s});t+=len}};
+  push(0,ONSET);let c=0;
+  while(t<totalMin){const deep=[38,28,12,5,3][Math.min(c,4)],rem=[10,18,26,32,36][Math.min(c,4)],light=CYCLE-deep-rem;
+    push(2,light*.55);push(3,deep);push(2,light*.45-(c>=2?3:0));push(1,rem);if(c>=2)push(0,3);c++}
+  return out}
+const COL=["var(--awake)","var(--rem)","var(--light)","var(--deep)"],ROW=["Éveil","Paradoxal","Léger","Profond"];
+function hypno(segs,total,startMs){const W=360,H=150,L=62,R=8,T=8,B=24,x=m=>L+(W-L-R)*m/total,y=s=>T+s*((H-T-B)/3);
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Hypnogramme">`;
+  ROW.forEach((r,i)=>g+=`<text x="${L-8}" y="${y(i)+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="Outfit,sans-serif">${r}</text><line x1="${L}" x2="${W-R}" y1="${y(i)}" y2="${y(i)}" stroke="var(--line)" stroke-dasharray="2 4"/>`);
+  let prev=null;segs.forEach(s=>{if(prev)g+=`<line x1="${x(s.a)}" x2="${x(s.a)}" y1="${y(prev.s)}" y2="${y(s.s)}" stroke="var(--line)" stroke-width="1"/>`;
+    g+=`<rect x="${x(s.a)}" y="${y(s.s)-3}" width="${Math.max(1,x(s.b)-x(s.a))}" height="6" rx="2" fill="${COL[s.s]}"/>`;prev=s});
+  const step=total>360?120:60;for(let m=0;m<=total;m+=step){const d=new Date(startMs+m*60000);g+=`<text x="${x(m)}" y="${H-6}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Outfit,sans-serif">${pad(d.getHours())}h${d.getMinutes()?pad(d.getMinutes()):""}</text>`}
+  return g+"</svg>"}
+function share(segs){const t=[0,0,0,0];segs.forEach(s=>t[s.s]+=s.b-s.a);return t}
+
+function renderSleep(){
+  const n=new Date();
+  // wake options if bed now
+  let h="";[4,5,6].forEach(c=>{const d=new Date(+n+(ONSET+c*CYCLE)*60000);h+=`<button class="opt${c===5?" best":""}" data-t="${hhmm(d)}"><b>${hhmm(d)}</b><span>${c} cycles · ${dur(c*CYCLE)}${c===5?"<br>conseillé":""}</span></button>`});
+  $("wakeOpts").innerHTML=h;
+  const w=nextWake(n);$("bedTitle").textContent="Pour me lever à "+hhmm(w);h="";
+  [6,5,4].forEach(c=>{const d=new Date(+w-(ONSET+c*CYCLE)*60000);const past=d<n;h+=`<div class="opt${c===5&&!past?" best":""}" style="${past?"opacity:.4":""}"><b>${hhmm(d)}</b><span>${c} cycles · ${dur(c*CYCLE)}${past?"<br>déjà passé":c===5?"<br>conseillé":""}</span></div>`});
+  $("bedOpts").innerHTML=h;
+  document.querySelectorAll("#wakeOpts .opt").forEach(b=>b.onclick=()=>{$("wakeT").value=b.dataset.t;syncUI();document.querySelector('nav button[data-v="nuit"]').click()});
+  // plan
+  const total=(w-n)/60000,segs=model(total),sh=share(segs);
+  $("planTxt").textContent=`Couché maintenant, réveil à ${hhmm(w)} : ${dur(total-ONSET)} de sommeil, dont environ ${dur(sh[3])} de profond et ${dur(sh[1])} de paradoxal. Le réveil tombe en sommeil ${["d'éveil","paradoxal","léger","profond"][(segs.at(-1)||{s:2}).s]}.`;
+  $("planChart").innerHTML=total>60?hypno(segs,total,+n):'<p class="empty">Moins d\'une heure avant le réveil.</p>';
+  // journal
+  const j=store.get("aube-nuits",[]);
+  if(!j.length){$("journal").innerHTML='<p class="empty">Aucune nuit enregistrée. Touche « Démarrer la nuit » ce soir : la durée sera notée ici à ton réveil.</p>';return}
+  const last=j.slice(0,7),avg=last.reduce((a,x)=>a+(x.end-x.start)/60000-ONSET,0)/last.length;
+  h=`<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><b>${dur(avg)}</b><span>moyenne sur ${last.length} nuit${last.length>1?"s":""}</span></div><div class="stat"><b>${(avg/CYCLE).toFixed(1).replace(".",",")}</b><span>cycles en moyenne</span></div></div><div>`;
+  last.forEach(x=>{const s=new Date(x.start),e=new Date(x.end),m=(x.end-x.start)/60000-ONSET;
+    h+=`<div class="night"><div><b>${s.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</b><br><span>${hhmm(s)} → ${hhmm(e)}</span></div><div style="text-align:right"><b>${dur(m)}</b><br><span>${(m/CYCLE).toFixed(1).replace(".",",")} cycles</span></div></div>`});
+  $("journal").innerHTML=h+"</div>";
+}
+
+/* ---------- recording analysis ---------- */
+let lastAnalysis=null;
+$("audio").addEventListener("change",async e=>{const f=e.target.files[0];if(!f)return;
+  const st=$("status"),bar=$("bar");bar.hidden=false;bar.firstElementChild.style.width="10%";st.textContent="Lecture du fichier…";$("result").hidden=true;
+  try{
+    const buf=await f.arrayBuffer();bar.firstElementChild.style.width="30%";st.textContent="Décodage de l'audio, ça peut prendre une minute…";
+    const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext,ctx=new OAC(1,8000,8000);
+    const audio=await new Promise((res,rej)=>{const p=ctx.decodeAudioData(buf,res,rej);if(p&&p.then)p.then(res,rej)});
+    bar.firstElementChild.style.width="60%";st.textContent="Analyse des sons…";await new Promise(r=>setTimeout(r,30));
+    const r=analyse(audio);bar.firstElementChild.style.width="100%";
+    let start=f.lastModified?f.lastModified-r.seconds*1000:Date.now()-r.seconds*1000;
+    showResult(r,start);st.textContent=`« ${f.name} » analysé.`;
+  }catch(err){st.textContent="Impossible de lire ce fichier. Il est peut-être trop long pour la mémoire du téléphone : coupe-le en morceaux de 2 à 3 h, ou essaie un autre format (m4a, mp3, wav).";bar.hidden=true}
+});
+function analyse(a){const d=a.getChannelData(0),sr=a.sampleRate,W=sr*10,n=Math.floor(d.length/W);
+  const db=new Float32Array(n),env=[];const E=Math.floor(sr/10);
+  for(let i=0;i<n;i++){let s=0;for(let k=i*W;k<(i+1)*W;k++)s+=d[k]*d[k];db[i]=10*Math.log10(s/W+1e-12)}
+  for(let k=0;k+E<=d.length;k+=E){let s=0;for(let j=k;j<k+E;j++)s+=Math.abs(d[j]);env.push(s/E)}
+  const sorted=[...db].sort((x,y)=>x-y),base=sorted[Math.floor(n*.3)]||-60;
+  // snore detection per 30 s: rhythmic envelope 2–6 s period
+  const snore=new Uint8Array(Math.ceil(n/3));
+  for(let w=0;w<snore.length;w++){const seg=env.slice(w*300,w*300+300);if(seg.length<200)continue;const m=seg.reduce((x,y)=>x+y,0)/seg.length;const z=seg.map(v=>v-m);
+    let v0=z.reduce((x,y)=>x+y*y,0);if(!v0)continue;let best=0;for(let lag=20;lag<=60;lag++){let c=0;for(let i=0;i+lag<z.length;i++)c+=z[i]*z[i+lag];best=Math.max(best,c/v0)}
+    const lvl=Math.max(...Array.from(db.slice(w*3,w*3+3)));if(best>.42&&lvl>base+5)snore[w]=1}
+  return{db,base,snore,seconds:d.length/sr,n}}
+function showResult(r,startMs){$("result").hidden=false;
+  const total=r.seconds/60,perMin=[];for(let i=0;i<r.n;i+=6){let mx=-120;for(let k=i;k<Math.min(i+6,r.n);k++)mx=Math.max(mx,r.db[k]);perMin.push(mx)}
+  // events: loud minutes not snoring
+  const ev=[];perMin.forEach((v,m)=>{const sn=r.snore[m*2]||r.snore[m*2+1];if(v>r.base+14&&!sn)ev.push({m,t:"noise",v})});
+  const snoreMin=Array.from(r.snore).reduce((a,b)=>a+b,0)/2;
+  const calm=perMin.filter(v=>v<r.base+6).length/perMin.length;
+  $("sDur").textContent=dur(total);$("sCalm").textContent=Math.round(calm*100)+" %";$("sSnore").textContent=dur(snoreMin);
+  // level chart
+  const Wd=360,H=110,L=8,T=8,B=20,lo=r.base-6,hi=Math.max(r.base+30,...perMin);const x=m=>L+(Wd-2*L)*m/Math.max(1,perMin.length-1),y=v=>T+(H-T-B)*(1-(Math.max(lo,v)-lo)/(hi-lo));
+  let p=perMin.map((v,m)=>`${m?"L":"M"}${x(m).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  let g=`<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Niveau sonore par minute"><line x1="${L}" x2="${Wd-L}" y1="${y(r.base+14)}" y2="${y(r.base+14)}" stroke="var(--line)" stroke-dasharray="3 4"/>`;
+  g+=`<path d="${p}L${x(perMin.length-1)},${H-B}L${L},${H-B}Z" fill="var(--dusk)" fill-opacity=".18"/><path d="${p}" fill="none" stroke="var(--dusk)" stroke-width="1.2"/>`;
+  Array.from(r.snore).forEach((s,w)=>{if(s)g+=`<rect x="${x(w/2)}" y="${H-B+2}" width="${Math.max(1.5,(Wd-2*L)/perMin.length/2)}" height="4" fill="var(--rem)"/>`});
+  ev.forEach(e=>g+=`<circle cx="${x(e.m)}" cy="${y(e.v)}" r="2.5" fill="var(--gold)"/>`);
+  const stp=total>360?120:60;for(let m=0;m<=total;m+=stp){const d=new Date(startMs+m*60000);g+=`<text x="${Math.min(Wd-14,Math.max(14,x(m)))}" y="${H-3}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Outfit,sans-serif">${pad(d.getHours())}h${d.getMinutes()?pad(d.getMinutes()):""}</text>`}
+  $("levelChart").innerHTML=g+"</svg>";
+  // stages: cycle model, then noise turns that minute into éveil/léger
+  const segs=model(total),perM=new Uint8Array(Math.ceil(total));segs.forEach(s=>{for(let m=Math.floor(s.a);m<Math.ceil(s.b)&&m<perM.length;m++)perM[m]=s.s});
+  ev.forEach(e=>{for(let k=-1;k<=2;k++){const m=e.m+k;if(m>=0&&m<perM.length)perM[m]=k===0||k===1?0:Math.min(perM[m],2)}});
+  const merged=[];for(let m=0;m<perM.length;m++){const l=merged.at(-1);if(l&&l.s===perM[m])l.b=m+1;else merged.push({a:m,b:m+1,s:perM[m]})}
+  $("stageChart").innerHTML=hypno(merged,total,startMs);
+  // events list
+  const list=[];let inS=-1;for(let w=0;w<=r.snore.length;w++){if(r.snore[w]&&inS<0)inS=w;if(!r.snore[w]&&inS>=0){if(w-inS>=2)list.push({m:inS/2,t:"snore",len:(w-inS)/2});inS=-1}}
+  ev.forEach(e=>list.push({m:e.m,t:"noise"}));list.sort((a,b)=>a.m-b.m);
+  $("events").innerHTML=list.length?list.slice(0,30).map(e=>`<div class="ev"><time>${hhmm(new Date(startMs+e.m*60000))}</time><span class="pill ${e.t}">${e.t==="snore"?"Ronflement":"Bruit fort"}</span><span style="color:var(--muted)">${e.t==="snore"?dur(e.len):"mouvement, parole ou bruit extérieur"}</span></div>`).join("")+(list.length>30?`<p class="hint">+ ${list.length-30} autres</p>`:""):'<p class="empty">Rien de marquant : nuit très calme.</p>';
+  const sh=share(merged);
+  lastAnalysis={debut:hhmm(new Date(startMs)),fin:hhmm(new Date(startMs+total*60000)),duree_min:Math.round(total),calme_pct:Math.round(calm*100),ronflement_min:Math.round(snoreMin),
+    bruits_forts:ev.length,heures_bruits:ev.slice(0,20).map(e=>hhmm(new Date(startMs+e.m*60000))),phases_estimees_min:{eveil:Math.round(sh[0]),paradoxal:Math.round(sh[1]),leger:Math.round(sh[2]),profond:Math.round(sh[3])}};
+  $("aiOut").textContent="";
+}
+/* Claude analysis (optional capability) */
+(async()=>{try{const s=window.claude&&await window.claude.use("sample");if(!s)return;$("aiBox").hidden=false;
+  $("aiBtn").onclick=async()=>{if(!lastAnalysis)return;$("aiBtn").disabled=true;$("aiOut").textContent="Analyse en cours…";
+    try{await s(`Tu es un coach du sommeil bienveillant. Voici les mesures d'une nuit, tirées d'un enregistrement audio analysé sur téléphone (les phases sont une estimation par cycles de 90 min, pas une mesure médicale) :\n${JSON.stringify(lastAnalysis)}\nÉcris en français, tutoiement, 120 mots maximum, sans titres ni listes à puces : un bilan de la nuit, ce que les ronflements et bruits peuvent indiquer, puis deux conseils concrets. Si les ronflements dépassent 60 min, suggère d'en parler à un médecin.`,
+      {modelTier:"quick",onText:({text})=>{$("aiOut").textContent=text}})}
+    catch(e){$("aiOut").textContent=e&&e.code==="not_granted"?"Analyse non autorisée.":"L'analyse n'a pas abouti. Réessaie dans un moment."}
+    $("aiBtn").disabled=false}}catch(e){}})();
+
+syncUI();if(NAT&&NAT.active){const a=NAT.active;begin({t0:a.t0,sunEnd:a.sunEnd,dawnStart:a.dawnStart,wake:a.wake,sleepSnd:a.sleepSnd,wakeSnd:a.wakeSnd},true)}
+setInterval(()=>{if(!N)syncUI()},30000);
+</script>
+
+</body>
+</html>

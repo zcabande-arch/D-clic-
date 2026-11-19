@@ -116,7 +116,8 @@ h2{font-size:15px;font-weight:500;margin:0;color:var(--ink)}
 .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
 .cell{min-width:0;aspect-ratio:1/1.18;border-radius:12px;border:1px solid transparent;background:rgba(255,255,255,.03);padding:5px 2px 4px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;color:var(--ink)}
 .cell.blank{background:none;pointer-events:none}
-.cell .dn{font-size:14px;font-weight:400;line-height:1}
+.cell .dn{font-size:14px;font-weight:400;line-height:1;display:flex;align-items:baseline;gap:2px}
+.cell .dn .mo{font-size:8.5px;color:var(--ember-2)}
 .cell .amt-s{font-size:9.5px;line-height:1;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;max-width:100%}
 .cell .amt-s.pos{color:var(--pos)}
 .cell .dots{display:flex;gap:3px;height:5px}
@@ -371,6 +372,7 @@ select option{background:#1b120d}
   <!-- FIXES -->
   <div class="view sec" id="v-fixed" hidden>
     <div class="hero"><span class="eyebrow">Revenus et prélèvements</span><span class="big num" id="fixedNet">—</span><span class="sub">Reviennent automatiquement chaque mois, au jour indiqué.</span></div>
+    <div class="preset" id="payBox"></div>
     <div class="card"><div class="list" id="recurring"></div></div>
     <button class="small-btn redo" id="redoWiz">Refaire le questionnaire</button>
   </div>
@@ -493,7 +495,32 @@ function localStore(){
 }
 
 /* ---------- maths ---------- */
-function monthItems(y,m){
+/* Période budgétaire : du 1er à la fin du mois, ou d'une paye à la suivante (startDay). */
+const startDay=()=>Math.min(31,Math.max(1,(S.settings?.startDay|0)||1));
+const dimOf=(y,m)=>new Date(y,m+1,0).getDate();
+const norm=(y,m)=>{const d=new Date(y,m,1);return {y:d.getFullYear(),m:d.getMonth()}};
+const isoOf=(y,m,d)=>ymKey(y,m)+"-"+pad(d);
+const isoDate=dt=>isoOf(dt.getFullYear(),dt.getMonth(),dt.getDate());
+const dshort=iso=>new Date(iso+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+// Paye après le 15 : la période « novembre » va du 28 octobre au 27 novembre. Paye avant le 15 : du 5 novembre au 4 décembre.
+function periodRange(y,m,D=startDay()){
+  if(D===1) return {start:isoOf(y,m,1),end:isoOf(y,m,dimOf(y,m))};
+  const off=D>15?-1:0, a=norm(y,m+off), b=norm(y,m+off+1);
+  return {start:isoOf(a.y,a.m,Math.min(D,dimOf(a.y,a.m))),end:isoDate(new Date(b.y,b.m,Math.min(D,dimOf(b.y,b.m))-1))};
+}
+function periodOf(iso,D=startDay()){
+  const [y,m1,d]=iso.split("-").map(Number), m=m1-1;
+  if(D===1) return {y,m};
+  const after=d>=Math.min(D,dimOf(y,m));
+  return D>15?(after?norm(y,m+1):{y,m}):(after?{y,m}:norm(y,m-1));
+}
+function monthItems(y,m,src=S,D=startDay()){
+  const r=periodRange(y,m,D), months=[...new Set([r.start.slice(0,7),r.end.slice(0,7)])];
+  return months.flatMap(k=>{const [yy,mm]=k.split("-").map(Number);return calItems(yy,mm-1,src)})
+    .filter(i=>i.date>=r.start&&i.date<=r.end)
+    .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:b.amount-a.amount);
+}
+function calItems(y,m,S){
   const dim=new Date(y,m+1,0).getDate(), key=ymKey(y,m), out=[];
   for(const r of S.recurring){
     const d=Math.min(Math.max(1,r.day|0),dim);
@@ -505,10 +532,24 @@ function monthItems(y,m){
   }
   for(const e of S.expenses) if((e.date||"").startsWith(key))
     out.push({src:"expenses",id:e.id,date:e.date,label:e.label,amount:-e.amount,type:"depense",cat:e.cat,sub:e.sub,example:e.example});
-  out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:b.amount-a.amount);
   return out;
 }
 const net=(y,m)=>monthItems(y,m).reduce((s,i)=>s+i.amount,0);
+function salaryDay(){
+  const inc=S.recurring.filter(r=>r.kind==="revenu");
+  const r=inc.find(r=>/salaire|paye|paie/i.test(r.label))||[...inc].sort((a,b)=>b.amount-a.amount)[0];
+  return r?Math.min(31,Math.max(1,r.day|0)):null;
+}
+// Change le jour de début en gardant le même solde d'aujourd'hui.
+async function setStartDay(D){
+  const now=currentBalance();
+  if(now===""){await saveSettings({startDay:D});return}
+  const cp=periodOf(todayIso,D);
+  const upTo=monthItems(cp.y,cp.m,S,D).filter(i=>i.date<=todayIso).reduce((s,i)=>s+i.amount,0);
+  await saveSettings({startDay:D,balance:Math.round((now-upTo)*100)/100,month:ymKey(cp.y,cp.m)});
+  view=cp;selDay=null;render();
+}
+let viewSet=false;
 function opening(y,m){
   if(!S.settings) return null;
   const [sy,sm]=S.settings.month.split("-").map(Number);
@@ -520,12 +561,13 @@ function opening(y,m){
 
 /* ---------- render ---------- */
 function render(){
-  const {y,m}=view, items=monthItems(y,m), key=ymKey(y,m);
-  const curKey=ymKey(today.getFullYear(),today.getMonth());
+  if(!viewSet&&S.loaded){view=periodOf(todayIso);viewSet=true}
+  const {y,m}=view, items=monthItems(y,m), key=ymKey(y,m), PR=periodRange(y,m), D=startDay();
+  const cp=periodOf(todayIso), curKey=ymKey(cp.y,cp.m);
   const isCur=key===curKey, isPast=key<curKey;
   const monthName=new Date(y,m,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   $("monthLabel").textContent=monthName;
-  $("monthSub").textContent=isCur?"Mois en cours":isPast?"Mois passé":"Prévision";
+  $("monthSub").textContent=(isCur?"Mois en cours":isPast?"Mois passé":"Prévision")+(D>1?` · ${dshort(PR.start)} → ${dshort(PR.end)}`:"");
   const open=opening(y,m);
   const inc=items.filter(i=>i.type==="revenu").reduce((s,i)=>s+i.amount,0);
   const deb=items.filter(i=>i.type==="prelevement").reduce((s,i)=>s+i.amount,0);
@@ -540,7 +582,7 @@ function render(){
     const now=open+items.filter(i=>i.date<=todayIso).reduce((s,i)=>s+i.amount,0);
     const left=-items.filter(i=>i.date>todayIso&&i.type==="prelevement").reduce((s,i)=>s+i.amount,0);
     $("heroSub").textContent=`${fmt(now)} aujourd'hui · ${fmt(Math.abs(left))} de prélèvements à venir`;
-  }else $("heroSub").textContent=open==null?"Indique ton solde du 1er pour voir la projection.":`Départ ${fmt(open)} au 1er`;
+  }else $("heroSub").textContent=open==null?"Indique ton solde du début du mois pour voir la projection.":`Départ ${fmt(open)} le ${dshort(PR.start)}`;
 
   // sorties vs revenus
   $("outVal").textContent=fmt(out);
@@ -564,7 +606,7 @@ function render(){
   // opening balance
   const ob=$("openingBox");
   if(!S.settings||ob.dataset.editing==="1"){
-    ob.innerHTML=`<span>Solde du compte au 1er ${esc(monthName)}</span>
+    ob.innerHTML=`<span>Solde du compte le ${new Date(PR.start+"T12:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})} au matin</span>
       <div class="inline-edit"><input id="balIn" inputmode="decimal" placeholder="ex. 1 200" value="${S.settings&&open!=null?String(open).replace(".",","):""}"><button class="small-btn" id="balSave">Enregistrer</button></div>`;
     $("balSave").onclick=async()=>{
       const v=parseAmt($("balIn").value); if(v==null){toast("Montant invalide");return}
@@ -572,7 +614,7 @@ function render(){
       try{await saveSettings({balance:v,month:key});toast("Solde enregistré")}catch(e){err(e)}
     };
   }else{
-    ob.innerHTML=`<span>Solde au 1er : <b class="num" style="color:var(--ink);font-weight:500">${open==null?"—":fmt(open)}</b></span><button class="link" id="balEdit">Corriger</button>`;
+    ob.innerHTML=`<span>Solde au ${dshort(PR.start)} : <b class="num" style="color:var(--ink);font-weight:500">${open==null?"—":fmt(open)}</b></span><button class="link" id="balEdit">Corriger</button>`;
     $("balEdit").onclick=()=>{ob.dataset.editing="1";render()};
   }
 
@@ -580,18 +622,18 @@ function render(){
   $("relTotal").textContent=signed(inc+deb+spe+vir);
   $("relTotal").className="big num"+(inc+deb+spe+vir<0?" neg":"");
   // calendrier
-  if(!selDay||!selDay.startsWith(key)) selDay=isCur?todayIso:key+"-01";
-  const dim=new Date(y,m+1,0).getDate(), lead=(new Date(y,m,1).getDay()+6)%7;
+  if(!selDay||selDay<PR.start||selDay>PR.end) selDay=isCur?todayIso:PR.start;
+  const first=new Date(PR.start+"T12:00"), lead=(first.getDay()+6)%7;
   const byDay={}; items.forEach(i=>(byDay[i.date]=byDay[i.date]||[]).push(i));
   const compact=n=>(n>0?"+":"−")+(Math.abs(n)>=1000?(Math.abs(n)/1000).toFixed(1).replace(".",",")+"k":Math.round(Math.abs(n)));
   let g="";
   for(let k=0;k<lead;k++) g+=`<span class="cell blank"></span>`;
-  for(let d=1;d<=dim;d++){
-    const iso=key+"-"+pad(d), list=byDay[iso]||[], tot=list.reduce((s,i)=>s+i.amount,0);
+  for(let dt=new Date(first);isoDate(dt)<=PR.end;dt.setDate(dt.getDate()+1)){
+    const iso=isoDate(dt), d=dt.getDate(), list=byDay[iso]||[], tot=list.reduce((s,i)=>s+i.amount,0);
     const types=[...new Set(list.map(i=>i.type))];
     const cls=["cell",iso===todayIso?"today":"",iso<todayIso?"past":"",iso===selDay?"sel":""].join(" ");
-    g+=`<button class="${cls}" data-day="${iso}" aria-label="${d} ${esc(monthName)}${list.length?", "+list.length+" opération(s)":""}">
-      <span class="dn">${d}</span>
+    g+=`<button class="${cls}" data-day="${iso}" aria-label="${dt.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}${list.length?", "+list.length+" opération(s)":""}">
+      <span class="dn">${d===1&&D>1?`1<small class="mo">${dt.toLocaleDateString("fr-FR",{month:"short"}).replace(".","")}</small>`:d}</span>
       <span class="amt-s ${tot>0?"pos":""}">${list.length?compact(tot):"&nbsp;"}</span>
       <span class="dots">${types.map(t=>`<i class="dot ${t==="revenu"?"d-in":t==="prelevement"?"d-deb":t==="virement"?"d-vir":"d-dep"}"></i>`).join("")}</span>
     </button>`;
@@ -612,6 +654,10 @@ function render(){
     </div>`}).join(""):`<p class="empty">Aucune opération ce jour-là. Touche + pour ajouter une dépense à cette date.</p>`;
 
   // fixes
+  const pd=salaryDay(), pb=$("payBox");
+  pb.classList.toggle("on",D>1);
+  pb.innerHTML=pd&&pd>1?`<button class="preset-head" data-paystart="${D>1?1:pd}" aria-pressed="${D>1}"><span class="check">✓</span><span>Mon mois commence le jour de ma paye<small>${D>1?`Chaque mois va du ${D} au ${D-1} du mois suivant.`:`Actuellement du 1er à la fin du mois. Activé : du ${pd} au ${pd-1}.`}</small></span></button>${D>1&&D!==pd?`<button class="link" data-paystart="${pd}">Passer au ${pd}, jour de ta paye actuelle</button>`:""}`
+    :`<span class="q-sub" style="font-size:13px">Ajoute ton salaire pour pouvoir commencer le mois le jour de ta paye.</span>`;
   const fixedNet=S.recurring.reduce((s,r)=>s+(r.kind==="revenu"?+r.amount:-r.amount),0);
   $("fixedNet").textContent=signed(fixedNet);
   $("recurring").innerHTML=rec.length?rec.map(r=>`<div class="row">
@@ -785,12 +831,12 @@ const PRESETS=[
 const STEPS=6;
 let W=null,wStep=0,wizOpen=false,wizDone=false;
 function currentBalance(){
-  const y=today.getFullYear(),m=today.getMonth(),o=opening(y,m);
+  const {y,m}=periodOf(todayIso),o=opening(y,m);
   return o==null?"":Math.round((o+monthItems(y,m).filter(i=>i.date<=todayIso).reduce((s,i)=>s+i.amount,0))*100)/100;
 }
 function openWizard(){
   const onb=!!S.settings?.onboarded;
-  W={name:S.settings?.name||"",salary:{amount:"",day:""},incomes:[],debits:PRESETS.map(p=>({...p,on:false,amount:""})),custom:[],balance:onb?currentBalance():""};
+  W={name:S.settings?.name||"",salary:{amount:"",day:""},incomes:[],debits:PRESETS.map(p=>({...p,on:false,amount:""})),custom:[],balance:onb?currentBalance():"",payStart:startDay()>1};
   for(const r of S.recurring.filter(r=>!r.example)){
     if(r.kind==="revenu"){
       if(!W.salary.amount&&/salaire/i.test(r.label)) W.salary={amount:r.amount,day:r.day};
@@ -825,6 +871,7 @@ function drawStep(){
     b.innerHTML=head(`${n}, combien gagnes-tu par mois ?`,"Ton salaire net et le jour où il arrive. Laisse vide si tu n'as pas de salaire fixe.")+
       `<div class="q-grid"><div class="field"><label for="wSal">Salaire net (€)</label><input class="big-input" id="wSal" inputmode="decimal" placeholder="2 000" value="${v(W.salary.amount)}"></div>
        <div class="field"><label for="wSalDay">Versé le</label><input class="big-input" id="wSalDay" type="number" min="1" max="31" placeholder="28" value="${W.salary.day}"></div></div>
+       <div class="preset${W.payStart?" on":""}" id="wPay"><button class="preset-head" data-act="tog-pay" aria-pressed="${W.payStart}"><span class="check">✓</span><span>Mon mois commence le jour de ma paye<small>Le budget va d'une paye à la suivante (par ex. du 28 au 27) au lieu du 1er au 31.</small></span></button></div>
        <p class="q-label">Autres revenus chaque mois</p>`+
       W.incomes.map((r,i)=>`<div class="preset on extra"><button class="del" data-act="rm-inc" data-i="${i}" aria-label="Retirer">×</button><div class="q-grid">
         <div class="field full"><label for="wIl${i}">Nom</label><input id="wIl${i}" placeholder="Prime, CAF, pension…" value="${esc(r.label)}"></div>
@@ -857,10 +904,8 @@ function drawStep(){
     const recs=buildRecurring();
     const inc=recs.filter(r=>r.kind==="revenu").reduce((s,r)=>s+r.amount,0);
     const deb=recs.filter(r=>r.kind!=="revenu").reduce((s,r)=>s+r.amount,0);
-    const dim=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
     const savs=buildSavings(), vir=savs.reduce((s,x)=>s+(+x.monthly||0),0), savTot=savs.reduce((s,x)=>s+x.balance,0);
-    const rest=recs.filter(r=>Math.min(r.day,dim)>today.getDate()).reduce((s,r)=>s+(r.kind==="revenu"?r.amount:-r.amount),0)
-      -savs.filter(x=>x.monthly>0&&Math.min(x.day,dim)>today.getDate()).reduce((s,x)=>s+x.monthly,0);
+    const P=wizPeriod(recs,savs), rest=P.items.filter(i=>i.date>todayIso).reduce((s,i)=>s+i.amount,0);
     const hasEx=[...S.expenses,...S.recurring].some(x=>x.example);
     b.innerHTML=head(`Tout est prêt, ${n}.`,"Voici ton mois type. Tu pourras tout modifier ensuite.")+
       `<div class="card recap">
@@ -869,7 +914,7 @@ function drawStep(){
         ${vir?`<div><span>Virements vers l'épargne</span><b class="num">${signed(-vir)}</b></div>`:""}
         <div class="tot"><span>Reste pour vivre</span><b class="num ${inc-deb-vir<0?"neg":""}">${fmt(inc-deb-vir)}</b></div>
         ${savTot?`<div><span>Épargne totale</span><b class="num">${fmt(savTot)}</b></div>`:""}
-        <div><span>Solde prévu fin ${today.toLocaleDateString("fr-FR",{month:"long"})}</span><b class="num">${fmt((parseAmt(W.balance)||0)+rest)}</b></div>
+        <div><span>Solde prévu le ${dshort(P.end)}</span><b class="num">${fmt((parseAmt(W.balance)||0)+rest)}</b></div>
       </div>${hasEx?`<p class="q-sub">Les lignes d'exemple seront effacées.</p>`:""}`;
   }
   const first=b.querySelector("input");
@@ -894,6 +939,7 @@ function validate(){
   if(wStep===0&&!W.name) return "Indique ton prénom pour continuer.";
   if(wStep===1){
     if(W.salary.amount!==""&&(parseAmt(W.salary.amount)==null||!dayOk(W.salary.day))) return "Indique le montant du salaire et un jour entre 1 et 31.";
+    if(W.payStart&&!(parseAmt(W.salary.amount)>0&&dayOk(W.salary.day))) return "Indique ton salaire et le jour de la paye, ou décoche « Mon mois commence le jour de ma paye ».";
     if(W.incomes.some(r=>!r.label||!(parseAmt(r.amount)>0)||!dayOk(r.day))) return "Complète chaque revenu (nom, montant, jour) ou retire-le.";
   }
   if(wStep===2){
@@ -904,6 +950,12 @@ function validate(){
     return "Pour chaque épargne cochée : un solde, et un jour si tu as un virement.";
   if(wStep===4&&parseAmt(W.balance)==null) return "Indique ton solde, même approximatif.";
   return "";
+}
+function wizStartDay(){return W.payStart&&dayOk(W.salary.day)>1?dayOk(W.salary.day):1}
+function wizPeriod(recs,savs){
+  const D=wizStartDay(), cp=periodOf(todayIso,D);
+  const src={recurring:recs,savings:savs,expenses:S.expenses.filter(x=>!x.example)};
+  return {D,cp,end:periodRange(cp.y,cp.m,D).end,items:monthItems(cp.y,cp.m,src,D)};
 }
 function buildSavings(){
   return W.savings.filter(s=>s.on).map(s=>{const m=s.monthly===""?0:parseAmt(s.monthly)||0;
@@ -927,13 +979,9 @@ async function finishWizard(){
     const savs=buildSavings();
     for(const s of S.savings.filter(x=>x.example||(W.savings.some(w=>w.id===x.id&&!w.on)))) await store.remove("savings",s.id);
     for(const s of savs){const {id,...body}=s; if(id) await store.put("savings",id,body); else await store.add("savings",body)}
-    const y=today.getFullYear(),m=today.getMonth(),key=ymKey(y,m),dim=new Date(y,m+1,0).getDate();
-    let upTo=0;
-    recs.forEach(r=>{if(Math.min(r.day,dim)<=today.getDate()) upTo+=r.kind==="revenu"?r.amount:-r.amount});
-    S.expenses.filter(x=>!x.example&&(x.date||"").startsWith(key)&&x.date<=todayIso).forEach(x=>upTo-=x.amount);
-    savs.forEach(s=>{if(s.monthly>0&&Math.min(s.day,dim)<=today.getDate()) upTo-=s.monthly});
-    await store.setSettings({name:W.name,onboarded:true,balance:Math.round((parseAmt(W.balance)-upTo)*100)/100,month:key});
-    view={y,m};selDay=null;closeWizard();show("home");render();toast("Bienvenue "+W.name+" !");
+    const P=wizPeriod(recs,savs), upTo=P.items.filter(i=>i.date<=todayIso).reduce((s,i)=>s+i.amount,0);
+    await store.setSettings({name:W.name,onboarded:true,startDay:P.D,balance:Math.round((parseAmt(W.balance)-upTo)*100)/100,month:ymKey(P.cp.y,P.cp.m)});
+    view=P.cp;selDay=null;closeWizard();show("home");render();toast("Bienvenue "+W.name+" !");
   }catch(e){err(e);btn.disabled=false;btn.textContent="C'est parti"}
 }
 $("wNext").onclick=()=>{
@@ -946,6 +994,7 @@ $("wBody").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.tagName==
 $("wBody").addEventListener("click",e=>{
   const a=e.target.closest("[data-act]");if(!a)return;
   collect();const i=+a.dataset.i;
+  if(a.dataset.act==="tog-pay"){W.payStart=!W.payStart;$("wPay").classList.toggle("on",W.payStart);a.setAttribute("aria-pressed",W.payStart);return}
   if(a.dataset.act==="tog-sav"){const s=W.savings[i];s.on=!s.on;$("ws"+i).classList.toggle("on",s.on);a.setAttribute("aria-pressed",s.on);if(s.on)$("wSb"+i).focus();return}
   if(a.dataset.act==="tog"){W.debits[i].on=!W.debits[i].on;$("wp"+i).classList.toggle("on",W.debits[i].on);a.setAttribute("aria-pressed",W.debits[i].on);if(W.debits[i].on)$("wDa"+i).focus();return}
   if(a.dataset.act==="add-inc") W.incomes.push({label:"",amount:"",day:""});
@@ -993,6 +1042,7 @@ $("addForm").addEventListener("submit",async e=>{
 document.addEventListener("click",async e=>{
   const g=e.target.closest("[data-goto]"); if(g){show(g.dataset.goto);return}
   const dd=e.target.closest("[data-day]"); if(dd){selDay=dd.dataset.day;render();return}
+  const ps=e.target.closest("[data-paystart]"); if(ps&&store){try{await setStartDay(+ps.dataset.paystart);toast(+ps.dataset.paystart>1?"Le mois commence maintenant le "+ps.dataset.paystart:"Le mois commence maintenant le 1er")}catch(e){err(e)}return}
   const dc=e.target.closest("[data-cat]"); if(dc){pieCat=dc.dataset.cat||null;render();return}
   const b=e.target.closest("[data-del]"); if(!b||!store) return;
   const [c,id]=b.dataset.del.split(":");
@@ -1004,7 +1054,7 @@ $("clearExamples").onclick=async()=>{
   if(!store) return;
   const list=[...S.expenses.filter(x=>x.example).map(x=>["expenses",x.id]),...S.recurring.filter(x=>x.example).map(x=>["recurring",x.id])];
   try{for(const [c,id] of list) await store.remove(c,id);
-    if(S.settings?.example){await saveSettings({balance:0,month:ymKey(today.getFullYear(),today.getMonth())});$("openingBox").dataset.editing="1";render()}
+    if(S.settings?.example){const cp=periodOf(todayIso);await saveSettings({balance:0,month:ymKey(cp.y,cp.m)});$("openingBox").dataset.editing="1";render()}
     toast("Exemples effacés")}catch(e){err(e)}
 };
 $("dayAdd").onclick=()=>{setKind("depense");$("fDate").value=selDay||todayIso;show("add");$("fLabel").focus()};

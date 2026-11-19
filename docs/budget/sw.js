@@ -1,5 +1,5 @@
 // Service worker de Budget du foyer : l'app s'ouvre même sans réseau (les données restent sur le téléphone).
-const SHELL = "budget-shell-v2";
+const SHELL = "budget-shell-v3";
 const LIBS = "budget-libs-v1";
 const SHELL_FILES = ["./", "./index.html", "./manifest.webmanifest", "./icons/favicon-32.png", "./icons/icon-192.png"];
 

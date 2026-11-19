@@ -193,6 +193,20 @@ désactive *Verify JWT*. Ensuite, dans *SQL Editor*, lance [`supabase/mons-rappe
 
 Pour l'essayer sans toucher à la base : **…/mons/?demo** (données gardées dans le navigateur ; codes `DEMO26` pour un admin, `BENE26` pour une bénévole).
 
+## Budget du foyer : le solde prévu jusqu'à la fin du mois
+
+Le dossier `docs/budget/` contient une septième application, **Budget du foyer** : un questionnaire de départ
+(prénom, salaire, prélèvements, épargne, solde du compte), puis le solde prévu en fin de mois.
+
+- **Accueil** : solde prévu, revenus et prélèvements fixes, sorties du mois, épargne et dépenses par catégorie.
+- **Calendrier** : chaque jour du mois avec ses opérations et le solde du soir.
+- **Ajouter** : une dépense datée, ou un revenu ou un prélèvement qui revient chaque mois.
+- **Camembert** : la répartition par catégorie, puis par sous-catégorie.
+- **Épargne** : Livret A, LDDS, LEP, PEL, assurance-vie, PEA… avec taux, plafonds, virements automatiques et projection à 12 mois.
+
+Elle est en ligne à l'adresse **https://zcabande-arch.github.io/D-clic-/budget/** : ouvre-la dans Safari et ajoute-la à l'écran d'accueil.
+Elle n'a besoin d'aucun serveur : les données restent sur le téléphone, dans le navigateur.
+
 ## Mes Exos : des exercices à partir d'une photo du cours
 
 Le dossier `docs/exos/` contient une sixième application, **Mes Exos** : on prend en photo les pages d'un cours

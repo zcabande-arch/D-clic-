@@ -209,6 +209,11 @@ button.lg:hover{background:var(--card-hi)}
 .acc-cap .track{height:6px}
 .acc-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .acc-actions input{flex:1;min-width:120px;padding:9px 12px}
+.acc-move{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.acc-move .small-btn{padding:10px 8px;font-size:12.5px;line-height:1.25}
+.acc-move .small-btn:disabled{opacity:.4}
+.tr-help{flex-basis:100%;margin:0;font-size:12.5px;color:var(--muted)}
+.small-btn.go{background:linear-gradient(90deg,var(--ember),var(--ember-2));color:#1a0c05;border:0}
 .type-desc{font-size:12.5px;color:var(--muted);margin:0;grid-column:1/-1}
 .card.tap{cursor:pointer}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);border-radius:999px;padding:4px;gap:4px}
@@ -327,6 +332,7 @@ select option{background:#1b120d}
         <div class="field" id="dayField" hidden><label for="fDay">Jour du mois</label><input id="fDay" type="number" min="1" max="31" placeholder="ex. 25"></div>
         <div class="field" id="catField"><label for="fCat">Catégorie</label><select id="fCat"></select></div>
         <div class="field" id="subField"><label for="fSub">Sous-catégorie</label><select id="fSub"></select></div>
+        <p class="type-desc" id="catHint" aria-live="polite"></p>
         <button class="primary" type="submit" id="submitBtn">Ajouter la dépense</button>
       </form>
     </div>
@@ -418,6 +424,63 @@ const CATS=Object.keys(TREE);
 const COLORS={"Courses":"#ffc15e","Logement":"#ff6a2b","Transport":"#7fb2ff","Restaurants":"#e8455a","Loisirs":"#c9a2ff","Santé":"#8fdcab","Shopping":"#f28fb6","Enfants":"#5fd1c9","Autre":"#b9a89a"};
 let pieCat=null;
 const C=2*Math.PI*70;
+/* ---------- reconnaissance automatique des catégories ---------- */
+// Ordre important : la première règle qui reconnaît un mot du libellé l'emporte.
+const RULES=[
+  ["Restaurants","Livraison","uber eats|deliveroo|just eat|livraison repas"],
+  ["Loisirs","Abonnements","netflix|spotify|deezer|disney|disney plus|canal|canal plus|prime video|amazon prime|youtube|youtube premium|apple music|icloud|playstation|psn|xbox|game pass|nintendo|twitch|crunchyroll|molotov|audible|chatgpt|dazn|bein"],
+  ["Logement","Loyer","loyer|credit immo|credit immobilier|pret immo|pret immobilier|syndic|charges|copropriete|hlm|bailleur"],
+  ["Logement","Énergie","edf|engie|total energie|totalenergies|electricite|elec|gaz|eau|veolia|suez|saur|enercoop|ekwateur|ohm|chauffage|fioul|granules"],
+  ["Logement","Téléphone & internet","free|freebox|free mobile|orange|sfr|bouygues|bbox|sosh|red by sfr|b you|la poste mobile|prixtel|youprice|internet|box|forfait|mobile|telephone"],
+  ["Santé","Mutuelle","mutuelle|harmonie|mgen|alan|malakoff|ag2r|swiss life|april|apivia|mutualite"],
+  ["Logement","Assurance","assurance|assurances|maif|macif|matmut|axa|groupama|gmf|allianz|mma|maaf|direct assurance|habitation|leocare|luko"],
+  ["Logement","Travaux","leroy merlin|castorama|brico|bricolage|bricomarche|brico depot|mr bricolage|travaux|plombier|electricien|serrurier|artisan|peinture"],
+  ["Courses","Boulangerie","boulangerie|pain|patisserie|croissant|croissants|baguette|viennoiserie|viennoiseries"],
+  ["Courses","Marché","marche|primeur|fromager|fromagerie|boucherie|boucher|poissonnerie|traiteur|amap"],
+  ["Courses","Hygiène & ménage","hygiene|menage|lessive|produits menagers|couches|savon|shampoing|dentifrice|papier toilette"],
+  ["Courses","Supermarché","carrefour|carrefour market|carrefour city|leclerc|e leclerc|auchan|lidl|aldi|intermarche|super u|hyper u|u express|monoprix|monop|franprix|casino|netto|cora|picard|grand frais|biocoop|naturalia|la vie claire|g20|spar|vival|proxi|leader price|colruyt|courses|drive|supermarche|hypermarche|epicerie|alimentation"],
+  ["Transport","Carburant","essence|carburant|gasoil|gazole|diesel|plein|sp95|sp98|e85|total|esso|shell|bp|avia|station|station service|recharge|superchargeur|ionity"],
+  ["Transport","Péage & parking","peage|parking|autoroute|vinci|sanef|aprr|cofiroute|bip go|ulys|stationnement|pv|amende|fourriere|indigo|onepark"],
+  ["Transport","Entretien","garage|vidange|pneu|pneus|norauto|feu vert|midas|speedy|euromaster|controle technique|reparation voiture|carrosserie|lavage"],
+  ["Transport","Transports en commun","navigo|ratp|sncf|ter|tgv|ouigo|tcl|rtm|tisseo|tbm|ilevia|tram|tramway|metro|bus|ticket|tickets|train|blablacar|flixbus|uber|taxi|bolt|heetch|g7|velib|velo|lime|trottinette|transport|transports"],
+  ["Restaurants","Fast-food","mcdo|mcdonald|mcdonalds|mc do|burger king|bk|kfc|quick|subway|five guys|kebab|tacos|o tacos|pizza|domino|dominos|pizza hut|burger|sandwich|snack|fast food|bagelstein|pomme de pain|brioche doree|class croute"],
+  ["Restaurants","Café","cafe|starbucks|columbus|brunch|bar|bistrot|apero|biere|bieres|cafeteria|salon de the"],
+  ["Restaurants","Restaurant","resto|restaurant|restau|diner|dejeuner|brasserie|sushi|sushis|creperie|pizzeria|bouillon|indien|chinois|japonais|libanais|italien|thai|resto u|crous"],
+  ["Loisirs","Sport","salle de sport|basic fit|basic-fit|fitness park|fitness|neoness|l orange bleue|keepcool|on air|sport|piscine|foot|club|decathlon|go sport|intersport|yoga|gym|crossfit|escalade|tennis|padel|running"],
+  ["Loisirs","Voyages","hotel|airbnb|booking|vol|avion|air france|easyjet|ryanair|transavia|volotea|vacances|voyage|camping|gite|location vacances|club med|expedia"],
+  ["Loisirs","Sorties","cinema|ciné|cine|ugc|pathe|gaumont|mk2|kinepolis|concert|theatre|musee|expo|exposition|bowling|soiree|boite|sortie|spectacle|festival|parc|escape game|laser game|karaoke|billetterie|ticketmaster|fnac spectacles|zoo"],
+  ["Santé","Pharmacie","pharmacie|pharma|medicament|medicaments|doliprane|parapharmacie|ordonnance"],
+  ["Santé","Médecin","medecin|docteur|dr|dentiste|kine|kinesitherapeute|osteo|osteopathe|ophtalmo|ophtalmologue|generaliste|doctolib|hopital|clinique|laboratoire|labo|analyse|analyses|psy|psychologue|orthodontiste|opticien|lunettes|lentilles|sage femme|gyneco|dermato|radio|radiologie"],
+  ["Enfants","Garde","creche|nounou|baby sitting|baby sitter|babysitter|babysitting|garde|assistante maternelle|centre aere|periscolaire|garderie|halte garderie"],
+  ["Enfants","École","ecole|cantine|college|lycee|fournitures|fournitures scolaires|scolaire|scolarite|rentree|cartable|manuels|pronote"],
+  ["Enfants","Activités","judo|danse|piano|conservatoire|colonie|colo|stage|poney|equitation|natation|scout|scouts|eveil"],
+  ["Enfants","Vêtements","vertbaudet|okaidi|petit bateau|du pareil au meme|dpam|jacadi|cyrillus|tape a l oeil|orchestra|bebe"],
+  ["Shopping","Vêtements","zara|h m|hm|kiabi|primark|uniqlo|celio|jules|bershka|pull and bear|mango|vetement|vetements|chaussure|chaussures|shein|vinted|zalando|nike|adidas|courir|foot locker|jd sports|pull|jean|jeans|manteau|robe|t shirt|baskets|sneakers|la redoute|asos|gemo|eram|bocage|sephora|nocibe|marionnaud|maquillage|parfum|coiffeur|coiffure"],
+  ["Shopping","Maison","ikea|but|conforama|maisons du monde|gifi|la foir fouille|foirfouille|action|hema|zara home|alinea|deco|decoration|meuble|meubles|vaisselle|linge|electromenager|amazon|cdiscount|temu|aliexpress|wish"],
+  ["Shopping","High-tech","boulanger|fnac|darty|apple|apple store|samsung|ldlc|materiel net|rue du commerce|back market|ordinateur|pc|telephone portable|smartphone|iphone|ecouteurs|airpods|console|jeu video|jeux video|tablette|ipad"],
+  ["Shopping","Cadeaux","cadeau|cadeaux|anniversaire|anniv|noel|fleurs|fleuriste|interflora|fete des meres|fete des peres|saint valentin|naissance|mariage"],
+  ["Loisirs","Abonnements","abonnement|abonnements|abo"]
+];
+const normTxt=t=>String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g," ").trim();
+const RULE_RX=RULES.map(([cat,sub,kw])=>({cat,sub,rx:new RegExp("(^| )("+kw.split("|").map(k=>normTxt(k).replace(/ /g," ")).join("|")+")s?( |$)")}));
+let catManual=false;
+// 1) ce que tu as déjà choisi pour le même libellé, 2) les mots-clés.
+function guessCat(label){
+  const n=normTxt(label); if(n.length<2) return null;
+  const past=[...S.expenses].filter(e=>!e.example&&e.cat&&normTxt(e.label)===n).sort((a,b)=>a.date<b.date?1:-1)[0]
+    ||S.recurring.find(r=>r.kind!=="revenu"&&!r.example&&r.cat&&normTxt(r.label)===n);
+  if(past&&TREE[past.cat]) return {cat:past.cat,sub:(TREE[past.cat].includes(past.sub)?past.sub:TREE[past.cat][0]),why:"comme la dernière fois"};
+  const r=RULE_RX.find(r=>r.rx.test(n));
+  return r?{cat:r.cat,sub:r.sub,why:"reconnu"}:null;
+}
+function autoCat(){
+  if(kind==="revenu"||catManual) return;
+  const g=guessCat($("fLabel").value);
+  if(!g){$("catHint").textContent="";return}
+  if($("fCat").value!==g.cat){$("fCat").value=g.cat;fillSubs()}
+  $("fSub").value=g.sub;
+  $("catHint").textContent=`✓ ${g.cat} › ${g.sub}, ${g.why}. Tu peux changer si besoin.`;
+}
 function fillSubs(){const c=document.getElementById("fCat").value;document.getElementById("fSub").innerHTML=(TREE[c]||["Divers"]).map(s=>`<option>${s}</option>`).join("")}
 const eur=new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"});
 const fmt=n=>eur.format(n);
@@ -434,7 +497,9 @@ let store=null;
 const $=id=>document.getElementById(id);
 $("fCat").innerHTML=CATS.map(c=>`<option>${c}</option>`).join("");
 $("fDate").value=todayIso;
-$("fCat").onchange=fillSubs;fillSubs();
+$("fCat").onchange=()=>{fillSubs();catManual=true;$("catHint").textContent=""};fillSubs();
+$("fSub").onchange=()=>{catManual=true;$("catHint").textContent=""};
+$("fLabel").addEventListener("input",autoCat);
 $("pieSvg").innerHTML+=Array.from({length:10},(_,i)=>`<circle class="seg-c" id="seg${i}" cx="90" cy="90" r="70" stroke-dasharray="0 ${C}" stroke-dashoffset="0"></circle>`).join("");
 
 /* ---------- tabs ---------- */
@@ -531,7 +596,9 @@ function calItems(y,m,S){
     out.push({src:"savings",id:s.id,date:key+"-"+pad(d),label:"Virement "+(s.label||t.name),amount:-s.monthly,type:"virement",cat:"Épargne"});
   }
   for(const e of S.expenses) if((e.date||"").startsWith(key))
-    out.push({src:"expenses",id:e.id,date:e.date,label:e.label,amount:-e.amount,type:"depense",cat:e.cat,sub:e.sub,example:e.example});
+    out.push(e.kind==="epargne"
+      ?{src:"expenses",id:e.id,date:e.date,label:e.label,amount:e.dir==="out"?+e.amount:-e.amount,type:"virement",cat:"Épargne",tr:e.dir||"in"}
+      :{src:"expenses",id:e.id,date:e.date,label:e.label,amount:-e.amount,type:"depense",cat:e.cat,sub:e.sub,example:e.example});
   return out;
 }
 const net=(y,m)=>monthItems(y,m).reduce((s,i)=>s+i.amount,0);
@@ -572,7 +639,7 @@ function render(){
   const inc=items.filter(i=>i.type==="revenu").reduce((s,i)=>s+i.amount,0);
   const deb=items.filter(i=>i.type==="prelevement").reduce((s,i)=>s+i.amount,0);
   const spe=items.filter(i=>i.type==="depense").reduce((s,i)=>s+i.amount,0);
-  const out=-(deb+spe);
+  const out=-(deb+spe)||0;
   const vir=items.filter(i=>i.type==="virement").reduce((s,i)=>s+i.amount,0);
   const end=open==null?null:open+inc+deb+spe+vir;
 
@@ -646,7 +713,7 @@ function render(){
   const dayFuture=selDay>todayIso;
   $("daySub").textContent=endOfDay==null?"":(dayFuture?"Solde prévu le soir : ":"Solde le soir : ")+fmt(endOfDay);
   $("dayList").innerHTML=dayList.length?dayList.map(i=>{
-    const meta=i.type==="depense"?esc(i.cat||"Autre"):i.type==="virement"?"Vers ton épargne":(i.type==="revenu"?"Revenu":"Prélèvement")+" mensuel";
+    const meta=i.type==="depense"?esc(i.cat||"Autre"):i.type==="virement"?(i.tr==="out"?"Depuis ton épargne vers le compte courant":"Du compte courant vers ton épargne"):(i.type==="revenu"?"Revenu":"Prélèvement")+" mensuel";
     return `<div class="row${dayFuture?" future":""}" style="grid-template-columns:minmax(0,1fr) auto 30px">
       <div class="what"><div class="t">${esc(i.label)}</div><div class="m">${i.example?'<span class="tag">exemple</span>':""}${meta}${dayFuture?" · prévu":""}</div></div>
       <div class="amt num"><span class="a ${i.amount>0?"pos":""}">${signed(i.amount)}</span></div>
@@ -746,7 +813,8 @@ function renderSavings(){
       <div class="acc-bal num">${fmt(x.now)}</div>
       ${cap?`<div class="acc-cap"><div class="track"><i style="width:${p}%;background:${x.t.color}"></i></div><span class="num">${x.now>=cap?"Plafond atteint":`Encore ${fmt(cap-x.now)} avant le plafond de ${fmt(cap)}`}</span></div>`:""}
       <div class="acc-facts"><div>Taux<b class="num">${pct2(x.rate)}</b></div><div>Par mois<b class="num">${+x.monthly?fmt(+x.monthly):"—"}</b></div><div>Dans 12 mois<b class="num">≈ ${fmt(x.in12)}</b></div></div>
-      <div class="acc-actions" id="acc-${x.id}"><button class="small-btn" data-editsav="${x.id}">Mettre à jour le solde</button>${+x.monthly?`<small style="color:var(--muted)">Virement le ${x.day} du mois</small>`:""}</div>
+      <div class="acc-move"><button class="small-btn" data-transfer="in:${x.id}">↓ Verser</button><button class="small-btn" data-transfer="out:${x.id}"${x.now>0?"":" disabled"}>↑ Retirer</button></div>
+      <div class="acc-actions" id="acc-${x.id}"><button class="link" data-editsav="${x.id}">Corriger le solde</button>${+x.monthly?`<small style="color:var(--muted)">Virement le ${x.day} du mois</small>`:""}</div>
     </div>`;
   }).join("");
 }
@@ -767,6 +835,18 @@ function renderSavings(){
   });
 })();
 document.addEventListener("click",async e=>{
+  const tr=e.target.closest("[data-transfer]");
+  if(tr){const [dir,id]=tr.dataset.transfer.split(":"),s=S.savings.find(x=>x.id===id);if(!s)return;
+    const nm=esc(s.label||(TYPES[s.type]||TYPES.autre).name), now=savNow(s);
+    $("acc-"+id).innerHTML=`<p class="tr-help">${dir==="in"?`Du compte courant vers ${nm}`:`De ${nm} vers le compte courant (disponible : ${fmt(now)})`}</p>
+      <input id="trIn-${id}" inputmode="decimal" placeholder="Montant (€)" aria-label="Montant du ${dir==="in"?"versement":"retrait"}">
+      <button class="small-btn go" data-dotransfer="${dir}:${id}">${dir==="in"?"Verser":"Retirer"}</button><button class="link" data-trcancel>Annuler</button>`;
+    $("trIn-"+id).focus();return}
+  if(e.target.closest("[data-trcancel]")){render();return}
+  const dtr=e.target.closest("[data-dotransfer]");
+  if(dtr){const [dir,id]=dtr.dataset.dotransfer.split(":");
+    const amt=parseAmt($("trIn-"+id).value);if(!(amt>0)){toast("Indique un montant");return}
+    try{await doTransfer(dir,id,amt)}catch(e){err(e)}return}
   const ed=e.target.closest("[data-editsav]");
   if(ed){const s=S.savings.find(x=>x.id===ed.dataset.editsav);if(!s)return;
     $("acc-"+s.id).innerHTML=`<input id="accIn-${s.id}" inputmode="decimal" value="${String(savNow(s)).replace(".",",")}" aria-label="Nouveau solde"><button class="small-btn" data-savesav="${s.id}">Enregistrer</button>`;
@@ -777,6 +857,23 @@ document.addEventListener("click",async e=>{
     const {id,...body}=s;
     try{await store.put("savings",id,{...body,balance:v,asOf:todayIso});toast("Solde mis à jour")}catch(e){err(e)}}
 });
+
+/* ---------- virements épargne <-> compte courant ---------- */
+// Une ligne datée du jour dans le compte courant (type « virement ») + le solde du compte épargne ajusté.
+async function shiftSav(id,delta){
+  const s=S.savings.find(x=>x.id===id); if(!s) return;
+  const {id:_,...body}=s;
+  await store.put("savings",id,{...body,balance:Math.round((savNow(s)+delta)*100)/100,asOf:todayIso});
+}
+async function doTransfer(dir,id,amt){
+  const s=S.savings.find(x=>x.id===id); if(!s) return;
+  const t=TYPES[s.type]||TYPES.autre, now=savNow(s), nm=s.label||t.name;
+  if(dir==="out"&&amt>now){toast(`Il n'y a que ${fmt(now)} sur ${nm}`);return}
+  if(dir==="in"&&t.cap&&now+amt>t.cap){toast(now>=t.cap?`${nm} est au plafond`:`Plafond : tu peux verser au plus ${fmt(t.cap-now)}`);return}
+  await shiftSav(id,dir==="in"?amt:-amt);
+  await store.add("expenses",{kind:"epargne",dir,savId:id,label:(dir==="in"?"Virement vers ":"Retrait de ")+nm,amount:amt,date:todayIso});
+  toast(dir==="in"?`${fmt(amt)} versés sur ${nm}`:`${fmt(amt)} remis sur le compte courant`);
+}
 
 /* ---------- camembert ---------- */
 function renderPie(tree,monthName){
@@ -966,7 +1063,7 @@ function buildRecurring(){
   if(parseAmt(W.salary.amount)>0&&dayOk(W.salary.day)) out.push({label:"Salaire",amount:parseAmt(W.salary.amount),day:dayOk(W.salary.day),kind:"revenu"});
   W.incomes.forEach(r=>parseAmt(r.amount)>0&&dayOk(r.day)&&out.push({label:r.label,amount:parseAmt(r.amount),day:dayOk(r.day),kind:"revenu"}));
   W.debits.forEach(d=>d.on&&parseAmt(d.amount)>0&&dayOk(d.day)&&out.push({label:d.label,amount:parseAmt(d.amount),day:dayOk(d.day),kind:"prelevement",cat:d.cat,sub:d.sub}));
-  W.custom.forEach(r=>parseAmt(r.amount)>0&&dayOk(r.day)&&out.push({label:r.label,amount:parseAmt(r.amount),day:dayOk(r.day),kind:"prelevement",cat:r.cat||"Autre",sub:(TREE[r.cat]||["Divers"])[0]}));
+  W.custom.forEach(r=>parseAmt(r.amount)>0&&dayOk(r.day)&&out.push({label:r.label,amount:parseAmt(r.amount),day:dayOk(r.day),kind:"prelevement",cat:r.cat||"Autre",sub:(g=>g&&g.cat===r.cat?g.sub:(TREE[r.cat]||["Divers"])[0])(guessCat(r.label))}));
   return out;
 }
 async function finishWizard(){
@@ -991,6 +1088,12 @@ $("wNext").onclick=()=>{
 $("wBack").onclick=()=>{collect();if(wStep>0){wStep--;drawStep();$("wiz").scrollTop=0}};
 $("wSkip").onclick=()=>closeWizard();
 $("wBody").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT"&&wStep!==1&&wStep!==2&&wStep!==3){e.preventDefault();$("wNext").click()}});
+const wCatManual=new Set();
+$("wBody").addEventListener("change",e=>{const m=e.target.id.match(/^wCc(\d+)$/);if(m)wCatManual.add(+m[1])});
+$("wBody").addEventListener("input",e=>{
+  const m=e.target.id.match(/^wCl(\d+)$/); if(!m||wCatManual.has(+m[1])) return;
+  const g=guessCat(e.target.value), sel=$("wCc"+m[1]); if(g&&sel) sel.value=g.cat;
+});
 $("wBody").addEventListener("click",e=>{
   const a=e.target.closest("[data-act]");if(!a)return;
   collect();const i=+a.dataset.i;
@@ -1000,7 +1103,7 @@ $("wBody").addEventListener("click",e=>{
   if(a.dataset.act==="add-inc") W.incomes.push({label:"",amount:"",day:""});
   if(a.dataset.act==="rm-inc") W.incomes.splice(i,1);
   if(a.dataset.act==="add-cus") W.custom.push({label:"",amount:"",day:"",cat:"Autre"});
-  if(a.dataset.act==="rm-cus") W.custom.splice(i,1);
+  if(a.dataset.act==="rm-cus"){W.custom.splice(i,1);wCatManual.clear()}
   drawStep();
 });
 $("redoWiz").onclick=()=>openWizard();
@@ -1014,6 +1117,7 @@ function setKind(k){
   $("catField").hidden=$("subField").hidden=k==="revenu";
   if(k==="prelevement"&&$("fCat").value==="Courses"){$("fCat").value="Logement";fillSubs()}
   $("fLabel").placeholder=dep?"Courses Carrefour":k==="revenu"?"Salaire":"Loyer";
+  if(k==="revenu") $("catHint").textContent=""; else autoCat();
   $("submitBtn").textContent=dep?"Ajouter la dépense":k==="revenu"?"Ajouter le revenu":"Ajouter le prélèvement";
 }
 document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>setKind(b.dataset.kind));
@@ -1035,7 +1139,7 @@ $("addForm").addEventListener("submit",async e=>{
       await store.add("recurring",kind==="prelevement"?{label,amount,day,kind,cat:$("fCat").value,sub:$("fSub").value}:{label,amount,day,kind});
       toast(kind==="revenu"?"Revenu ajouté":"Prélèvement ajouté");
     }
-    $("fLabel").value="";$("fAmount").value="";$("fDay").value="";
+    $("fLabel").value="";$("fAmount").value="";$("fDay").value="";catManual=false;$("catHint").textContent="";
     render();
   }catch(e){err(e)}
 });
@@ -1048,7 +1152,10 @@ document.addEventListener("click",async e=>{
   const [c,id]=b.dataset.del.split(":");
   const item=S[c].find(x=>x.id===id); if(!item) return;
   const {id:_,...body}=item;
-  try{await store.remove(c,id);toast("Supprimé",async()=>{try{await store.restore(c,id,body)}catch(e){err(e)}})}catch(e){err(e)}
+  // Supprimer un virement d'épargne remet aussi le compte épargne comme avant.
+  const sav=c==="expenses"&&item.kind==="epargne"?(item.dir==="out"?+item.amount:-item.amount):0;
+  try{await store.remove(c,id);if(sav)await shiftSav(item.savId,sav);
+    toast("Supprimé",async()=>{try{await store.restore(c,id,body);if(sav)await shiftSav(item.savId,-sav)}catch(e){err(e)}})}catch(e){err(e)}
 });
 $("clearExamples").onclick=async()=>{
   if(!store) return;

@@ -209,6 +209,11 @@ button.lg:hover{background:var(--card-hi)}
 .acc-cap .track{height:6px}
 .acc-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .acc-actions input{flex:1;min-width:120px;padding:9px 12px}
+.acc-move{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.acc-move .small-btn{padding:10px 8px;font-size:12.5px;line-height:1.25}
+.acc-move .small-btn:disabled{opacity:.4}
+.tr-help{flex-basis:100%;margin:0;font-size:12.5px;color:var(--muted)}
+.small-btn.go{background:linear-gradient(90deg,var(--ember),var(--ember-2));color:#1a0c05;border:0}
 .type-desc{font-size:12.5px;color:var(--muted);margin:0;grid-column:1/-1}
 .card.tap{cursor:pointer}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);border-radius:999px;padding:4px;gap:4px}
@@ -591,7 +596,9 @@ function calItems(y,m,S){
     out.push({src:"savings",id:s.id,date:key+"-"+pad(d),label:"Virement "+(s.label||t.name),amount:-s.monthly,type:"virement",cat:"Épargne"});
   }
   for(const e of S.expenses) if((e.date||"").startsWith(key))
-    out.push({src:"expenses",id:e.id,date:e.date,label:e.label,amount:-e.amount,type:"depense",cat:e.cat,sub:e.sub,example:e.example});
+    out.push(e.kind==="epargne"
+      ?{src:"expenses",id:e.id,date:e.date,label:e.label,amount:e.dir==="out"?+e.amount:-e.amount,type:"virement",cat:"Épargne",tr:e.dir||"in"}
+      :{src:"expenses",id:e.id,date:e.date,label:e.label,amount:-e.amount,type:"depense",cat:e.cat,sub:e.sub,example:e.example});
   return out;
 }
 const net=(y,m)=>monthItems(y,m).reduce((s,i)=>s+i.amount,0);
@@ -632,7 +639,7 @@ function render(){
   const inc=items.filter(i=>i.type==="revenu").reduce((s,i)=>s+i.amount,0);
   const deb=items.filter(i=>i.type==="prelevement").reduce((s,i)=>s+i.amount,0);
   const spe=items.filter(i=>i.type==="depense").reduce((s,i)=>s+i.amount,0);
-  const out=-(deb+spe);
+  const out=-(deb+spe)||0;
   const vir=items.filter(i=>i.type==="virement").reduce((s,i)=>s+i.amount,0);
   const end=open==null?null:open+inc+deb+spe+vir;
 
@@ -706,7 +713,7 @@ function render(){
   const dayFuture=selDay>todayIso;
   $("daySub").textContent=endOfDay==null?"":(dayFuture?"Solde prévu le soir : ":"Solde le soir : ")+fmt(endOfDay);
   $("dayList").innerHTML=dayList.length?dayList.map(i=>{
-    const meta=i.type==="depense"?esc(i.cat||"Autre"):i.type==="virement"?"Vers ton épargne":(i.type==="revenu"?"Revenu":"Prélèvement")+" mensuel";
+    const meta=i.type==="depense"?esc(i.cat||"Autre"):i.type==="virement"?(i.tr==="out"?"Depuis ton épargne vers le compte courant":"Du compte courant vers ton épargne"):(i.type==="revenu"?"Revenu":"Prélèvement")+" mensuel";
     return `<div class="row${dayFuture?" future":""}" style="grid-template-columns:minmax(0,1fr) auto 30px">
       <div class="what"><div class="t">${esc(i.label)}</div><div class="m">${i.example?'<span class="tag">exemple</span>':""}${meta}${dayFuture?" · prévu":""}</div></div>
       <div class="amt num"><span class="a ${i.amount>0?"pos":""}">${signed(i.amount)}</span></div>
@@ -806,7 +813,8 @@ function renderSavings(){
       <div class="acc-bal num">${fmt(x.now)}</div>
       ${cap?`<div class="acc-cap"><div class="track"><i style="width:${p}%;background:${x.t.color}"></i></div><span class="num">${x.now>=cap?"Plafond atteint":`Encore ${fmt(cap-x.now)} avant le plafond de ${fmt(cap)}`}</span></div>`:""}
       <div class="acc-facts"><div>Taux<b class="num">${pct2(x.rate)}</b></div><div>Par mois<b class="num">${+x.monthly?fmt(+x.monthly):"—"}</b></div><div>Dans 12 mois<b class="num">≈ ${fmt(x.in12)}</b></div></div>
-      <div class="acc-actions" id="acc-${x.id}"><button class="small-btn" data-editsav="${x.id}">Mettre à jour le solde</button>${+x.monthly?`<small style="color:var(--muted)">Virement le ${x.day} du mois</small>`:""}</div>
+      <div class="acc-move"><button class="small-btn" data-transfer="in:${x.id}">↓ Verser</button><button class="small-btn" data-transfer="out:${x.id}"${x.now>0?"":" disabled"}>↑ Retirer</button></div>
+      <div class="acc-actions" id="acc-${x.id}"><button class="link" data-editsav="${x.id}">Corriger le solde</button>${+x.monthly?`<small style="color:var(--muted)">Virement le ${x.day} du mois</small>`:""}</div>
     </div>`;
   }).join("");
 }
@@ -827,6 +835,18 @@ function renderSavings(){
   });
 })();
 document.addEventListener("click",async e=>{
+  const tr=e.target.closest("[data-transfer]");
+  if(tr){const [dir,id]=tr.dataset.transfer.split(":"),s=S.savings.find(x=>x.id===id);if(!s)return;
+    const nm=esc(s.label||(TYPES[s.type]||TYPES.autre).name), now=savNow(s);
+    $("acc-"+id).innerHTML=`<p class="tr-help">${dir==="in"?`Du compte courant vers ${nm}`:`De ${nm} vers le compte courant (disponible : ${fmt(now)})`}</p>
+      <input id="trIn-${id}" inputmode="decimal" placeholder="Montant (€)" aria-label="Montant du ${dir==="in"?"versement":"retrait"}">
+      <button class="small-btn go" data-dotransfer="${dir}:${id}">${dir==="in"?"Verser":"Retirer"}</button><button class="link" data-trcancel>Annuler</button>`;
+    $("trIn-"+id).focus();return}
+  if(e.target.closest("[data-trcancel]")){render();return}
+  const dtr=e.target.closest("[data-dotransfer]");
+  if(dtr){const [dir,id]=dtr.dataset.dotransfer.split(":");
+    const amt=parseAmt($("trIn-"+id).value);if(!(amt>0)){toast("Indique un montant");return}
+    try{await doTransfer(dir,id,amt)}catch(e){err(e)}return}
   const ed=e.target.closest("[data-editsav]");
   if(ed){const s=S.savings.find(x=>x.id===ed.dataset.editsav);if(!s)return;
     $("acc-"+s.id).innerHTML=`<input id="accIn-${s.id}" inputmode="decimal" value="${String(savNow(s)).replace(".",",")}" aria-label="Nouveau solde"><button class="small-btn" data-savesav="${s.id}">Enregistrer</button>`;
@@ -837,6 +857,23 @@ document.addEventListener("click",async e=>{
     const {id,...body}=s;
     try{await store.put("savings",id,{...body,balance:v,asOf:todayIso});toast("Solde mis à jour")}catch(e){err(e)}}
 });
+
+/* ---------- virements épargne <-> compte courant ---------- */
+// Une ligne datée du jour dans le compte courant (type « virement ») + le solde du compte épargne ajusté.
+async function shiftSav(id,delta){
+  const s=S.savings.find(x=>x.id===id); if(!s) return;
+  const {id:_,...body}=s;
+  await store.put("savings",id,{...body,balance:Math.round((savNow(s)+delta)*100)/100,asOf:todayIso});
+}
+async function doTransfer(dir,id,amt){
+  const s=S.savings.find(x=>x.id===id); if(!s) return;
+  const t=TYPES[s.type]||TYPES.autre, now=savNow(s), nm=s.label||t.name;
+  if(dir==="out"&&amt>now){toast(`Il n'y a que ${fmt(now)} sur ${nm}`);return}
+  if(dir==="in"&&t.cap&&now+amt>t.cap){toast(now>=t.cap?`${nm} est au plafond`:`Plafond : tu peux verser au plus ${fmt(t.cap-now)}`);return}
+  await shiftSav(id,dir==="in"?amt:-amt);
+  await store.add("expenses",{kind:"epargne",dir,savId:id,label:(dir==="in"?"Virement vers ":"Retrait de ")+nm,amount:amt,date:todayIso});
+  toast(dir==="in"?`${fmt(amt)} versés sur ${nm}`:`${fmt(amt)} remis sur le compte courant`);
+}
 
 /* ---------- camembert ---------- */
 function renderPie(tree,monthName){
@@ -1115,7 +1152,10 @@ document.addEventListener("click",async e=>{
   const [c,id]=b.dataset.del.split(":");
   const item=S[c].find(x=>x.id===id); if(!item) return;
   const {id:_,...body}=item;
-  try{await store.remove(c,id);toast("Supprimé",async()=>{try{await store.restore(c,id,body)}catch(e){err(e)}})}catch(e){err(e)}
+  // Supprimer un virement d'épargne remet aussi le compte épargne comme avant.
+  const sav=c==="expenses"&&item.kind==="epargne"?(item.dir==="out"?+item.amount:-item.amount):0;
+  try{await store.remove(c,id);if(sav)await shiftSav(item.savId,sav);
+    toast("Supprimé",async()=>{try{await store.restore(c,id,body);if(sav)await shiftSav(item.savId,-sav)}catch(e){err(e)}})}catch(e){err(e)}
 });
 $("clearExamples").onclick=async()=>{
   if(!store) return;

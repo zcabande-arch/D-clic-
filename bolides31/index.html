@@ -1,0 +1,529 @@
+<title>Les Bolides 31</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: galerie blanche — titre géant coupé, colonne de filtres repliables à gauche, grille de tuiles grises carrées */
+:root{
+  --bg:#ffffff; --surface:#ffffff; --tile:#ececec; --sunk:#f1f1f1; --ink:#111111; --muted:#6d6d6d; --faint:#a8a8a8; --line:#e2e2e2;
+  --chip:#ececec; --badge:#7a7a7a; --new:#b9f24a; --promo:#ffe45c;
+  --accent:#111111; --accent-ink:#ffffff; --err:#c0392b; --ok:#2f8a57; --warn:#b4720f; --price:#111111;
+  --display:"Outfit","Avenir Next",system-ui,sans-serif; --body:"Outfit","Avenir Next",system-ui,-apple-system,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --r:4px; --R:6px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e0e0e; --surface:#161616; --tile:#1f1f1f; --sunk:#1b1b1b; --ink:#f2f2f2; --muted:#a0a0a0; --faint:#666; --line:#2b2b2b;
+  --chip:#262626; --badge:#3a3a3a; --accent:#f2f2f2; --accent-ink:#111; --err:#ff7a6b; --ok:#5cc88a; --warn:#f0b04e; --price:#ffffff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e0e0e; --surface:#161616; --tile:#1f1f1f; --sunk:#1b1b1b; --ink:#f2f2f2; --muted:#a0a0a0; --faint:#666; --line:#2b2b2b;
+  --chip:#262626; --badge:#3a3a3a; --accent:#f2f2f2; --accent-ink:#111; --err:#ff7a6b; --ok:#5cc88a; --warn:#f0b04e; --price:#ffffff; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.05;font-weight:700;letter-spacing:-.02em}
+
+/* en-tête */
+.top .wrap{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding-block:22px 6px}
+.brand{font-weight:800;font-size:18px;letter-spacing:-.03em;white-space:nowrap;display:flex;align-items:center;gap:12px}
+.icon{border:0;background:none;padding:6px;margin:-6px;display:grid;place-items:center}
+.nav{display:flex;gap:16px;justify-content:center;font-size:13px}
+.nav button{border:0;background:none;padding:4px 0;color:var(--muted);white-space:nowrap;border-bottom:1.5px solid transparent}
+.nav button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+.right{justify-self:end;display:flex;gap:8px}
+.switch{display:flex;gap:4px}
+.switch button{border:1px solid var(--ink);background:transparent;padding:7px 12px;border-radius:var(--R);font-size:12px;font-weight:600;white-space:nowrap}
+.switch button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+@media (max-width:820px){.top .wrap{grid-template-columns:1fr auto}.nav{grid-column:1/-1;grid-row:2;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}}
+.searchbar{padding-block:10px 0}
+.searchbar input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:var(--R);padding:12px 14px;font-size:15px}
+
+/* titre géant */
+.giant{text-align:center;overflow:hidden;height:.74em;font-family:var(--display);font-weight:800;font-size:clamp(64px,15.5vw,190px);letter-spacing:-.04em;line-height:1;margin-top:28px;white-space:nowrap}
+.sub-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-block:30px 26px}
+.sub-h h2{font-size:clamp(22px,3vw,28px)}
+.meta{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--ink);flex-wrap:wrap}
+.sortpill{display:flex;align-items:center;gap:8px}
+.sortpill select{border:0;background:var(--badge);color:#fff;border-radius:var(--R);padding:5px 8px;font-size:12px;font-weight:600}
+
+/* corps */
+.shop{display:grid;grid-template-columns:224px minmax(0,1fr);gap:28px;align-items:start;padding-bottom:48px}
+@media (max-width:860px){.shop{grid-template-columns:1fr;gap:16px}}
+.side{display:grid;align-content:start}
+.side-h{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);padding-bottom:12px}
+.side-h button{border:0;background:none;font-size:12px;color:var(--ink);text-decoration:underline;padding:2px}
+@media (min-width:861px){.mob{display:none}}
+@media (max-width:860px){.side[data-open="false"] .fgroups{display:none}.side-h{border:1px solid var(--line);border-radius:var(--R);padding:10px 12px}}
+.sec{border-bottom:1px solid var(--line);padding-block:14px}
+.sec-h{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;background:none;padding:0;font-size:13px;color:var(--muted)}
+.sec-h::after{content:"";border:4px solid transparent;border-top-color:var(--ink);border-bottom:0;transition:transform .15s}
+.sec[data-closed="true"] .sec-h::after{transform:rotate(-90deg)}
+.sec[data-closed="true"] .sec-b{display:none}
+.sec-b{display:grid;gap:10px;padding-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{border:0;background:var(--chip);padding:4px 9px;border-radius:var(--R);font-size:11.5px;font-weight:500;display:inline-flex;gap:5px;align-items:center}
+.chip small{color:var(--faint);font-size:10px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.chip[aria-pressed="true"] small{color:inherit;opacity:.6}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+.lbl{font-size:12px;color:var(--muted)}
+.range{position:relative;height:22px}
+.range .rail{position:absolute;left:0;right:0;top:10px;height:2px;background:repeating-linear-gradient(90deg,var(--faint) 0 2px,transparent 2px 18px)}
+.range .fill{position:absolute;top:9px;height:4px;background:var(--ink);border-radius:2px}
+.range input{position:absolute;inset:0;width:100%;margin:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.range input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:14px;height:14px;border-radius:50%;background:var(--ink);border:2px solid var(--bg);cursor:pointer}
+.range input::-moz-range-thumb{pointer-events:auto;width:12px;height:12px;border-radius:50%;background:var(--ink);border:2px solid var(--bg);cursor:pointer}
+.range input::-webkit-slider-runnable-track{background:none}
+.range input::-moz-range-track{background:none}
+.rangeval{font-size:12px;font-variant-numeric:tabular-nums}
+
+/* tuiles */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+@media (max-width:520px){.grid{grid-template-columns:1fr 1fr;gap:10px}}
+.card{background:var(--tile);border:0;border-radius:var(--r);padding:12px;display:grid;grid-template-rows:auto 1fr auto;aspect-ratio:5/6;text-align:left;position:relative;transition:filter .15s}
+.card:hover{filter:brightness(.97)}
+.card-top{display:flex;justify-content:space-between;align-items:center;min-height:18px}
+.badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--R);background:var(--badge);color:#fff}
+.badge.new{color:var(--new)}
+.badge.promo{color:var(--promo)}
+.badge.ex{background:transparent;color:var(--muted);border:1px dashed var(--faint)}
+.ibtn{width:20px;height:20px;border-radius:50%;background:var(--badge);color:#fff;display:grid;place-items:center;font-size:14px;line-height:1;flex:none;margin-left:auto}
+.ph{display:grid;place-items:center;min-height:0;padding:8px 4px;max-width:100%}
+.ph img{max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;filter:drop-shadow(0 10px 10px rgba(0,0,0,.12))}
+.ph .none{color:var(--faint)}
+.card-bot{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px}
+.card-bot .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.price{font-weight:700;font-variant-numeric:tabular-nums;color:var(--price);white-space:nowrap}
+.card.off .ph{opacity:.45;filter:grayscale(1)}
+
+.empty{background:var(--tile);border-radius:var(--r);padding:40px 20px;text-align:center;color:var(--muted);display:grid;gap:8px;justify-items:center}
+.empty h3{color:var(--ink);font-size:20px}
+
+/* salons */
+.salons{border-top:1px solid var(--line);padding-block:28px 48px;display:grid;gap:12px}
+.salons h2{font-size:24px}
+.salons ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.salons li{display:flex;gap:10px;align-items:baseline}
+.salons li::before{content:"";width:7px;height:7px;background:var(--ink);border-radius:1px;flex:none;transform:translateY(-1px)}
+
+/* boutons */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:var(--R);padding:9px 14px;font-weight:600;font-size:14px}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.dark{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.btn.danger{color:var(--err)}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{min-width:0}
+.input{border:1px solid var(--line);background:var(--surface);border-radius:var(--R);padding:10px 12px;width:100%}
+
+/* modale */
+.modal{position:fixed;inset:0;background:color-mix(in srgb,#000 45%,transparent);z-index:20;display:grid;place-items:end center;padding-top:env(safe-area-inset-top,0px)}
+@media (min-width:700px){.modal{place-items:center}}
+.sheet{background:var(--surface);width:min(760px,100%);max-height:92vh;overflow:auto;border-radius:12px 12px 0 0;padding:20px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:grid;gap:16px}
+@media (min-width:700px){.sheet{border-radius:10px;padding:26px}}
+.sheet-head{display:flex;justify-content:space-between;align-items:start;gap:10px}
+.cbrand{font-size:12px;color:var(--muted)}
+.x{border:0;background:var(--sunk);width:34px;height:34px;border-radius:50%;font-size:18px;flex:none}
+.gallery{display:grid;gap:8px}
+.gallery .main{aspect-ratio:4/3;background:var(--tile);border-radius:var(--r);overflow:hidden;max-width:100%}
+.gallery .main img{width:100%;height:100%;object-fit:contain}
+.thumbs{display:flex;gap:6px;overflow-x:auto}
+.thumbs button{border:2px solid transparent;padding:0;border-radius:var(--r);overflow:hidden;width:64px;height:48px;flex:none;background:var(--tile)}
+.thumbs button[aria-pressed="true"]{border-color:var(--ink)}
+.thumbs img{width:100%;height:100%;object-fit:cover}
+.specs{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin:0;font-size:14px}
+.specs dt{color:var(--muted)}
+.specs dd{margin:0;font-weight:500}
+.desc{white-space:pre-wrap;margin:0;max-width:65ch}
+.contact{background:var(--sunk);border-radius:var(--R);padding:16px;display:grid;gap:10px}
+.contact .line{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.contact .val{font-family:var(--mono);font-size:15px;user-select:all;overflow-wrap:anywhere}
+.msg{background:var(--surface);border:1px solid var(--line);border-radius:var(--R);padding:12px;font-size:13px;white-space:pre-wrap;user-select:all}
+
+/* espace pro */
+.pro-head{padding-block:26px 18px;display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap}
+.pro-head h1{font-size:clamp(40px,8vw,84px);font-weight:800;letter-spacing:-.04em}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.kpi{background:var(--tile);border-radius:var(--r);padding:14px 16px}
+.kpi b{display:block;font-size:24px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+@media (max-width:480px){.kpi b{font-size:18px}}
+.tabs{display:flex;gap:5px;margin-bottom:14px;overflow-x:auto}
+.tabs button{border:0;background:var(--chip);padding:7px 12px;border-radius:var(--R);font-weight:500;font-size:13px;white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.list{display:grid;gap:8px;padding-bottom:40px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:var(--R);display:grid;grid-template-columns:72px 1fr;gap:12px;padding:10px;align-items:center}
+.item .th{width:72px;height:54px;border-radius:var(--r);overflow:hidden;background:var(--tile)}
+.item .th img{width:100%;height:100%;object-fit:cover}
+.item .info{min-width:0;display:grid;gap:2px}
+.item .t{font-weight:600;overflow-wrap:anywhere}
+.item .m{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.item .acts{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+@media (min-width:760px){.item{grid-template-columns:72px 1fr auto}.item .acts{grid-column:auto}}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--R);margin-right:6px;vertical-align:1px}
+.pill.v{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.pill.r{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.pill.s{background:var(--chip);color:var(--muted)}
+.confirm{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;background:var(--sunk);padding:10px;border-radius:var(--R)}
+
+.form{display:grid;gap:12px}
+.form label{display:grid;gap:4px;font-size:13px;font-weight:600}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form .three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:520px){.form .three{grid-template-columns:1fr 1fr}}
+.check{display:flex!important;align-items:center;gap:8px;font-weight:500!important}
+.drop{border:2px dashed var(--line);border-radius:var(--R);padding:14px;text-align:center;color:var(--muted);font-size:13px;display:grid;gap:8px}
+.drop.over{border-color:var(--ink)}
+.pgrid{display:flex;gap:8px;flex-wrap:wrap}
+.pgrid .p{position:relative;width:84px;height:63px;border-radius:var(--r);overflow:hidden;background:var(--tile)}
+.pgrid .p img{width:100%;height:100%;object-fit:cover}
+.pgrid .p button{position:absolute;right:3px;top:3px;border:0;background:rgba(0,0,0,.65);color:#fff;width:22px;height:22px;border-radius:50%;font-size:12px;line-height:1}
+.pgrid .p .first{position:absolute;left:0;bottom:0;right:0;background:var(--ink);color:var(--bg);font-size:10px;text-align:center;font-weight:700}
+.hint{font-size:12px;color:var(--muted);font-weight:400}
+.note{font-size:13px;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:var(--R);font-size:14px;font-weight:600;z-index:30;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:reduce){.card,.sec-h::after{transition:none}}
+</style>
+
+<header class="top"><div class="wrap">
+  <div class="brand"><span>B31<span style="color:var(--muted)">.</span></span><button class="icon" id="sbtn" aria-label="Rechercher"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button></div>
+  <nav class="nav" id="nav" aria-label="Rayons"></nav>
+  <div class="right"><div class="switch" id="sw" hidden>
+    <button id="sw-shop" aria-pressed="true">Boutique</button>
+    <button id="sw-pro" aria-pressed="false">Espace pro</button>
+  </div></div>
+</div></header>
+
+<main id="app"></main>
+<div id="modal-root"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+const CATS=["Voitures","Camions & utilitaires","Trains","Motos","Avions & divers"];
+const ECHELLES=["1/18","1/24","1/32","1/43","1/64","1/87 (HO)","1/160 (N)","Autre"];
+const ETATS=["Neuf en boîte","Excellent","Très bon","Bon","À restaurer"];
+const PICKS=[["Moins de 30 €",0,30],["30 – 100 €",30,100],["100 € et plus",100,null]];
+const NEW_MS=14*864e5;
+const S={annonces:[],config:{},loaded:false,slow:false,noDb:false,isAdmin:false,view:"shop",
+  f:{cat:"Tout",q:"",sort:"recent",ech:"",etat:"",min:0,max:null,dispo:false},tab:"en_vente",confirm:null,search:false,side:false,closed:{}};
+let db=null,assets=null,user=null;
+
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const eur=n=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:n%1?2:0}).format(Number(n)||0);
+const img=id=>/^[0-9a-f]{32}$/.test(id||"")?"/_blob/"+id:"";
+const ref=a=>"B31-"+String(a.id).slice(-5).toUpperCase();
+const CAR=`<svg width="72" height="36" viewBox="0 0 56 28" fill="none" aria-hidden="true"><path d="M4 20h48M8 20l3-8h10l5-6h12l6 6h4l4 8" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="15" cy="21" r="4" fill="currentColor"/><circle cx="41" cy="21" r="4" fill="currentColor"/></svg>`;
+function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2600)}
+
+/* ---------- BOUTIQUE ---------- */
+const enVente=()=>S.annonces.filter(a=>a.statut!=="vendu");
+const topPrice=()=>Math.max(50,Math.ceil(Math.max(0,...enVente().map(a=>+a.prix||0))/10)*10);
+function apply(l,skip){
+  const f=S.f,q=f.q.trim().toLowerCase(),hi=f.max??Infinity;
+  if(skip!=="cat"&&f.cat!=="Tout")l=l.filter(a=>a.categorie===f.cat);
+  if(skip!=="ech"&&f.ech)l=l.filter(a=>a.echelle===f.ech);
+  if(skip!=="etat"&&f.etat)l=l.filter(a=>a.etat===f.etat);
+  if(skip!=="prix")l=l.filter(a=>a.prix>=f.min&&a.prix<=hi);
+  if(skip!=="dispo"&&f.dispo)l=l.filter(a=>a.statut!=="reserve");
+  if(q)l=l.filter(a=>[a.titre,a.marque,a.description,a.echelle,a.categorie].join(" ").toLowerCase().includes(q));
+  return l;
+}
+function visible(){
+  const l=apply(enVente());
+  if(S.f.sort==="asc")l.sort((a,b)=>a.prix-b.prix);
+  else if(S.f.sort==="desc")l.sort((a,b)=>b.prix-a.prix);
+  else l.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  return l;
+}
+function card(a){
+  const p=img((a.photos||[])[0]),off=a.statut==="reserve";
+  const badge=off?'<span class="badge promo">Réservé</span>':a.exemple?'<span class="badge ex">Exemple</span>':(Date.now()-(a.createdAt||0)<NEW_MS?'<span class="badge new">Nouveau</span>':"");
+  return `<button class="card${off?" off":""}" data-open="${esc(a.id)}" aria-label="${esc(a.titre)}, ${eur(a.prix)}">
+    <div class="card-top">${badge}<span class="ibtn" aria-hidden="true">+</span></div>
+    <div class="ph">${p?`<img src="${p}" alt="" loading="lazy">`:`<div class="none">${CAR}</div>`}</div>
+    <div class="card-bot"><span class="n">${esc(a.titre.replace(/^\[Exemple\]\s*/,""))}</span><span class="price">${eur(a.prix)}</span></div>
+  </button>`;
+}
+function renderNav(){
+  $("#nav").innerHTML=["Tout",...CATS].map(c=>`<button data-cat="${esc(c)}" aria-pressed="${S.view==="shop"&&S.f.cat===c}">${c==="Tout"?"Tout":esc(c)}</button>`).join("");
+}
+function sec(key,title,inner){return inner?`<div class="sec" data-closed="${!!S.closed[key]}"><button class="sec-h" data-sec="${key}" aria-expanded="${!S.closed[key]}">${title}</button><div class="sec-b">${inner}</div></div>`:""}
+function sidebar(){
+  const all=enVente(),f=S.f,top=topPrice(),hi=f.max??top;
+  const cnt=(key,field,v)=>apply(all,key).filter(a=>a[field]===v).length;
+  const cats=["Tout",...CATS].map(c=>[c,c==="Tout"?apply(all,"cat").length:cnt("cat","categorie",c)]).filter(([c,n])=>n||c==="Tout"||f.cat===c);
+  const chipset=(key,field,vals)=>{const items=vals.map(v=>[v,cnt(key,field,v)]).filter(([v,n])=>n||f[key]===v);
+    return items.length?`<div class="chips">${items.map(([v,n])=>`<button class="chip" data-fk="${key}" data-fv="${esc(v)}" aria-pressed="${f[key]===v}">${esc(v)}<small>${n}</small></button>`).join("")}</div>`:""};
+  const pick=PICKS.findIndex(([,lo,h])=>f.min===lo&&f.max===h);
+  const active=f.ech||f.etat||f.min>0||f.max!=null||f.dispo||f.cat!=="Tout";
+  const L=f.min/top*100,R=hi/top*100;
+  return `<aside class="side" data-open="${S.side}">
+    <div class="side-h"><span>Filtres</span><span class="row" style="gap:12px">${active?'<button data-reset>Tout effacer</button>':""}<button class="mob" data-side aria-expanded="${S.side}">${S.side?"Masquer":"Afficher"}</button></span></div>
+    <div class="fgroups">
+      ${sec("cat","Par catégorie",`<div class="chips">${cats.map(([c,n])=>`<button class="chip" data-cat="${esc(c)}" aria-pressed="${f.cat===c}">${esc(c)}<small>${n}</small></button>`).join("")}</div>`)}
+      ${sec("prix","Prix",`<span class="rangeval" id="rv">${eur(f.min)} – ${eur(hi)}</span>
+        <div class="range"><div class="rail"></div><div class="fill" id="rf" style="left:${L}%;right:${100-R}%"></div>
+          <input type="range" id="rmin" min="0" max="${top}" step="5" value="${f.min}" aria-label="Prix minimum">
+          <input type="range" id="rmax" min="0" max="${top}" step="5" value="${hi}" aria-label="Prix maximum"></div>
+        <span class="lbl">Choix rapides</span>
+        <div class="chips">${PICKS.map(([l],i)=>`<button class="chip" data-pick="${i}" aria-pressed="${pick===i}">${l}</button>`).join("")}</div>`)}
+      ${sec("ech","Échelle",chipset("ech","echelle",ECHELLES))}
+      ${sec("etat","État",chipset("etat","etat",ETATS))}
+      ${sec("dispo","Disponibilité",`<div class="chips"><button class="chip" data-dispo="0" aria-pressed="${!f.dispo}">Tout afficher</button><button class="chip" data-dispo="1" aria-pressed="${f.dispo}">Disponible seulement</button></div>`)}
+    </div>
+  </aside>`;
+}
+function bindRange(){
+  const a=$("#rmin"),b=$("#rmax");if(!a)return;const top=topPrice();
+  const upd=()=>{let lo=+a.value,hi=+b.value;if(lo>hi){if(document.activeElement===a)a.value=lo=hi;else b.value=hi=lo}
+    $("#rv").textContent=`${eur(lo)} – ${eur(hi)}`;$("#rf").style.left=lo/top*100+"%";$("#rf").style.right=100-hi/top*100+"%";return[lo,hi]};
+  const commit=()=>{const[lo,hi]=upd();S.f.min=lo;S.f.max=hi>=top?null:hi;render()};
+  a.oninput=b.oninput=upd;a.onchange=b.onchange=commit;
+}
+function renderShop(){
+  renderNav();
+  const l=visible(),all=enVente(),f=S.f;
+  const cfg=S.config,salons=(cfg.salons||"").split("\n").map(s=>s.trim()).filter(Boolean);
+  let body;
+  if(S.noDb)body=`<div class="empty"><h3>Catalogue indisponible ici</h3><p>Connectez-vous à Claude pour consulter les annonces.</p></div>`;
+  else if(!S.loaded)body=`<div class="empty"><div>${CAR}</div><h3>${S.slow?"Le catalogue met du temps à répondre":"Chargement du catalogue…"}</h3>${S.slow?"<p>Vérifiez votre connexion, les annonces s'afficheront dès qu'elles arrivent.</p>":""}</div>`;
+  else if(!all.length)body=`<div class="empty"><div>${CAR}</div><h3>Les premières pièces arrivent bientôt</h3><p>Revenez dans quelques jours, ou venez nous voir sur un salon.</p>${S.isAdmin?'<button class="btn primary" data-go="new">Publier la première annonce</button>':""}</div>`;
+  else if(!l.length)body=`<div class="empty"><h3>Aucune pièce ne correspond</h3><button class="btn" data-reset>Effacer les filtres</button></div>`;
+  else body=`<div class="grid">${l.map(card).join("")}</div>`;
+  $("#app").innerHTML=`<div class="wrap">
+    ${S.search?`<div class="searchbar"><input id="q" type="search" placeholder="Rechercher : Dinky, Solido, 2CV, BB 9200…" value="${esc(f.q)}" aria-label="Rechercher"></div>`:""}
+    <h1 class="giant" aria-label="La Boutique">La Boutique</h1>
+    <div class="sub-h"><h2>${f.cat==="Tout"?"Toutes les pièces":esc(f.cat)}</h2>
+      <div class="meta"><span>${l.length} résultat${l.length>1?"s":""}</span>
+        <label class="sortpill">Trier par : <select id="sort"><option value="recent" ${f.sort==="recent"?"selected":""}>Nouveautés</option><option value="asc" ${f.sort==="asc"?"selected":""}>Prix croissant</option><option value="desc" ${f.sort==="desc"?"selected":""}>Prix décroissant</option></select></label></div></div>
+    <div class="shop">${sidebar()}<section>${body}</section></div>
+    ${salons.length?`<section class="salons"><h2>Retrouvez-nous en salon</h2><ul>${salons.map(s=>`<li>${esc(s)}</li>`).join("")}</ul></section>`:""}
+  </div>`;
+  const q=$("#q");if(q)q.oninput=()=>{S.f.q=q.value;const pos=q.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(pos,pos)};
+  $("#sort").onchange=e=>{S.f.sort=e.target.value;render()};
+  bindRange();
+}
+/* filtres, recherche, rayons */
+$("#sbtn").onclick=()=>{S.search=!S.search;if(!S.search)S.f.q="";S.view="shop";render();if(S.search)$("#q")?.focus()};
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-fk],[data-pick],[data-dispo],[data-side],[data-sec],#nav [data-cat]");
+  if(!t)return;
+  if(t.closest("#nav")){if(S.view!=="shop"){S.view="shop";try{history.replaceState(null,"","#")}catch(_){}}return}
+  e.stopImmediatePropagation();
+  const f=S.f;
+  if(t.dataset.fk)f[t.dataset.fk]=f[t.dataset.fk]===t.dataset.fv?"":t.dataset.fv;
+  else if(t.dataset.pick!==undefined){const[,lo,hi]=PICKS[+t.dataset.pick];if(f.min===lo&&f.max===hi){f.min=0;f.max=null}else{f.min=lo;f.max=hi}}
+  else if(t.dataset.dispo!==undefined)f.dispo=t.dataset.dispo==="1";
+  else if(t.dataset.side!==undefined)S.side=!S.side;
+  else if(t.dataset.sec)S.closed[t.dataset.sec]=!S.closed[t.dataset.sec];
+  render();
+},true);
+/* ---------- FICHE + ACHAT ---------- */
+function openDetail(id){
+  const a=S.annonces.find(x=>x.id===id);if(!a)return;
+  const ph=(a.photos||[]).map(img).filter(Boolean);let cur=0;
+  const draw=()=>{
+    $("#modal-root").innerHTML=`<div class="modal" data-close><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(a.titre)}">
+      <div class="sheet-head"><div><div class="cbrand">${esc(a.marque)} · ${esc(a.categorie)}</div><h2 style="font-size:24px;margin-top:4px">${esc(a.titre)}</h2></div><button class="x" data-close aria-label="Fermer">×</button></div>
+      <div class="gallery"><div class="main">${ph.length?`<img src="${ph[cur]}" alt="">`:`<div style="display:grid;place-items:center;height:100%;color:var(--muted)">${CAR}</div>`}</div>
+      ${ph.length>1?`<div class="thumbs">${ph.map((p,i)=>`<button data-th="${i}" aria-pressed="${i===cur}" aria-label="Photo ${i+1}"><img src="${p}" alt=""></button>`).join("")}</div>`:""}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="price" style="font-size:30px">${eur(a.prix)}</span>
+        ${a.statut==="reserve"?'<span class="pill r">Réservé</span>':`<button class="btn primary" data-buy>Je l'achète</button>`}
+      </div>
+      <dl class="specs"><dt>Échelle</dt><dd>${esc(a.echelle)}</dd><dt>État</dt><dd>${esc(a.etat)}</dd><dt>Boîte d'origine</dt><dd>${a.boite?"Oui":"Non"}</dd>${a.annee?`<dt>Année</dt><dd>${esc(a.annee)}</dd>`:""}<dt>Référence</dt><dd style="font-family:var(--mono)">${ref(a)}</dd></dl>
+      ${a.description?`<p class="desc">${esc(a.description)}</p>`:""}
+      <div id="buy"></div>
+    </div></div>`;
+    $("#modal-root").querySelectorAll("[data-th]").forEach(b=>b.onclick=()=>{cur=+b.dataset.th;draw()});
+    const bb=$("[data-buy]");if(bb)bb.onclick=()=>showBuy(a);
+  };
+  draw();
+}
+function showBuy(a){
+  const c=S.config,msg=`Bonjour, je souhaite acheter « ${a.titre} » (${a.marque}, ${a.echelle}) à ${eur(a.prix)} — réf. ${ref(a)}. Est-elle toujours disponible ?`;
+  const line=(lbl,v,href)=>v?`<div class="line"><div><div class="note">${lbl}</div><div class="val">${esc(v)}</div></div><div class="row"><button class="btn sm" data-copy="${esc(v)}">Copier</button>${href?`<a class="btn sm dark" href="${esc(href)}" style="text-decoration:none">Ouvrir</a>`:""}</div></div>`:"";
+  $("#buy").innerHTML=`<div class="contact">
+    <strong>Pour réserver cette pièce, contactez-nous :</strong>
+    ${line("Téléphone / SMS",c.telephone,c.telephone?"tel:"+c.telephone.replace(/\s/g,""):"")}
+    ${line("E-mail",c.email,c.email?`mailto:${c.email}?subject=${encodeURIComponent("Achat "+ref(a))}&body=${encodeURIComponent(msg)}`:"")}
+    ${!c.telephone&&!c.email?'<p class="note" style="margin:0">Les coordonnées de la boutique ne sont pas encore renseignées.</p>':""}
+    <div class="note">Message prêt à envoyer :</div><div class="msg">${esc(msg)}</div>
+    <div class="row"><button class="btn sm" data-copy="${esc(msg)}">Copier le message</button></div>
+    ${c.paiement?`<p class="note" style="margin:0">${esc(c.paiement)}</p>`:""}
+  </div>`;
+}
+
+/* ---------- ESPACE PRO ---------- */
+function renderPro(){
+  const A=S.annonces,by=s=>A.filter(a=>a.statut===s);
+  const enV=A.filter(a=>a.statut!=="vendu"),vend=by("vendu");
+  const ca=vend.reduce((s,a)=>s+(+a.prix||0),0),stock=enV.reduce((s,a)=>s+(+a.prix||0),0);
+  const tabs=[["en_vente",`En vente (${enV.length})`],["vendu",`Vendues (${vend.length})`],["reglages","Coordonnées & salons"]];
+  let list="";
+  if(S.tab==="reglages")list=settingsForm();
+  else{
+    const L=(S.tab==="vendu"?vend.sort((a,b)=>(b.venduLe||0)-(a.venduLe||0)):enV.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)));
+    list=L.length?`<div class="list">${L.map(proItem).join("")}</div>`:`<div class="empty"><h3>${S.tab==="vendu"?"Aucune vente pour l'instant":"Aucune annonce en ligne"}</h3>${S.tab!=="vendu"?'<button class="btn primary" data-go="new">Publier une annonce</button>':""}</div>`;
+  }
+  $("#app").innerHTML=`<div class="wrap">
+    <div class="pro-head"><h1>Espace pro</h1><button class="btn primary" data-go="new">+ Nouvelle annonce</button></div>
+    <div class="kpis"><div class="kpi"><b>${enV.length}</b><span>en ligne</span></div><div class="kpi"><b>${eur(stock)}</b><span>valeur en vente</span></div><div class="kpi"><b>${eur(ca)}</b><span>vendu en ligne</span></div></div>
+    <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-tab="${k}" aria-selected="${S.tab===k}">${l}</button>`).join("")}</div>
+    ${list}
+  </div>`;
+  if(S.tab==="reglages")bindSettings();
+}
+function proItem(a){
+  const p=img((a.photos||[])[0]),st=a.statut;
+  const pill=st==="vendu"?'<span class="pill s">Vendue</span>':st==="reserve"?'<span class="pill r">Réservée</span>':'<span class="pill v">En ligne</span>';
+  const when=st==="vendu"&&a.venduLe?" · vendue le "+new Date(a.venduLe).toLocaleDateString("fr-FR"):"";
+  const acts=st==="vendu"
+    ?`<button class="btn sm" data-act="relist" data-id="${esc(a.id)}">Remettre en vente</button><button class="btn sm danger" data-act="askdel" data-id="${esc(a.id)}">Supprimer</button>`
+    :`<button class="btn sm ok" data-act="sold" data-id="${esc(a.id)}">✓ Vendue</button><button class="btn sm" data-act="${st==="reserve"?"unres":"res"}" data-id="${esc(a.id)}">${st==="reserve"?"Annuler réservation":"Réserver"}</button><button class="btn sm" data-act="edit" data-id="${esc(a.id)}">Modifier</button><button class="btn sm danger" data-act="askdel" data-id="${esc(a.id)}">Supprimer</button>`;
+  const conf=S.confirm===a.id?`<div class="confirm">Supprimer définitivement cette annonce et ses photos ?<button class="btn sm danger" data-act="del" data-id="${esc(a.id)}">Oui, supprimer</button><button class="btn sm" data-act="nodel">Annuler</button></div>`:"";
+  return `<div class="item"><div class="th">${p?`<img src="${p}" alt="" loading="lazy">`:""}</div>
+    <div class="info"><div class="t">${pill}${esc(a.titre)}${a.exemple?' <span class="pill s">exemple</span>':""}</div><div class="m">${ref(a)} · ${esc(a.echelle)} · ${eur(a.prix)}${when}</div></div>
+    <div class="acts">${acts}</div>${conf}</div>`;
+}
+async function act(kind,id){
+  const d=db.collection("annonces").doc(id),a=S.annonces.find(x=>x.id===id);
+  try{
+    if(kind==="sold"){await d.update({statut:"vendu",venduLe:Date.now()});toast("Vendue — retirée de la boutique")}
+    else if(kind==="res"){await d.update({statut:"reserve"});toast("Marquée réservée")}
+    else if(kind==="unres"||kind==="relist"){await d.update({statut:"en_vente"});toast("Remise en vente")}
+    else if(kind==="askdel"){S.confirm=id;render();return}
+    else if(kind==="nodel"){S.confirm=null;render();return}
+    else if(kind==="del"){
+      S.confirm=null;await d.delete();
+      if(assets)for(const p of a?.photos||[]){try{await assets.delete(p)}catch(e){}}
+      toast("Annonce supprimée");
+    }
+    else if(kind==="edit")openForm(a);
+  }catch(e){toast(e?.code==="invalid_argument"?"Action réservée aux gérants de la boutique":"Échec, réessayez")}
+}
+
+/* formulaire annonce */
+function openForm(a){
+  const e=a||{statut:"en_vente",categorie:"Voitures",echelle:"1/43",etat:"Très bon",photos:[]};
+  let photos=[...(e.photos||[])],busy=0;
+  const opts=(arr,v)=>arr.map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");
+  $("#modal-root").innerHTML=`<div class="modal"><form class="sheet form" id="f" novalidate>
+    <div class="sheet-head"><h2 style="font-size:22px">${a?"Modifier l'annonce":"Nouvelle annonce"}</h2><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
+    <div class="drop" id="drop"><div class="pgrid" id="pg"></div>
+      <label class="btn" style="justify-self:center;display:inline-block">📷 Ajouter des photos<input type="file" id="files" accept="image/*" multiple hidden></label>
+      <span class="hint">Jusqu'à 8 photos. La première sert de couverture. Depuis un téléphone, vous pouvez photographier directement.</span></div>
+    <label>Titre de l'annonce<input class="input" id="f-titre" required maxlength="120" value="${esc(e.titre)}" placeholder="Citroën DS 19 1956 bleu nuit"></label>
+    <div class="two"><label>Marque du fabricant<input class="input" id="f-marque" maxlength="60" value="${esc(e.marque)}" placeholder="Norev, Solido, Jouef…"></label>
+      <label>Prix (€)<input class="input" id="f-prix" type="number" min="0" step="0.5" inputmode="decimal" value="${esc(e.prix)}" required></label></div>
+    <div class="three"><label>Catégorie<select class="input" id="f-cat">${opts(CATS,e.categorie)}</select></label>
+      <label>Échelle<select class="input" id="f-ech">${opts(ECHELLES,e.echelle)}</select></label>
+      <label>État<select class="input" id="f-etat">${opts(ETATS,e.etat)}</select></label></div>
+    <div class="two"><label>Année de production <span class="hint">(facultatif)</span><input class="input" id="f-annee" maxlength="20" value="${esc(e.annee)}" placeholder="1965"></label>
+      <label class="check" style="align-self:end;padding-bottom:10px"><input type="checkbox" id="f-boite" ${e.boite?"checked":""}> Boîte d'origine</label></div>
+    <label>Description<textarea class="input" id="f-desc" rows="4" maxlength="2000" placeholder="Défauts, accessoires, provenance…">${esc(e.description)}</textarea></label>
+    <p class="note" id="ferr" hidden style="color:var(--err);margin:0"></p>
+    <div class="row" style="justify-content:flex-end"><button type="button" class="btn" data-close>Annuler</button><button class="btn primary" id="save">${a?"Enregistrer":"Publier l'annonce"}</button></div>
+  </form></div>`;
+  const pg=$("#pg"),err=$("#ferr");
+  const drawP=()=>{pg.innerHTML=photos.map((p,i)=>`<div class="p"><img src="${img(p)}" alt="">${i===0?'<span class="first">COUVERTURE</span>':""}<button type="button" data-rm="${i}" aria-label="Retirer">×</button></div>`).join("")+(busy?`<div class="p" style="display:grid;place-items:center;font-size:11px;color:var(--muted)">Envoi…</div>`:"");
+    pg.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{photos.splice(+b.dataset.rm,1);drawP()})};
+  drawP();
+  async function addFiles(fl){
+    if(!assets){err.hidden=false;err.textContent="L'envoi de photos est réservé aux gérants de la boutique.";return}
+    for(const f of [...fl].slice(0,8-photos.length)){
+      busy++;drawP();
+      try{const blob=await shrink(f);const r=await assets.upload(blob,{type:"image/jpeg"});photos.push(r.id)}
+      catch(e){err.hidden=false;err.textContent=e?.code==="too_large"?"Photo trop lourde.":"Une photo n'a pas pu être envoyée."}
+      busy--;drawP();
+    }
+  }
+  $("#files").onchange=e=>addFiles(e.target.files);
+  const dr=$("#drop");dr.ondragover=e=>{e.preventDefault();dr.classList.add("over")};dr.ondragleave=()=>dr.classList.remove("over");
+  dr.ondrop=e=>{e.preventDefault();dr.classList.remove("over");addFiles(e.dataTransfer.files)};
+  $("#f").onsubmit=async ev=>{
+    ev.preventDefault();
+    const v=id=>$("#"+id).value.trim(),titre=v("f-titre"),prix=parseFloat(v("f-prix").replace(",","."));
+    if(!titre||!(prix>=0)){err.hidden=false;err.textContent="Indiquez au moins un titre et un prix.";return}
+    if(busy){err.hidden=false;err.textContent="Patientez, les photos sont en cours d'envoi.";return}
+    const data={titre,marque:v("f-marque"),prix,categorie:v("f-cat"),echelle:v("f-ech"),etat:v("f-etat"),annee:v("f-annee"),boite:$("#f-boite").checked,description:v("f-desc"),photos};
+    $("#save").disabled=true;
+    try{
+      if(a){await db.collection("annonces").doc(a.id).update({...data,exemple:false});toast("Annonce mise à jour")}
+      else{await db.collection("annonces").doc().set({...data,statut:"en_vente",createdAt:Date.now()});toast("Annonce publiée")}
+      close();
+    }catch(e){$("#save").disabled=false;err.hidden=false;err.textContent=e?.code==="invalid_argument"?"Seuls les gérants peuvent publier.":"L'enregistrement a échoué, réessayez."}
+  };
+}
+function shrink(file){
+  return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();
+    im.onload=()=>{const m=1600,k=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement("canvas");
+      c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+      URL.revokeObjectURL(u);c.toBlob(b=>b?res(b):rej(),"image/jpeg",.85)};
+    im.onerror=()=>{URL.revokeObjectURL(u);rej()};im.src=u});
+}
+
+/* réglages */
+function settingsForm(){
+  const c=S.config;
+  return `<form class="form" id="sf" style="max-width:640px;padding-bottom:40px">
+    <p class="note" style="margin:0">Ces informations s'affichent pour les acheteurs quand ils cliquent sur « Je l'achète ».</p>
+    <div class="two"><label>Téléphone<input class="input" id="s-tel" value="${esc(c.telephone)}" placeholder="06 12 34 56 78"></label>
+    <label>E-mail<input class="input" id="s-mail" type="email" value="${esc(c.email)}" placeholder="contact@lesbolides31.fr"></label></div>
+    <label>Paiement & livraison<textarea class="input" id="s-pay" rows="2" placeholder="Virement ou chèque. Envoi Colissimo suivi, ou remise en main propre sur salon.">${esc(c.paiement)}</textarea></label>
+    <label>Prochains salons <span class="hint">une ligne par salon</span><textarea class="input" id="s-sal" rows="5" placeholder="14 février 2027 — Bourse jouets anciens, Muret">${esc(c.salons)}</textarea></label>
+    <div class="row"><button class="btn primary" id="s-save">Enregistrer</button></div>
+  </form>`;
+}
+function bindSettings(){
+  $("#sf").onsubmit=async e=>{e.preventDefault();const v=id=>$("#"+id).value.trim();
+    try{await db.doc("config/boutique").set({telephone:v("s-tel"),email:v("s-mail"),paiement:v("s-pay"),salons:v("s-sal")});toast("Coordonnées enregistrées")}
+    catch(e){toast("Échec de l'enregistrement")}};
+}
+
+/* ---------- routage & événements ---------- */
+function close(){$("#modal-root").innerHTML=""}
+function render(){
+  $("#sw").hidden=!S.isAdmin;
+  $("#sw-shop").setAttribute("aria-pressed",S.view==="shop");$("#sw-pro").setAttribute("aria-pressed",S.view==="pro");
+  (S.view==="pro"&&S.isAdmin?renderPro:renderShop)();if(S.view!=="shop")renderNav();
+}
+function setView(v){S.view=v;try{history.replaceState(null,"",v==="pro"?"#pro":"#")}catch(e){}render();scrollTo(0,0)}
+$("#sw-shop").onclick=()=>setView("shop");$("#sw-pro").onclick=()=>setView("pro");
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("[data-open],[data-cat],[data-close],[data-go],[data-tab],[data-act],[data-reset],[data-copy]");
+  if(!t)return;
+  if(t.dataset.close!==undefined){if(t===e.target||t.classList.contains("x")||t.tagName==="BUTTON")close();return}
+  if(t.dataset.open)openDetail(t.dataset.open);
+  else if(t.dataset.cat){S.f.cat=t.dataset.cat;render()}
+  else if(t.dataset.go==="new")openForm(null);
+  else if(t.dataset.tab){S.tab=t.dataset.tab;S.confirm=null;render()}
+  else if(t.dataset.act)act(t.dataset.act,t.dataset.id);
+  else if(t.dataset.reset!==undefined){S.f={...S.f,cat:"Tout",ech:"",etat:"",min:0,max:null,dispo:false,q:""};render()}
+  else if(t.dataset.copy!==undefined){try{await navigator.clipboard.writeText(t.dataset.copy);toast("Copié")}catch(_){toast("Sélectionnez le texte pour le copier")}}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")close()});
+
+async function start(){
+  render();
+  if(!window.claude?.use){S.noDb=true;render();return}
+  [db,user,assets]=await Promise.all([claude.use("db"),claude.use("user"),claude.use("assets")]);
+  S.isAdmin=user?await user.canEdit():false;
+  if(S.isAdmin&&location.hash==="#pro")S.view="pro";
+  if(!db){S.noDb=true;render();return}
+  const timer=setTimeout(()=>{if(!S.loaded){S.slow=true;render()}},10000);
+  db.collection("annonces").onSnapshot(s=>{
+    S.annonces=s.docs.map(d=>({id:d.id,...d.data()}));
+    if(!s.metadata.fromCache){S.loaded=true;clearTimeout(timer)}else if(s.size)S.loaded=true;
+    if(!$("#f"))render();
+  },()=>{S.loaded=true;clearTimeout(timer);render()});
+  db.doc("config/boutique").onSnapshot(s=>{S.config=s.exists?s.data():{};if(!$("#f")&&!$("#sf"))render()},()=>{});
+  render();
+}
+start();
+</script>
